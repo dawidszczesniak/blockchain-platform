@@ -1,0 +1,27 @@
+# IntelliJ IDEA
+.idea/
+*.iml
+*.ipr
+*.iws
+out/
+.run/
+
+# Gradle / Kotlin caches & build outputs
+.gradle/
+.kotlin/
+**/build/
+
+# Node / Kotlin JS/Wasm
+**/node_modules/
+kotlin-js-store/**/node_modules/
+
+# Local env / secrets
+local.properties
+.env
+.env.*
+!.env.example
+
+# OS junk
+.DS_Store
+Thumbs.db
+*.log
