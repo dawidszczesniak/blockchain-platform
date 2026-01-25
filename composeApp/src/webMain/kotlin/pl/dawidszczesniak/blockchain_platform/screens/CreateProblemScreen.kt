@@ -5,6 +5,15 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import blockchain_platform.composeapp.generated.resources.Res
+import blockchain_platform.composeapp.generated.resources.create_problem_action_placeholder
+import blockchain_platform.composeapp.generated.resources.create_problem_entry_fee_label
+import blockchain_platform.composeapp.generated.resources.create_problem_join_until_label
+import blockchain_platform.composeapp.generated.resources.create_problem_participants_label
+import blockchain_platform.composeapp.generated.resources.create_problem_prize_label
+import blockchain_platform.composeapp.generated.resources.create_problem_submit_until_label
+import blockchain_platform.composeapp.generated.resources.create_problem_title
+import org.jetbrains.compose.resources.stringResource
 
 @Composable
 fun CreateProblemScreen() {
@@ -15,13 +24,13 @@ fun CreateProblemScreen() {
     var submitUntilDate by remember { mutableStateOf("") }
 
     Column(modifier = Modifier.fillMaxSize().padding(24.dp)) {
-        Text("Utwórz problem", style = MaterialTheme.typography.headlineSmall)
+        Text(stringResource(Res.string.create_problem_title), style = MaterialTheme.typography.headlineSmall)
         Spacer(Modifier.height(12.dp))
 
         OutlinedTextField(
             value = prize,
             onValueChange = { prize = it },
-            label = { Text("Nagroda (np. wei / USDC)") },
+            label = { Text(stringResource(Res.string.create_problem_prize_label)) },
             modifier = Modifier.fillMaxWidth()
         )
         Spacer(Modifier.height(10.dp))
@@ -29,7 +38,7 @@ fun CreateProblemScreen() {
         OutlinedTextField(
             value = participants,
             onValueChange = { participants = it },
-            label = { Text("Liczba uczestników") },
+            label = { Text(stringResource(Res.string.create_problem_participants_label)) },
             modifier = Modifier.fillMaxWidth()
         )
         Spacer(Modifier.height(10.dp))
@@ -37,7 +46,7 @@ fun CreateProblemScreen() {
         OutlinedTextField(
             value = entryFee,
             onValueChange = { entryFee = it },
-            label = { Text("Wejściówka (np. wei / USDC)") },
+            label = { Text(stringResource(Res.string.create_problem_entry_fee_label)) },
             modifier = Modifier.fillMaxWidth()
         )
         Spacer(Modifier.height(10.dp))
@@ -45,7 +54,7 @@ fun CreateProblemScreen() {
         OutlinedTextField(
             value = joinUntilDate,
             onValueChange = { joinUntilDate = it },
-            label = { Text("Koniec rejestracji (YYYY-MM-DD)") },
+            label = { Text(stringResource(Res.string.create_problem_join_until_label)) },
             modifier = Modifier.fillMaxWidth()
         )
         Spacer(Modifier.height(10.dp))
@@ -53,7 +62,7 @@ fun CreateProblemScreen() {
         OutlinedTextField(
             value = submitUntilDate,
             onValueChange = { submitUntilDate = it },
-            label = { Text("Koniec zgłoszeń (YYYY-MM-DD)") },
+            label = { Text(stringResource(Res.string.create_problem_submit_until_label)) },
             modifier = Modifier.fillMaxWidth()
         )
         Spacer(Modifier.height(16.dp))
@@ -62,7 +71,7 @@ fun CreateProblemScreen() {
             onClick = { /* TODO: call backend */ },
             enabled = false
         ) {
-            Text("Utwórz (placeholder)")
+            Text(stringResource(Res.string.create_problem_action_placeholder))
         }
     }
 }

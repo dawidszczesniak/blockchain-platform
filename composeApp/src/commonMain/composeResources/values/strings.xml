@@ -1,0 +1,60 @@
+<resources>
+    <string name="app_name">Blockchain Platform</string>
+
+    <string name="nav_problem_list">Problem list</string>
+    <string name="nav_create_problem">Create problem</string>
+    <string name="theme_dark">Dark</string>
+    <string name="theme_light">Light</string>
+    <string name="profile">Profile</string>
+    <string name="settings">Settings</string>
+    <string name="logout">Log out</string>
+    <string name="login">Log in</string>
+
+    <string name="create_problem_title">Create problem</string>
+    <string name="create_problem_prize_label">Prize (e.g., wei / USDC)</string>
+    <string name="create_problem_participants_label">Number of participants</string>
+    <string name="create_problem_entry_fee_label">Entry fee (e.g., wei / USDC)</string>
+    <string name="create_problem_join_until_label">Registration ends (YYYY-MM-DD)</string>
+    <string name="create_problem_submit_until_label">Submission ends (YYYY-MM-DD)</string>
+    <string name="create_problem_action_placeholder">Create (placeholder)</string>
+
+    <string name="login_title">Log in</string>
+    <string name="login_subtitle">Wallet login placeholder for now.</string>
+    <string name="login_connect_wallet">Connect wallet (mock)</string>
+
+    <string name="settings_title">Settings</string>
+    <string name="settings_placeholder">Settings placeholder.</string>
+    <string name="settings_future">Later: wallet address, RPC, etc.</string>
+
+    <string name="problems_title">Problem list</string>
+    <string name="problems_mock_info">Mock: %1$d problems (infinite scroll + sorting).</string>
+    <string name="loading_more">Loading more problems…</string>
+
+    <string name="sort_label">Sort by:</string>
+    <string name="sort_option_newest">Newest added</string>
+    <string name="sort_option_oldest">Oldest added</string>
+    <string name="sort_option_start_soonest">Fewest days to start</string>
+    <string name="sort_option_start_latest">Most days to start</string>
+    <string name="sort_option_prize_highest">Highest prize</string>
+    <string name="sort_option_prize_lowest">Lowest prize</string>
+    <string name="sort_option_entry_fee_highest">Highest entry fee</string>
+    <string name="sort_option_entry_fee_lowest">Lowest entry fee</string>
+    <string name="sort_option_required_most">Most required participants</string>
+    <string name="sort_option_required_least">Fewest required participants</string>
+    <string name="sort_option_registered_most">Most registered</string>
+    <string name="sort_option_registered_least">Fewest registered</string>
+    <string name="sort_option_progress_most">Highest progress</string>
+    <string name="sort_option_progress_least">Lowest progress</string>
+    <string name="sort_option_join_ends_soonest">Registration ends soonest</string>
+    <string name="sort_option_join_ends_latest">Registration ends latest</string>
+
+    <string name="info_prize">Prize</string>
+    <string name="info_entry_fee">Entry fee</string>
+    <string name="info_start">Start</string>
+    <string name="days_count">%1$d days</string>
+    <string name="participants_summary">Participants: %1$d / %2$d (required)</string>
+    <string name="registration_and_submission">Registration until: %1$s (in %2$d days)  |  Submissions until: %3$s</string>
+    <string name="details_coming_soon">Details (soon)</string>
+
+    <string name="problem_title_template">Problem #%1$d – Algorithm optimization (%2$s)</string>
+</resources>

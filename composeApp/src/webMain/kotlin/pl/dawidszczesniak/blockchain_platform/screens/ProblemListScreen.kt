@@ -14,9 +14,39 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
+import blockchain_platform.composeapp.generated.resources.Res
+import blockchain_platform.composeapp.generated.resources.days_count
+import blockchain_platform.composeapp.generated.resources.details_coming_soon
+import blockchain_platform.composeapp.generated.resources.info_entry_fee
+import blockchain_platform.composeapp.generated.resources.info_prize
+import blockchain_platform.composeapp.generated.resources.info_start
+import blockchain_platform.composeapp.generated.resources.loading_more
+import blockchain_platform.composeapp.generated.resources.participants_summary
+import blockchain_platform.composeapp.generated.resources.problem_title_template
+import blockchain_platform.composeapp.generated.resources.problems_mock_info
+import blockchain_platform.composeapp.generated.resources.problems_title
+import blockchain_platform.composeapp.generated.resources.registration_and_submission
+import blockchain_platform.composeapp.generated.resources.sort_label
+import blockchain_platform.composeapp.generated.resources.sort_option_entry_fee_highest
+import blockchain_platform.composeapp.generated.resources.sort_option_entry_fee_lowest
+import blockchain_platform.composeapp.generated.resources.sort_option_join_ends_latest
+import blockchain_platform.composeapp.generated.resources.sort_option_join_ends_soonest
+import blockchain_platform.composeapp.generated.resources.sort_option_newest
+import blockchain_platform.composeapp.generated.resources.sort_option_oldest
+import blockchain_platform.composeapp.generated.resources.sort_option_prize_highest
+import blockchain_platform.composeapp.generated.resources.sort_option_prize_lowest
+import blockchain_platform.composeapp.generated.resources.sort_option_progress_least
+import blockchain_platform.composeapp.generated.resources.sort_option_progress_most
+import blockchain_platform.composeapp.generated.resources.sort_option_registered_least
+import blockchain_platform.composeapp.generated.resources.sort_option_registered_most
+import blockchain_platform.composeapp.generated.resources.sort_option_required_least
+import blockchain_platform.composeapp.generated.resources.sort_option_required_most
+import blockchain_platform.composeapp.generated.resources.sort_option_start_latest
+import blockchain_platform.composeapp.generated.resources.sort_option_start_soonest
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import org.jetbrains.compose.resources.stringResource
 import kotlin.math.max
 import kotlin.math.min
 
@@ -27,7 +57,7 @@ private const val INITIAL_CREATED_ORDER = 1000
 private data class FakeProblem(
     val id: Int,
     val createdOrder: Int,
-    val title: String,
+    val titleLetter: Char,
     val prizeAmount: Int,
     val entryFeeAmount: Int,
     val requiredParticipants: Int,
@@ -38,30 +68,30 @@ private data class FakeProblem(
     val submitUntilLabel: String,
 )
 
-private enum class SortOption(val label: String) {
-    Newest("Najnowsze dodane"),
-    Oldest("Najstarsze dodane"),
+private enum class SortOption {
+    Newest,
+    Oldest,
 
-    StartSoonest("Najmniej dni do startu"),
-    StartLatest("Najwięcej dni do startu"),
+    StartSoonest,
+    StartLatest,
 
-    PrizeHighest("Największa nagroda"),
-    PrizeLowest("Najmniejsza nagroda"),
+    PrizeHighest,
+    PrizeLowest,
 
-    EntryFeeHighest("Największa wejściówka"),
-    EntryFeeLowest("Najmniejsza wejściówka"),
+    EntryFeeHighest,
+    EntryFeeLowest,
 
-    RequiredMost("Najwięcej wymaganych uczestników"),
-    RequiredLeast("Najmniej wymaganych uczestników"),
+    RequiredMost,
+    RequiredLeast,
 
-    RegisteredMost("Najwięcej zapisanych"),
-    RegisteredLeast("Najmniej zapisanych"),
+    RegisteredMost,
+    RegisteredLeast,
 
-    ProgressMost("Największy progres"),
-    ProgressLeast("Najmniejszy progres"),
+    ProgressMost,
+    ProgressLeast,
 
-    JoinEndsSoonest("Rejestracja kończy się najszybciej"),
-    JoinEndsLatest("Rejestracja kończy się najpóźniej"),
+    JoinEndsSoonest,
+    JoinEndsLatest,
 }
 
 @Composable
@@ -125,10 +155,10 @@ fun ProblemsListScreen() {
 
     Column(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxWidth().padding(24.dp)) {
-            Text("Lista problemów", style = MaterialTheme.typography.headlineSmall)
+            Text(stringResource(Res.string.problems_title), style = MaterialTheme.typography.headlineSmall)
             Spacer(Modifier.height(6.dp))
             Text(
-                "Mock: ${allProblems.size} problemów (infinite scroll + sortowanie).",
+                stringResource(Res.string.problems_mock_info, allProblems.size),
                 style = MaterialTheme.typography.bodyMedium
             )
 
@@ -188,7 +218,7 @@ fun ProblemsListScreen() {
                 ) {
                     LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                     Spacer(Modifier.height(8.dp))
-                    Text("Dociąganie kolejnych problemów…", style = MaterialTheme.typography.bodySmall)
+                    Text(stringResource(Res.string.loading_more), style = MaterialTheme.typography.bodySmall)
                 }
             }
         }
@@ -207,12 +237,12 @@ private fun SortRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.End
     ) {
-        Text("Sortowanie:", style = MaterialTheme.typography.titleSmall)
+        Text(stringResource(Res.string.sort_label), style = MaterialTheme.typography.titleSmall)
         Spacer(Modifier.width(10.dp))
 
         Box(modifier = Modifier.wrapContentSize(Alignment.TopEnd)) {
             OutlinedButton(onClick = { expanded = true }) {
-                Text(sortOption.label)
+                Text(sortOptionLabel(sortOption))
             }
 
             DropdownMenu(
@@ -222,7 +252,7 @@ private fun SortRow(
             ) {
                 SortOption.entries.forEach { option ->
                     DropdownMenuItem(
-                        text = { Text(option.label) },
+                        text = { Text(sortOptionLabel(option)) },
                         onClick = {
                             expanded = false
                             onSortChanged(option)
@@ -231,6 +261,28 @@ private fun SortRow(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun sortOptionLabel(option: SortOption): String {
+    return when (option) {
+        SortOption.Newest -> stringResource(Res.string.sort_option_newest)
+        SortOption.Oldest -> stringResource(Res.string.sort_option_oldest)
+        SortOption.StartSoonest -> stringResource(Res.string.sort_option_start_soonest)
+        SortOption.StartLatest -> stringResource(Res.string.sort_option_start_latest)
+        SortOption.PrizeHighest -> stringResource(Res.string.sort_option_prize_highest)
+        SortOption.PrizeLowest -> stringResource(Res.string.sort_option_prize_lowest)
+        SortOption.EntryFeeHighest -> stringResource(Res.string.sort_option_entry_fee_highest)
+        SortOption.EntryFeeLowest -> stringResource(Res.string.sort_option_entry_fee_lowest)
+        SortOption.RequiredMost -> stringResource(Res.string.sort_option_required_most)
+        SortOption.RequiredLeast -> stringResource(Res.string.sort_option_required_least)
+        SortOption.RegisteredMost -> stringResource(Res.string.sort_option_registered_most)
+        SortOption.RegisteredLeast -> stringResource(Res.string.sort_option_registered_least)
+        SortOption.ProgressMost -> stringResource(Res.string.sort_option_progress_most)
+        SortOption.ProgressLeast -> stringResource(Res.string.sort_option_progress_least)
+        SortOption.JoinEndsSoonest -> stringResource(Res.string.sort_option_join_ends_soonest)
+        SortOption.JoinEndsLatest -> stringResource(Res.string.sort_option_join_ends_latest)
     }
 }
 
@@ -245,22 +297,42 @@ private fun ProblemCard(
 
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(problem.title, style = MaterialTheme.typography.titleMedium)
+            Text(
+                stringResource(
+                    Res.string.problem_title_template,
+                    problem.id,
+                    problem.titleLetter.toString()
+                ),
+                style = MaterialTheme.typography.titleMedium
+            )
             Spacer(Modifier.height(8.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                InfoChip(label = "Nagroda", value = "${problem.prizeAmount} USDC")
-                InfoChip(label = "Wejściówka", value = "${problem.entryFeeAmount} USDC")
-                InfoChip(label = "Start", value = "${problem.daysToStart} dni")
+                InfoChip(
+                    label = stringResource(Res.string.info_prize),
+                    value = "${problem.prizeAmount} USDC"
+                )
+                InfoChip(
+                    label = stringResource(Res.string.info_entry_fee),
+                    value = "${problem.entryFeeAmount} USDC"
+                )
+                InfoChip(
+                    label = stringResource(Res.string.info_start),
+                    value = stringResource(Res.string.days_count, problem.daysToStart)
+                )
             }
 
             Spacer(Modifier.height(10.dp))
 
             Text(
-                "Uczestnicy: $registered / ${problem.requiredParticipants} (wymagani)",
+                stringResource(
+                    Res.string.participants_summary,
+                    registered,
+                    problem.requiredParticipants
+                ),
                 style = MaterialTheme.typography.bodyMedium
             )
             Spacer(Modifier.height(6.dp))
@@ -272,7 +344,12 @@ private fun ProblemCard(
             Spacer(Modifier.height(10.dp))
 
             Text(
-                "Rejestracja do: ${problem.joinUntilLabel} (za ${problem.daysToJoinEnd} dni)  |  Zgłoszenia do: ${problem.submitUntilLabel}",
+                stringResource(
+                    Res.string.registration_and_submission,
+                    problem.joinUntilLabel,
+                    problem.daysToJoinEnd,
+                    problem.submitUntilLabel
+                ),
                 style = MaterialTheme.typography.bodySmall
             )
 
@@ -280,7 +357,7 @@ private fun ProblemCard(
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 Button(onClick = onOpen, enabled = false) {
-                    Text("Szczegóły (wkrótce)")
+                    Text(stringResource(Res.string.details_coming_soon))
                 }
             }
         }
@@ -353,7 +430,7 @@ private fun generateFakeProblems(
         FakeProblem(
             id = id,
             createdOrder = createdOrder,
-            title = "Problem #$id – Optymalizacja algorytmu (${('A' + (id % 26))})",
+            titleLetter = 'A' + (id % 26),
             prizeAmount = prize,
             entryFeeAmount = entry,
             requiredParticipants = required,

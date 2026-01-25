@@ -6,6 +6,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import blockchain_platform.composeapp.generated.resources.Res
+import blockchain_platform.composeapp.generated.resources.login_connect_wallet
+import blockchain_platform.composeapp.generated.resources.login_subtitle
+import blockchain_platform.composeapp.generated.resources.login_title
+import org.jetbrains.compose.resources.stringResource
 
 @Composable
 fun LoginScreen(onLogin: () -> Unit) {
@@ -15,12 +20,12 @@ fun LoginScreen(onLogin: () -> Unit) {
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text("Zaloguj się", style = MaterialTheme.typography.headlineMedium)
+            Text(stringResource(Res.string.login_title), style = MaterialTheme.typography.headlineMedium)
             Spacer(Modifier.height(12.dp))
-            Text("Na razie wydmuszka logowania portfelem.")
+            Text(stringResource(Res.string.login_subtitle))
             Spacer(Modifier.height(20.dp))
             Button(onClick = onLogin) {
-                Text("Połącz portfel (mock)")
+                Text(stringResource(Res.string.login_connect_wallet))
             }
         }
     }

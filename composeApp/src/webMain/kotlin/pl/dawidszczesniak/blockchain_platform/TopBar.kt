@@ -32,6 +32,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
+import blockchain_platform.composeapp.generated.resources.Res
+import blockchain_platform.composeapp.generated.resources.app_name
+import blockchain_platform.composeapp.generated.resources.login
+import blockchain_platform.composeapp.generated.resources.logout
+import blockchain_platform.composeapp.generated.resources.nav_create_problem
+import blockchain_platform.composeapp.generated.resources.nav_problem_list
+import blockchain_platform.composeapp.generated.resources.profile
+import blockchain_platform.composeapp.generated.resources.settings
+import blockchain_platform.composeapp.generated.resources.theme_dark
+import blockchain_platform.composeapp.generated.resources.theme_light
+import org.jetbrains.compose.resources.stringResource
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -54,7 +65,7 @@ fun TopBar(
         TopAppBar(
             title = {
                 Text(
-                    "Blockchain Platform",
+                    stringResource(Res.string.app_name),
                     modifier = Modifier.clickable { onHomeClick() }
                 )
             },
@@ -65,20 +76,24 @@ fun TopBar(
             ),
             actions = {
                 NavTab(
-                    text = "Lista problemów",
+                    text = stringResource(Res.string.nav_problem_list),
                     selected = currentRoute == Route.Problems,
                     onClick = { onHomeClick() }
                 )
                 Spacer(Modifier.width(8.dp))
                 NavTab(
-                    text = "Utwórz problem",
+                    text = stringResource(Res.string.nav_create_problem),
                     selected = currentRoute == Route.CreateProblem,
                     onClick = { onNavigate(Route.CreateProblem) }
                 )
                 Spacer(Modifier.width(16.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        if (isDarkTheme) "Ciemny" else "Jasny",
+                        if (isDarkTheme) {
+                            stringResource(Res.string.theme_dark)
+                        } else {
+                            stringResource(Res.string.theme_light)
+                        },
                         style = MaterialTheme.typography.labelMedium
                     )
                     Spacer(Modifier.width(8.dp))
@@ -93,7 +108,7 @@ fun TopBar(
                         IconButton(onClick = { profileMenuExpanded = true }) {
                             Icon(
                                 imageVector = Icons.Outlined.AccountCircle,
-                                contentDescription = "Profil"
+                                contentDescription = stringResource(Res.string.profile)
                             )
                         }
                         DropdownMenu(
@@ -102,14 +117,14 @@ fun TopBar(
                             offset = DpOffset(x = 0.dp, y = 8.dp)
                         ) {
                             DropdownMenuItem(
-                                text = { Text("Ustawienia") },
+                                text = { Text(stringResource(Res.string.settings)) },
                                 onClick = {
                                     profileMenuExpanded = false
                                     onNavigate(Route.Settings)
                                 }
                             )
                             DropdownMenuItem(
-                                text = { Text("Wyloguj") },
+                                text = { Text(stringResource(Res.string.logout)) },
                                 onClick = {
                                     profileMenuExpanded = false
                                     onLogout()
@@ -119,7 +134,7 @@ fun TopBar(
                     }
                 } else {
                     NavTab(
-                        text = "Zaloguj się",
+                        text = stringResource(Res.string.login),
                         selected = currentRoute == Route.Login,
                         onClick = { onLoginClick() }
                     )
