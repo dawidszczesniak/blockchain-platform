@@ -5,12 +5,11 @@ import androidx.compose.runtime.*
 @Composable
 fun App() {
 
-    var isDarkTheme by remember { mutableStateOf(true) }
     var isLoggedIn by remember { mutableStateOf(false) }
     var route by remember { mutableStateOf(Route.Problems) }
     var pendingRouteAfterLogin by remember { mutableStateOf<Route?>(null) }
 
-    AppTheme(darkTheme = isDarkTheme) {
+    AppTheme {
         fun navigate(target: Route) {
             if (!isLoggedIn && (target == Route.CreateProblem || target == Route.Settings)) {
                 pendingRouteAfterLogin = target
@@ -36,9 +35,7 @@ fun App() {
                 isLoggedIn = false
                 pendingRouteAfterLogin = null
                 route = Route.Problems
-            },
-            isDarkTheme = isDarkTheme,
-            onThemeChange = { isDarkTheme = it }
+            }
         )
     }
 }

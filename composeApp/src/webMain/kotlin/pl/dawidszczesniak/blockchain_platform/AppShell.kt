@@ -9,10 +9,13 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.*
 import androidx.compose.runtime.key
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import pl.dawidszczesniak.blockchain_platform.screens.CreateProblemScreen
 import pl.dawidszczesniak.blockchain_platform.screens.LoginScreen
 import pl.dawidszczesniak.blockchain_platform.screens.ProblemsListScreen
 import pl.dawidszczesniak.blockchain_platform.screens.SettingsScreen
+import pl.dawidszczesniak.blockchain_platform.ui.AppBackdrop
+import pl.dawidszczesniak.blockchain_platform.ui.AppPageContainer
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -23,8 +26,6 @@ fun AppShell(
     onLoginClick: () -> Unit,
     onLogin: () -> Unit,
     onLogout: () -> Unit,
-    isDarkTheme: Boolean,
-    onThemeChange: (Boolean) -> Unit,
 ) {
     var problemsScreenKey by remember { mutableStateOf(0) }
 
@@ -33,31 +34,29 @@ fun AppShell(
         onNavigate(Route.Problems)
     }
 
-    Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
-        topBar = {
-            TopBar(
-                currentRoute = currentRoute,
-                onNavigate = onNavigate,
-                isLoggedIn = isLoggedIn,
-                onLoginClick = onLoginClick,
-                onLogout = onLogout,
-                onHomeClick = { goHomeRecreate() },
-                isDarkTheme = isDarkTheme,
-                onThemeChange = onThemeChange
-            )
-        }
-    ) { padding ->
-        Box(
-            modifier = Modifier
-                .padding(padding)
-                .fillMaxSize()
-        ) {
-            when (currentRoute) {
-                Route.Problems -> key(problemsScreenKey) { ProblemsListScreen() }
-                Route.CreateProblem -> CreateProblemScreen()
-                Route.Settings -> SettingsScreen()
-                Route.Login -> LoginScreen(onLogin = onLogin)
+    Box(modifier = Modifier.fillMaxSize()) {
+        AppBackdrop(modifier = Modifier.fillMaxSize())
+        Scaffold(
+            containerColor = Color.Transparent,
+            contentColor = MaterialTheme.colorScheme.onBackground,
+            topBar = {
+                TopBar(
+                    currentRoute = currentRoute,
+                    onNavigate = onNavigate,
+                    isLoggedIn = isLoggedIn,
+                    onLoginClick = onLoginClick,
+                    onLogout = onLogout,
+                    onHomeClick = { goHomeRecreate() }
+                )
+            }
+        ) { padding ->
+            AppPageContainer(modifier = Modifier.padding(padding)) {
+                when (currentRoute) {
+                    Route.Problems -> key(problemsScreenKey) { ProblemsListScreen() }
+                    Route.CreateProblem -> CreateProblemScreen()
+                    Route.Settings -> SettingsScreen()
+                    Route.Login -> LoginScreen(onLogin = onLogin)
+                }
             }
         }
     }

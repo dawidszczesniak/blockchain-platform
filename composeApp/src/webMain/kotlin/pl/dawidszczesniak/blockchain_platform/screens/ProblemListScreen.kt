@@ -14,6 +14,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.SolidColor
 import blockchain_platform.composeapp.generated.resources.Res
 import blockchain_platform.composeapp.generated.resources.days_count
 import blockchain_platform.composeapp.generated.resources.details_coming_soon
@@ -47,6 +48,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import org.jetbrains.compose.resources.stringResource
+import pl.dawidszczesniak.blockchain_platform.ui.AppHeader
+import pl.dawidszczesniak.blockchain_platform.ui.AppSurface
 import kotlin.math.max
 import kotlin.math.min
 
@@ -153,72 +156,76 @@ fun ProblemsListScreen() {
             }
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        Column(modifier = Modifier.fillMaxWidth().padding(24.dp)) {
-            Text(stringResource(Res.string.problems_title), style = MaterialTheme.typography.headlineSmall)
-            Spacer(Modifier.height(6.dp))
-            Text(
-                stringResource(Res.string.problems_mock_info, allProblems.size),
-                style = MaterialTheme.typography.bodyMedium
-            )
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(18.dp)
+    ) {
+        AppHeader(
+            title = stringResource(Res.string.problems_title),
+            subtitle = stringResource(Res.string.problems_mock_info, allProblems.size)
+        )
 
-            Spacer(Modifier.height(12.dp))
-
+        AppSurface(
+            modifier = Modifier.fillMaxSize(),
+            surfaceAlpha = 0.65f,
+            borderAlpha = 0.34f
+        ) {
             SortRow(
                 sortOption = sortOption,
                 onSortChanged = { sortOption = it }
             )
-        }
+            Spacer(Modifier.height(12.dp))
 
-        Box(modifier = Modifier.fillMaxSize()) {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(start = 24.dp, end = 52.dp, bottom = 24.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                items(sortedProblems) { p ->
-                    ProblemCard(problem = p, onOpen = { /* TODO */ })
+            Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(end = 44.dp, bottom = 18.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items(sortedProblems) { p ->
+                        ProblemCard(problem = p, onOpen = { /* TODO */ })
+                    }
                 }
-            }
-
-            Box(
-                modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .fillMaxHeight()
-                    .padding(end = 8.dp)
-            ) {
-                val shape = RoundedCornerShape(8.dp)
 
                 Box(
                     modifier = Modifier
+                        .align(Alignment.CenterEnd)
                         .fillMaxHeight()
-                        .width(10.dp)
-                        .background(
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
-                            shape = shape
-                        )
-                )
-
-                VerticalScrollbar(
-                    adapter = rememberScrollbarAdapter(listState),
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .width(10.dp)
-                )
-            }
-
-            if (isLoadingMore) {
-                Column(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                        .padding(end = 6.dp)
                 ) {
-                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                    Spacer(Modifier.height(8.dp))
-                    Text(stringResource(Res.string.loading_more), style = MaterialTheme.typography.bodySmall)
+                    val shape = RoundedCornerShape(8.dp)
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .width(8.dp)
+                            .background(
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
+                                shape = shape
+                            )
+                    )
+
+                    VerticalScrollbar(
+                        adapter = rememberScrollbarAdapter(listState),
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .width(8.dp)
+                    )
+                }
+
+                if (isLoadingMore) {
+                    Column(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .padding(top = 16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                        Spacer(Modifier.height(8.dp))
+                        Text(stringResource(Res.string.loading_more), style = MaterialTheme.typography.bodySmall)
+                    }
                 }
             }
         }
@@ -237,11 +244,19 @@ private fun SortRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.End
     ) {
-        Text(stringResource(Res.string.sort_label), style = MaterialTheme.typography.titleSmall)
+        Text(stringResource(Res.string.sort_label), style = MaterialTheme.typography.labelLarge)
         Spacer(Modifier.width(10.dp))
 
         Box(modifier = Modifier.wrapContentSize(Alignment.TopEnd)) {
-            OutlinedButton(onClick = { expanded = true }) {
+            OutlinedButton(
+                onClick = { expanded = true },
+                shape = RoundedCornerShape(14.dp),
+                border = ButtonDefaults.outlinedButtonBorder(enabled = true).copy(
+                    brush = SolidColor(
+                        MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)
+                    )
+                )
+            ) {
                 Text(sortOptionLabel(sortOption))
             }
 
@@ -295,70 +310,73 @@ private fun ProblemCard(
     val registered = min(problem.registeredParticipants, required)
     val progress = registered.toFloat() / required.toFloat()
 
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                stringResource(
-                    Res.string.problem_title_template,
-                    problem.id,
-                    problem.titleLetter.toString()
-                ),
-                style = MaterialTheme.typography.titleMedium
+    AppSurface(
+        modifier = Modifier.fillMaxWidth(),
+        surfaceAlpha = 0.74f,
+        borderAlpha = 0.4f
+    ) {
+        Text(
+            stringResource(
+                Res.string.problem_title_template,
+                problem.id,
+                problem.titleLetter.toString()
+            ),
+            style = MaterialTheme.typography.titleMedium
+        )
+        Spacer(Modifier.height(8.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            InfoChip(
+                label = stringResource(Res.string.info_prize),
+                value = "${problem.prizeAmount} USDC"
             )
-            Spacer(Modifier.height(8.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                InfoChip(
-                    label = stringResource(Res.string.info_prize),
-                    value = "${problem.prizeAmount} USDC"
-                )
-                InfoChip(
-                    label = stringResource(Res.string.info_entry_fee),
-                    value = "${problem.entryFeeAmount} USDC"
-                )
-                InfoChip(
-                    label = stringResource(Res.string.info_start),
-                    value = stringResource(Res.string.days_count, problem.daysToStart)
-                )
-            }
-
-            Spacer(Modifier.height(10.dp))
-
-            Text(
-                stringResource(
-                    Res.string.participants_summary,
-                    registered,
-                    problem.requiredParticipants
-                ),
-                style = MaterialTheme.typography.bodyMedium
+            InfoChip(
+                label = stringResource(Res.string.info_entry_fee),
+                value = "${problem.entryFeeAmount} USDC"
             )
-            Spacer(Modifier.height(6.dp))
-            LinearProgressIndicator(
-                progress = { progress },
-                modifier = Modifier.fillMaxWidth()
+            InfoChip(
+                label = stringResource(Res.string.info_start),
+                value = stringResource(Res.string.days_count, problem.daysToStart)
             )
+        }
 
-            Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(10.dp))
 
-            Text(
-                stringResource(
-                    Res.string.registration_and_submission,
-                    problem.joinUntilLabel,
-                    problem.daysToJoinEnd,
-                    problem.submitUntilLabel
-                ),
-                style = MaterialTheme.typography.bodySmall
-            )
+        Text(
+            stringResource(
+                Res.string.participants_summary,
+                registered,
+                problem.requiredParticipants
+            ),
+            style = MaterialTheme.typography.bodyMedium
+        )
+        Spacer(Modifier.height(6.dp))
+        LinearProgressIndicator(
+            progress = { progress },
+            modifier = Modifier.fillMaxWidth()
+        )
 
-            Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(10.dp))
 
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                Button(onClick = onOpen, enabled = false) {
-                    Text(stringResource(Res.string.details_coming_soon))
-                }
+        Text(
+            stringResource(
+                Res.string.registration_and_submission,
+                problem.joinUntilLabel,
+                problem.daysToJoinEnd,
+                problem.submitUntilLabel
+            ),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        Spacer(Modifier.height(12.dp))
+
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            Button(onClick = onOpen, enabled = false) {
+                Text(stringResource(Res.string.details_coming_soon))
             }
         }
     }
@@ -368,7 +386,15 @@ private fun ProblemCard(
 private fun InfoChip(label: String, value: String) {
     AssistChip(
         onClick = { },
-        label = { Text("$label: $value") }
+        label = { Text("$label: $value", style = MaterialTheme.typography.labelMedium) },
+        colors = AssistChipDefaults.assistChipColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f),
+            labelColor = MaterialTheme.colorScheme.onSurface
+        ),
+        border = AssistChipDefaults.assistChipBorder(
+            enabled = true,
+            borderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)
+        )
     )
 }
 

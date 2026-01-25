@@ -10,18 +10,25 @@ import blockchain_platform.composeapp.generated.resources.settings_future
 import blockchain_platform.composeapp.generated.resources.settings_placeholder
 import blockchain_platform.composeapp.generated.resources.settings_title
 import org.jetbrains.compose.resources.stringResource
+import pl.dawidszczesniak.blockchain_platform.ui.AppHeader
+import pl.dawidszczesniak.blockchain_platform.ui.AppSurface
 
 @Composable
 fun SettingsScreen() {
-    Column(modifier = Modifier.fillMaxSize().padding(24.dp)) {
-        Text(stringResource(Res.string.settings_title), style = MaterialTheme.typography.headlineSmall)
-        Spacer(Modifier.height(12.dp))
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(18.dp)
+    ) {
+        AppHeader(title = stringResource(Res.string.settings_title))
 
-        Card(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(16.dp)) {
-                Text(stringResource(Res.string.settings_placeholder))
-                Text(stringResource(Res.string.settings_future))
-            }
+        AppSurface(modifier = Modifier.fillMaxWidth()) {
+            Text(stringResource(Res.string.settings_placeholder))
+            Spacer(Modifier.height(8.dp))
+            Text(
+                stringResource(Res.string.settings_future),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
