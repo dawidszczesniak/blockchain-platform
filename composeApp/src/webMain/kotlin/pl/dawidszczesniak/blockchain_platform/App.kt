@@ -1,47 +1,44 @@
 package pl.dawidszczesniak.blockchain_platform
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.safeContentPadding
-import androidx.compose.material3.Button
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import org.jetbrains.compose.resources.painterResource
-
-import blockchain_platform.composeapp.generated.resources.Res
-import blockchain_platform.composeapp.generated.resources.compose_multiplatform
 
 @Composable
 fun App() {
-    MaterialTheme {
-        var showContent by remember { mutableStateOf(false) }
-        Column(
-            modifier = Modifier
-                .background(MaterialTheme.colorScheme.primaryContainer)
-                .safeContentPadding()
-                .fillMaxSize(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Button(onClick = { showContent = !showContent }) {
-                Text("Click me!")
-            }
-            AnimatedVisibility(showContent) {
-                val greeting = remember { Greeting().greet() }
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Image(painterResource(Res.drawable.compose_multiplatform), null)
-                    Text("Compose: $greeting")
-                }
+
+    var isDarkTheme by remember { mutableStateOf(true) }
+    var isLoggedIn by remember { mutableStateOf(false) }
+    var route by remember { mutableStateOf(Route.Problems) }
+    var pendingRouteAfterLogin by remember { mutableStateOf<Route?>(null) }
+
+    AppTheme(darkTheme = isDarkTheme) {
+        fun navigate(target: Route) {
+            if (!isLoggedIn && (target == Route.CreateProblem || target == Route.Settings)) {
+                pendingRouteAfterLogin = target
+                route = Route.Login
+            } else {
+                route = target
             }
         }
+
+        AppShell(
+            currentRoute = route,
+            onNavigate = { navigate(it) },
+            isLoggedIn = isLoggedIn,
+            onLoginClick = {
+                route = Route.Login
+            },
+            onLogin = {
+                isLoggedIn = true
+                route = pendingRouteAfterLogin ?: Route.Problems
+                pendingRouteAfterLogin = null
+            },
+            onLogout = {
+                isLoggedIn = false
+                pendingRouteAfterLogin = null
+                route = Route.Problems
+            },
+            isDarkTheme = isDarkTheme,
+            onThemeChange = { isDarkTheme = it }
+        )
     }
 }
