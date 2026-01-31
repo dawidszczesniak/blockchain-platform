@@ -25,6 +25,12 @@
     <string name="create_problem_test_remove">Remove</string>
     <string name="create_problem_test_expand">Expand</string>
     <string name="create_problem_test_collapse">Collapse</string>
+    <string name="create_problem_profit_title">Profit estimate</string>
+    <string name="create_problem_profit_note">Calculated from prize, entry fee, participants, and 2% platform fee.</string>
+    <string name="create_problem_profit_gross">Gross entry fees</string>
+    <string name="create_problem_profit_prize">Prize payout</string>
+    <string name="create_problem_profit_platform_fee">Platform fee (2%)</string>
+    <string name="create_problem_profit_net">Net profit</string>
     <string name="create_problem_join_until_label">Registration ends (YYYY-MM-DD)</string>
     <string name="create_problem_submit_until_label">Submission ends (YYYY-MM-DD)</string>
     <string name="create_problem_action_placeholder">Create (placeholder)</string>

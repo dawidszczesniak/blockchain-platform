@@ -25,6 +25,12 @@
     <string name="create_problem_test_remove">Usuń</string>
     <string name="create_problem_test_expand">Rozwiń</string>
     <string name="create_problem_test_collapse">Zwiń</string>
+    <string name="create_problem_profit_title">Szacowany zysk</string>
+    <string name="create_problem_profit_note">Wyliczane z nagrody, wejściówki, liczby uczestników i opłaty platformy 2%.</string>
+    <string name="create_problem_profit_gross">Suma wejściówek</string>
+    <string name="create_problem_profit_prize">Wypłata nagrody</string>
+    <string name="create_problem_profit_platform_fee">Opłata platformy (2%)</string>
+    <string name="create_problem_profit_net">Zysk na czysto</string>
     <string name="create_problem_join_until_label">Koniec rejestracji (YYYY-MM-DD)</string>
     <string name="create_problem_submit_until_label">Koniec zgłoszeń (YYYY-MM-DD)</string>
     <string name="create_problem_action_placeholder">Utwórz (placeholder)</string>
