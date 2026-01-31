@@ -18,9 +18,10 @@ import blockchain_platform.composeapp.generated.resources.create_problem_descrip
 import blockchain_platform.composeapp.generated.resources.create_problem_entry_fee_label
 import blockchain_platform.composeapp.generated.resources.create_problem_join_until_label
 import blockchain_platform.composeapp.generated.resources.create_problem_participants_label
-import blockchain_platform.composeapp.generated.resources.create_problem_profit_gross
+import blockchain_platform.composeapp.generated.resources.create_problem_profit_entry_fee
 import blockchain_platform.composeapp.generated.resources.create_problem_profit_net
 import blockchain_platform.composeapp.generated.resources.create_problem_profit_note
+import blockchain_platform.composeapp.generated.resources.create_problem_profit_participants
 import blockchain_platform.composeapp.generated.resources.create_problem_profit_platform_fee
 import blockchain_platform.composeapp.generated.resources.create_problem_profit_prize
 import blockchain_platform.composeapp.generated.resources.create_problem_profit_title
@@ -306,12 +307,16 @@ private fun ProfitPanel(
         Spacer(Modifier.height(14.dp))
 
         ProfitRow(
-            label = stringResource(Res.string.create_problem_profit_gross),
-            value = formatAmount(gross)
-        )
-        ProfitRow(
             label = stringResource(Res.string.create_problem_profit_prize),
             value = formatAmount(prizeValue)
+        )
+        ProfitRow(
+            label = stringResource(Res.string.create_problem_profit_entry_fee),
+            value = formatAmount(entryFeeValue)
+        )
+        ProfitRow(
+            label = stringResource(Res.string.create_problem_profit_participants),
+            value = participantsValue.toString()
         )
         ProfitRow(
             label = stringResource(Res.string.create_problem_profit_platform_fee),
