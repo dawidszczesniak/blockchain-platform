@@ -28,7 +28,7 @@
     <string name="settings_future">Tu później: adres portfela, RPC, itp.</string>
 
     <string name="problems_title">Lista problemów</string>
-    <string name="problems_mock_info">Mock: %1$d problemów (infinite scroll + sortowanie).</string>
+    <string name="problems_mock_info">Mock: %1$d problemów (paginacja + sortowanie).</string>
     <string name="loading_more">Dociąganie kolejnych problemów…</string>
 
     <string name="sort_label">Sortowanie:</string>

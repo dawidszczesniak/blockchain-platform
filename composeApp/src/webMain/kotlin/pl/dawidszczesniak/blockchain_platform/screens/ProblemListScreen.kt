@@ -4,10 +4,12 @@ import androidx.compose.foundation.VerticalScrollbar
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollbarAdapter
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -22,7 +24,6 @@ import blockchain_platform.composeapp.generated.resources.details_coming_soon
 import blockchain_platform.composeapp.generated.resources.info_entry_fee
 import blockchain_platform.composeapp.generated.resources.info_prize
 import blockchain_platform.composeapp.generated.resources.info_start
-import blockchain_platform.composeapp.generated.resources.loading_more
 import blockchain_platform.composeapp.generated.resources.participants_summary
 import blockchain_platform.composeapp.generated.resources.problem_title_template
 import blockchain_platform.composeapp.generated.resources.problems_mock_info
@@ -45,17 +46,14 @@ import blockchain_platform.composeapp.generated.resources.sort_option_required_l
 import blockchain_platform.composeapp.generated.resources.sort_option_required_most
 import blockchain_platform.composeapp.generated.resources.sort_option_start_latest
 import blockchain_platform.composeapp.generated.resources.sort_option_start_soonest
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
 import org.jetbrains.compose.resources.stringResource
 import pl.dawidszczesniak.blockchain_platform.ui.AppSurface
 import kotlin.math.max
 import kotlin.math.min
 
 private const val PAGE_SIZE = 20
-private const val LOAD_MORE_THRESHOLD = 5
 private const val INITIAL_CREATED_ORDER = 1000
+private const val TOTAL_PROBLEMS = 87
 
 private data class FakeProblem(
     val id: Int,
@@ -101,59 +99,33 @@ private enum class SortOption {
 fun ProblemsListScreen() {
     val listState = rememberLazyListState()
 
-    var allProblems by remember {
-        mutableStateOf(
-            generateFakeProblems(
-                startId = 1,
-                startCreatedOrder = INITIAL_CREATED_ORDER,
-                count = PAGE_SIZE
-            )
+    val allProblems = remember {
+        generateFakeProblems(
+            startId = 1,
+            startCreatedOrder = INITIAL_CREATED_ORDER,
+            count = TOTAL_PROBLEMS
         )
     }
-    var nextId by remember { mutableStateOf(1 + PAGE_SIZE) }
-    var nextCreatedOrder by remember { mutableStateOf(INITIAL_CREATED_ORDER - PAGE_SIZE) }
 
     var sortOption by remember { mutableStateOf(SortOption.Newest) }
     val sortedProblems = remember(allProblems, sortOption) {
         sortProblems(allProblems, sortOption)
     }
 
-    var isLoadingMore by remember { mutableStateOf(false) }
-
-    suspend fun loadMoreMock() {
-        if (isLoadingMore) return
-        isLoadingMore = true
-
-        delay(350)
-
-        val more = generateFakeProblems(
-            startId = nextId,
-            startCreatedOrder = nextCreatedOrder,
-            count = PAGE_SIZE
-        )
-
-        allProblems = allProblems + more
-        nextId += PAGE_SIZE
-        nextCreatedOrder -= PAGE_SIZE
-
-        isLoadingMore = false
+    var currentPage by remember { mutableStateOf(1) }
+    val totalPages = max(1, (sortedProblems.size + PAGE_SIZE - 1) / PAGE_SIZE)
+    val pageIndex = currentPage.coerceIn(1, totalPages)
+    val startIndex = (pageIndex - 1) * PAGE_SIZE
+    val pageProblems = remember(sortedProblems, pageIndex) {
+        sortedProblems.drop(startIndex).take(PAGE_SIZE)
     }
 
-    LaunchedEffect(Unit) {
-        snapshotFlow {
-            val lastVisibleIndex = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-            val totalItems = listState.layoutInfo.totalItemsCount
-            lastVisibleIndex to totalItems
-        }
-            .map { (lastVisible, total) ->
-                total > 0 && lastVisible >= (total - LOAD_MORE_THRESHOLD)
-            }
-            .distinctUntilChanged()
-            .collect { shouldLoadMore ->
-                if (shouldLoadMore) {
-                    loadMoreMock()
-                }
-            }
+    LaunchedEffect(totalPages) {
+        if (currentPage > totalPages) currentPage = totalPages
+    }
+
+    LaunchedEffect(pageIndex, sortOption) {
+        listState.scrollToItem(0)
     }
 
     Column(
@@ -177,7 +149,10 @@ fun ProblemsListScreen() {
                 Spacer(Modifier.weight(1f))
                 SortRow(
                     sortOption = sortOption,
-                    onSortChanged = { sortOption = it }
+                    onSortChanged = {
+                        sortOption = it
+                        currentPage = 1
+                    }
                 )
             }
             Spacer(Modifier.height(6.dp))
@@ -195,7 +170,7 @@ fun ProblemsListScreen() {
                     contentPadding = PaddingValues(end = 44.dp, bottom = 18.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    items(sortedProblems) { p ->
+                    items(pageProblems) { p ->
                         ProblemCard(problem = p, onOpen = { /* TODO */ })
                     }
                 }
@@ -225,21 +200,13 @@ fun ProblemsListScreen() {
                             .width(8.dp)
                     )
                 }
-
-                if (isLoadingMore) {
-                    Column(
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .fillMaxWidth()
-                            .padding(top = 16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                        Spacer(Modifier.height(8.dp))
-                        Text(stringResource(Res.string.loading_more), style = MaterialTheme.typography.bodySmall)
-                    }
-                }
             }
+
+            PaginationRow(
+                currentPage = pageIndex,
+                totalPages = totalPages,
+                onPageSelected = { currentPage = it }
+            )
         }
     }
 }
@@ -308,6 +275,45 @@ private fun sortOptionLabel(option: SortOption): String {
         SortOption.ProgressLeast -> stringResource(Res.string.sort_option_progress_least)
         SortOption.JoinEndsSoonest -> stringResource(Res.string.sort_option_join_ends_soonest)
         SortOption.JoinEndsLatest -> stringResource(Res.string.sort_option_join_ends_latest)
+    }
+}
+
+@Composable
+private fun PaginationRow(
+    currentPage: Int,
+    totalPages: Int,
+    onPageSelected: (Int) -> Unit
+) {
+    if (totalPages <= 1) return
+
+    val scrollState = rememberScrollState()
+    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+        Row(
+            modifier = Modifier.horizontalScroll(scrollState),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            for (page in 1..totalPages) {
+                val selected = page == currentPage
+                if (selected) {
+                    Button(
+                        onClick = { onPageSelected(page) },
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                    ) {
+                        Text(page.toString())
+                    }
+                } else {
+                    OutlinedButton(
+                        onClick = { onPageSelected(page) },
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                    ) {
+                        Text(page.toString())
+                    }
+                }
+            }
+        }
     }
 }
 
