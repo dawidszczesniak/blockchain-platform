@@ -23,6 +23,7 @@ import blockchain_platform.composeapp.generated.resources.create_problem_test_co
 import blockchain_platform.composeapp.generated.resources.create_problem_test_collapse
 import blockchain_platform.composeapp.generated.resources.create_problem_test_expand
 import blockchain_platform.composeapp.generated.resources.create_problem_test_label
+import blockchain_platform.composeapp.generated.resources.create_problem_test_remove
 import blockchain_platform.composeapp.generated.resources.create_problem_tests_title
 import blockchain_platform.composeapp.generated.resources.create_problem_title
 import org.jetbrains.compose.resources.stringResource
@@ -129,6 +130,12 @@ fun CreateProblemScreen() {
                         onToggle = {
                             tests[index] = test.copy(expanded = !test.expanded)
                         },
+                        canRemove = tests.size > 1,
+                        onRemove = {
+                            if (tests.size > 1) {
+                                tests.removeAll { it.id == test.id }
+                            }
+                        },
                         onCodeChange = { value ->
                             tests[index] = test.copy(code = value)
                         }
@@ -171,6 +178,8 @@ private fun TestCaseCard(
     index: Int,
     test: TestDraft,
     onToggle: () -> Unit,
+    canRemove: Boolean,
+    onRemove: () -> Unit,
     onCodeChange: (String) -> Unit,
 ) {
     OutlinedCard(
@@ -190,6 +199,9 @@ private fun TestCaseCard(
                     style = MaterialTheme.typography.titleSmall
                 )
                 Spacer(Modifier.weight(1f))
+                TextButton(onClick = onRemove, enabled = canRemove) {
+                    Text(stringResource(Res.string.create_problem_test_remove))
+                }
                 TextButton(onClick = onToggle) {
                     Text(
                         stringResource(

@@ -20,6 +20,7 @@
     <string name="create_problem_tests_title">Tests (%1$d/%2$d)</string>
     <string name="create_problem_add_test">Add test</string>
     <string name="create_problem_test_label">Test %1$d</string>
+    <string name="create_problem_test_remove">Remove</string>
     <string name="create_problem_test_expand">Expand</string>
     <string name="create_problem_test_collapse">Collapse</string>
     <string name="create_problem_join_until_label">Registration ends (YYYY-MM-DD)</string>
