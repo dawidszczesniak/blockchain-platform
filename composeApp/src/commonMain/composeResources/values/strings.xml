@@ -15,6 +15,13 @@
     <string name="create_problem_prize_label">Prize (e.g., wei / USDC)</string>
     <string name="create_problem_participants_label">Number of participants</string>
     <string name="create_problem_entry_fee_label">Entry fee (e.g., wei / USDC)</string>
+    <string name="create_problem_description_label">Problem description</string>
+    <string name="create_problem_test_code_label">Test code / validator</string>
+    <string name="create_problem_tests_title">Tests (%1$d/%2$d)</string>
+    <string name="create_problem_add_test">Add test</string>
+    <string name="create_problem_test_label">Test %1$d</string>
+    <string name="create_problem_test_expand">Expand</string>
+    <string name="create_problem_test_collapse">Collapse</string>
     <string name="create_problem_join_until_label">Registration ends (YYYY-MM-DD)</string>
     <string name="create_problem_submit_until_label">Submission ends (YYYY-MM-DD)</string>
     <string name="create_problem_action_placeholder">Create (placeholder)</string>
