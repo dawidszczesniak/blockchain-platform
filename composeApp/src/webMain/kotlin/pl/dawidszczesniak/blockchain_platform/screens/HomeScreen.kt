@@ -72,7 +72,9 @@ fun HomeScreen(onNavigateToProblems: () -> Unit) {
         verticalArrangement = Arrangement.spacedBy(24.dp)
     ) {
         HeroSection(onNavigateToProblems = onNavigateToProblems)
+        // TODO(backend): Replace dashboard stats with real metrics from backend.
         StatsSection()
+        // TODO(backend): Replace updates feed with backend data.
         UpdatesSection()
     }
 }
@@ -325,6 +327,7 @@ private fun UpdatesList(modifier: Modifier = Modifier) {
             color = MaterialTheme.colorScheme.onSurface
         )
         Spacer(Modifier.height(12.dp))
+        // TODO(backend): Replace mock updates with real backend entries.
         val updates = listOf(
             stringResource(Res.string.home_update_title_1) to stringResource(Res.string.home_update_body_1),
             stringResource(Res.string.home_update_title_2) to stringResource(Res.string.home_update_body_2),
