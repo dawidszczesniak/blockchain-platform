@@ -5,6 +5,7 @@
     <string name="nav_create_problem">Create problem</string>
     <string name="nav_my_problems">Created problems</string>
     <string name="nav_my_participation">My participation</string>
+    <string name="nav_home">Dashboard</string>
     <string name="theme_dark">Dark</string>
     <string name="theme_light">Light</string>
     <string name="profile">Profile</string>
@@ -75,6 +76,34 @@
     <string name="participation_empty_title">You’re not participating in any problems yet.</string>
     <string name="participation_empty_body">Browse the problem list and join a challenge.</string>
     <string name="participation_empty_action">Go to problem list</string>
+
+    <string name="home_hero_title_lead">Blockchain</string>
+    <string name="home_hero_title_emphasis">Challenge Platform</string>
+    <string name="home_hero_description">Create contests, set prizes, and verify solutions on-chain. Run fair, auditable competitions for builders and researchers.</string>
+    <string name="home_hero_primary_cta">Browse challenges</string>
+    <string name="home_hero_secondary_cta">How it works</string>
+
+    <string name="home_stat_status_title">Active challenges</string>
+    <string name="home_stat_status_value">38</string>
+    <string name="home_stat_status_note">Open for submissions</string>
+    <string name="home_stat_nodes_title">Prize pool</string>
+    <string name="home_stat_nodes_value">148,200 USDC</string>
+    <string name="home_stat_nodes_note">Across all active contests</string>
+    <string name="home_stat_block_title">Submissions today</string>
+    <string name="home_stat_block_value">312</string>
+    <string name="home_stat_block_note">+9% vs yesterday</string>
+
+    <string name="home_updates_title">Latest updates</string>
+    <string name="home_update_title_1">New challenge: ZK Proof Aggregation</string>
+    <string name="home_update_body_1">Prize 25,000 USDC • 20 participants • 14 days left.</string>
+    <string name="home_update_title_2">Validator v1.4 released</string>
+    <string name="home_update_body_2">Faster test execution and deterministic scoring.</string>
+    <string name="home_update_title_3">Payouts batch finalized</string>
+    <string name="home_update_body_3">11 winners paid in the last reward cycle.</string>
+
+    <string name="home_community_title">Join the builders</string>
+    <string name="home_community_body">Discuss challenge ideas, share test suites, and co‑create the platform.</string>
+    <string name="home_community_cta">Builder community</string>
     <string name="my_problem_participants">Participants: %1$d / %2$d</string>
     <string name="my_problem_started_on">Started: %1$s</string>
     <string name="my_problem_submitted">Submissions: %1$d</string>

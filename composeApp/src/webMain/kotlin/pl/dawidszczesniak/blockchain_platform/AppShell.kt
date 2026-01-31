@@ -7,12 +7,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.runtime.*
-import androidx.compose.runtime.key
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import pl.dawidszczesniak.blockchain_platform.screens.CreateProblemScreen
+import pl.dawidszczesniak.blockchain_platform.screens.HomeScreen
 import pl.dawidszczesniak.blockchain_platform.screens.LoginScreen
 import pl.dawidszczesniak.blockchain_platform.screens.MyParticipationScreen
 import pl.dawidszczesniak.blockchain_platform.screens.MyProblemsScreen
@@ -31,13 +31,6 @@ fun AppShell(
     onLogin: () -> Unit,
     onLogout: () -> Unit,
 ) {
-    var problemsScreenKey by remember { mutableStateOf(0) }
-
-    fun goHomeRecreate() {
-        problemsScreenKey++
-        onNavigate(Route.Problems)
-    }
-
     Box(modifier = Modifier.fillMaxSize()) {
         AppBackdrop(modifier = Modifier.fillMaxSize())
         Scaffold(
@@ -50,22 +43,21 @@ fun AppShell(
                     isLoggedIn = isLoggedIn,
                     onLoginClick = onLoginClick,
                     onLogout = onLogout,
-                    onHomeClick = { goHomeRecreate() }
+                    onHomeClick = { onNavigate(Route.Home) }
                 )
             }
         ) { padding ->
-            val pagePadding = PaddingValues(top = 0.dp, bottom = 24.dp)
+            val pagePadding = PaddingValues(top = 24.dp, bottom = 24.dp)
 
             AppPageContainer(
                 modifier = Modifier.padding(padding),
                 contentPadding = pagePadding
             ) {
                 when (currentRoute) {
-                    Route.Problems -> key(problemsScreenKey) {
-                        ProblemsListScreen(
-                            onCreateProblem = { onNavigate(Route.CreateProblem) }
-                        )
-                    }
+                    Route.Home -> HomeScreen(onNavigateToProblems = { onNavigate(Route.Problems) })
+                    Route.Problems -> ProblemsListScreen(
+                        onCreateProblem = { onNavigate(Route.CreateProblem) }
+                    )
                     Route.CreateProblem -> CreateProblemScreen()
                     Route.MyProblems -> MyProblemsScreen(
                         onCreateProblem = { onNavigate(Route.CreateProblem) }

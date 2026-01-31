@@ -1,5 +1,7 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
 :root {
-    color-scheme: dark;
+    color-scheme: light;
 }
 
 html, body {
@@ -8,16 +10,9 @@ html, body {
     margin: 0;
     padding: 0;
     overflow: hidden;
-    background: #061629;
-    color: #e6f3ff;
+    background: #ffffff;
+    color: #111111;
+    font-family: 'Space Grotesk', 'Manrope', sans-serif;
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
-}
-
-body > svg {
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    transform: translate(-50%, -50%);
-    opacity: 0.6;
 }

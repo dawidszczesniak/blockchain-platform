@@ -100,61 +100,51 @@ fun MyParticipationScreen(onBrowseProblems: () -> Unit) {
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
-        AppSurface(
-            modifier = if (filtered.isEmpty()) {
-                Modifier.fillMaxWidth()
-            } else {
-                Modifier.fillMaxSize()
-            },
-            surfaceAlpha = 0.65f,
-            borderAlpha = 0.34f
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = stringResource(Res.string.participation_title),
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onSurface
+            Text(
+                text = stringResource(Res.string.participation_title),
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            if (filtered.isNotEmpty()) {
+                Spacer(Modifier.weight(1f))
+                ParticipationFilterRow(
+                    current = filter,
+                    onChange = {
+                        filter = it
+                        currentPage = 1
+                    }
                 )
-                if (filtered.isNotEmpty()) {
-                    Spacer(Modifier.weight(1f))
-                    ParticipationFilterRow(
-                        current = filter,
-                        onChange = {
-                            filter = it
-                            currentPage = 1
-                        }
-                    )
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+
+        if (filtered.isEmpty()) {
+            EmptyParticipation(onBrowseProblems = onBrowseProblems)
+            return@Column
+        }
+
+        Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxWidth(),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(end = 8.dp, bottom = 18.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                items(pageProblems) { item ->
+                    ParticipationCard(problem = item)
                 }
-            }
-            Spacer(Modifier.height(12.dp))
-
-            if (filtered.isEmpty()) {
-                EmptyParticipation(onBrowseProblems = onBrowseProblems)
-                return@AppSurface
-            }
-
-            Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier.fillMaxWidth(),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(end = 8.dp, bottom = 18.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    items(pageProblems) { item ->
-                        ParticipationCard(problem = item)
-                    }
-                    item {
-                        Spacer(Modifier.height(8.dp))
-                        PaginationRow(
-                            currentPage = pageIndex,
-                            totalPages = totalPages,
-                            onPageSelected = { currentPage = it }
-                        )
-                        Spacer(Modifier.height(8.dp))
-                    }
+                item {
+                    Spacer(Modifier.height(8.dp))
+                    PaginationRow(
+                        currentPage = pageIndex,
+                        totalPages = totalPages,
+                        onPageSelected = { currentPage = it }
+                    )
+                    Spacer(Modifier.height(8.dp))
                 }
             }
         }
@@ -164,9 +154,7 @@ fun MyParticipationScreen(onBrowseProblems: () -> Unit) {
 @Composable
 private fun ParticipationCard(problem: ParticipationProblem) {
     AppSurface(
-        modifier = Modifier.fillMaxWidth(),
-        surfaceAlpha = 0.74f,
-        borderAlpha = 0.4f
+        modifier = Modifier.fillMaxWidth()
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),

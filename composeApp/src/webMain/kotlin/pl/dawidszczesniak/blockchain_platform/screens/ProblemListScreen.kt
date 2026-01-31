@@ -145,98 +145,87 @@ fun ProblemsListScreen(onCreateProblem: () -> Unit) {
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
-        AppSurface(
-            modifier = if (isEmpty) {
-                Modifier.fillMaxWidth()
-            } else {
-                Modifier.fillMaxSize()
-            },
-            surfaceAlpha = 0.65f,
-            borderAlpha = 0.34f
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = stringResource(Res.string.problems_title),
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onSurface
+            Text(
+                text = stringResource(Res.string.problems_title),
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            if (sortedProblems.isNotEmpty()) {
+                Spacer(Modifier.weight(1f))
+                SortRow(
+                    sortOption = sortOption,
+                    onSortChanged = {
+                        sortOption = it
+                        currentPage = 1
+                    }
                 )
-                if (sortedProblems.isNotEmpty()) {
-                    Spacer(Modifier.weight(1f))
-                    SortRow(
-                        sortOption = sortOption,
-                        onSortChanged = {
-                            sortOption = it
-                            currentPage = 1
-                        }
-                    )
-                }
             }
-            Spacer(Modifier.height(6.dp))
-            if (!isEmpty) {
-                // TODO(backend): Replace mock banner with real backend metadata.
-                Text(
-                    text = stringResource(Res.string.problems_mock_info, allProblems.size),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(Modifier.height(12.dp))
-            } else {
-                Spacer(Modifier.height(12.dp))
-                EmptyProblemList(onCreateProblem = onCreateProblem)
-                return@AppSurface
+        }
+        Spacer(Modifier.height(6.dp))
+        if (!isEmpty) {
+            // TODO(backend): Replace mock banner with real backend metadata.
+            Text(
+                text = stringResource(Res.string.problems_mock_info, allProblems.size),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(12.dp))
+        } else {
+            Spacer(Modifier.height(12.dp))
+            EmptyProblemList(onCreateProblem = onCreateProblem)
+            return@Column
+        }
+
+        Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(end = 44.dp, bottom = 18.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                items(pageProblems) { p ->
+                    ProblemCard(problem = p, onOpen = { /* TODO */ })
+                }
+                item {
+                    Spacer(Modifier.height(8.dp))
+                    PaginationRow(
+                        currentPage = pageIndex,
+                        totalPages = totalPages,
+                        onPageSelected = { currentPage = it }
+                    )
+                    Spacer(Modifier.height(8.dp))
+                }
             }
 
-            Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(end = 44.dp, bottom = 18.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    items(pageProblems) { p ->
-                        ProblemCard(problem = p, onOpen = { /* TODO */ })
-                    }
-                    item {
-                        Spacer(Modifier.height(8.dp))
-                        PaginationRow(
-                            currentPage = pageIndex,
-                            totalPages = totalPages,
-                            onPageSelected = { currentPage = it }
-                        )
-                        Spacer(Modifier.height(8.dp))
-                    }
-                }
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .fillMaxHeight()
+                    .padding(end = 6.dp)
+            ) {
+                val shape = RoundedCornerShape(8.dp)
 
                 Box(
                     modifier = Modifier
-                        .align(Alignment.CenterEnd)
                         .fillMaxHeight()
-                        .padding(end = 6.dp)
-                ) {
-                    val shape = RoundedCornerShape(8.dp)
+                        .width(8.dp)
+                        .background(
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
+                            shape = shape
+                        )
+                )
 
-                    Box(
-                        modifier = Modifier
-                            .fillMaxHeight()
-                            .width(8.dp)
-                            .background(
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
-                                shape = shape
-                            )
-                    )
-
-                    VerticalScrollbar(
-                        adapter = rememberScrollbarAdapter(listState),
-                        modifier = Modifier
-                            .fillMaxHeight()
-                            .width(8.dp)
-                    )
-                }
+                VerticalScrollbar(
+                    adapter = rememberScrollbarAdapter(listState),
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .width(8.dp)
+                )
             }
-
         }
     }
 }
@@ -381,9 +370,7 @@ private fun ProblemCard(
     val progress = registered.toFloat() / required.toFloat()
 
     AppSurface(
-        modifier = Modifier.fillMaxWidth(),
-        surfaceAlpha = 0.74f,
-        borderAlpha = 0.4f
+        modifier = Modifier.fillMaxWidth()
     ) {
         Text(
             stringResource(

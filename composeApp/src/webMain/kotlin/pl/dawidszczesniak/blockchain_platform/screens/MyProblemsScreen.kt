@@ -167,49 +167,43 @@ fun MyProblemsScreen(onCreateProblem: () -> Unit) {
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
-        AppSurface(
+        Row(
             modifier = Modifier.fillMaxWidth(),
-            surfaceAlpha = 0.65f,
-            borderAlpha = 0.34f
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = stringResource(Res.string.my_problems_title),
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                if (filtered.isNotEmpty()) {
-                    Spacer(Modifier.weight(1f))
-                    TypeFilterRow(
-                        current = filter,
-                        onChange = {
-                            filter = it
-                            currentPage = 1
-                        }
-                    )
-                }
-            }
-            Spacer(Modifier.height(12.dp))
-
-            if (filtered.isEmpty()) {
-                EmptyMyProblems(onCreateProblem = onCreateProblem)
-            } else {
-                pageProblems.forEachIndexed { index, problem ->
-                    MyProblemCard(problem = problem)
-                    if (index < pageProblems.lastIndex) {
-                        Spacer(Modifier.height(12.dp))
+            Text(
+                text = stringResource(Res.string.my_problems_title),
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            if (filtered.isNotEmpty()) {
+                Spacer(Modifier.weight(1f))
+                TypeFilterRow(
+                    current = filter,
+                    onChange = {
+                        filter = it
+                        currentPage = 1
                     }
-                }
-                Spacer(Modifier.height(14.dp))
-                PaginationRow(
-                    currentPage = pageIndex,
-                    totalPages = totalPages,
-                    onPageSelected = { currentPage = it }
                 )
             }
+        }
+        Spacer(Modifier.height(12.dp))
+
+        if (filtered.isEmpty()) {
+            EmptyMyProblems(onCreateProblem = onCreateProblem)
+        } else {
+            pageProblems.forEachIndexed { index, problem ->
+                MyProblemCard(problem = problem)
+                if (index < pageProblems.lastIndex) {
+                    Spacer(Modifier.height(12.dp))
+                }
+            }
+            Spacer(Modifier.height(14.dp))
+            PaginationRow(
+                currentPage = pageIndex,
+                totalPages = totalPages,
+                onPageSelected = { currentPage = it }
+            )
         }
     }
 }
@@ -217,9 +211,7 @@ fun MyProblemsScreen(onCreateProblem: () -> Unit) {
 @Composable
 private fun MyProblemCard(problem: MyProblem) {
     AppSurface(
-        modifier = Modifier.fillMaxWidth(),
-        surfaceAlpha = 0.74f,
-        borderAlpha = 0.4f
+        modifier = Modifier.fillMaxWidth()
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),

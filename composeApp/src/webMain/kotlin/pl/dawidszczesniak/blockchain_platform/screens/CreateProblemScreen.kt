@@ -168,7 +168,7 @@ private fun CreateProblemForm(
     submitUntilDate: String,
     onSubmitUntilChange: (String) -> Unit,
 ) {
-    AppSurface(modifier = modifier.fillMaxWidth()) {
+    Column(modifier = modifier.fillMaxWidth()) {
         Text(
             text = stringResource(Res.string.create_problem_title),
             style = MaterialTheme.typography.titleLarge
@@ -293,7 +293,7 @@ private fun ProfitPanel(
         else -> MaterialTheme.colorScheme.onSurface
     }
 
-    AppSurface(modifier = modifier.fillMaxWidth()) {
+    Column(modifier = modifier.fillMaxWidth()) {
         Text(
             text = stringResource(Res.string.create_problem_profit_title),
             style = MaterialTheme.typography.titleLarge

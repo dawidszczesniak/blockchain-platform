@@ -5,6 +5,7 @@
     <string name="nav_create_problem">Utwórz problem</string>
     <string name="nav_my_problems">Utworzone problemy</string>
     <string name="nav_my_participation">Moje uczestnictwo</string>
+    <string name="nav_home">Pulpit</string>
     <string name="theme_dark">Ciemny</string>
     <string name="theme_light">Jasny</string>
     <string name="profile">Profil</string>
@@ -75,6 +76,34 @@
     <string name="participation_empty_title">Nie bierzesz jeszcze udziału w żadnych problemach.</string>
     <string name="participation_empty_body">Wejdź na listę problemów i dołącz do wyzwania.</string>
     <string name="participation_empty_action">Przejdź do listy problemów</string>
+
+    <string name="home_hero_title_lead">Blockchain</string>
+    <string name="home_hero_title_emphasis">Platforma Wyzwań</string>
+    <string name="home_hero_description">Twórz konkursy, ustawiaj nagrody i weryfikuj rozwiązania on‑chain. Prowadź uczciwe, audytowalne wyzwania dla twórców i badaczy.</string>
+    <string name="home_hero_primary_cta">Przeglądaj wyzwania</string>
+    <string name="home_hero_secondary_cta">Jak to działa</string>
+
+    <string name="home_stat_status_title">Aktywne wyzwania</string>
+    <string name="home_stat_status_value">38</string>
+    <string name="home_stat_status_note">Otwarte na zgłoszenia</string>
+    <string name="home_stat_nodes_title">Pula nagród</string>
+    <string name="home_stat_nodes_value">148,200 USDC</string>
+    <string name="home_stat_nodes_note">Łącznie we wszystkich wyzwaniach</string>
+    <string name="home_stat_block_title">Zgłoszenia dziś</string>
+    <string name="home_stat_block_value">312</string>
+    <string name="home_stat_block_note">+9% w stosunku do wczoraj</string>
+
+    <string name="home_updates_title">Ostatnie Aktualizacje</string>
+    <string name="home_update_title_1">Nowe wyzwanie: ZK Proof Aggregation</string>
+    <string name="home_update_body_1">Nagroda 25,000 USDC • 20 uczestników • 14 dni do końca.</string>
+    <string name="home_update_title_2">Validator v1.4</string>
+    <string name="home_update_body_2">Szybsze testy i deterministyczny scoring.</string>
+    <string name="home_update_title_3">Zakończono wypłaty</string>
+    <string name="home_update_body_3">11 zwycięzców opłaconych w ostatnim cyklu.</string>
+
+    <string name="home_community_title">Dołącz do twórców</string>
+    <string name="home_community_body">Dyskutuj pomysły na wyzwania, dziel się testami i współtwórz platformę.</string>
+    <string name="home_community_cta">Społeczność builderów</string>
     <string name="my_problem_participants">Uczestnicy: %1$d / %2$d</string>
     <string name="my_problem_started_on">Start: %1$s</string>
     <string name="my_problem_submitted">Zgłoszenia: %1$d</string>

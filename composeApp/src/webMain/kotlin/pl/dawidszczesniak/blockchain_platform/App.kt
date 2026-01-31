@@ -6,12 +6,12 @@ import androidx.compose.runtime.*
 fun App() {
 
     var isLoggedIn by remember { mutableStateOf(false) }
-    var route by remember { mutableStateOf(Route.Problems) }
+    var route by remember { mutableStateOf(Route.Home) }
     var pendingRouteAfterLogin by remember { mutableStateOf<Route?>(null) }
 
     AppTheme {
         fun navigate(target: Route) {
-            if (!isLoggedIn && (target == Route.CreateProblem || target == Route.Settings)) {
+            if (!isLoggedIn && (target == Route.CreateProblem || target == Route.Settings || target == Route.MyProblems || target == Route.MyParticipation)) {
                 pendingRouteAfterLogin = target
                 route = Route.Login
             } else {
@@ -28,13 +28,13 @@ fun App() {
             },
             onLogin = {
                 isLoggedIn = true
-                route = pendingRouteAfterLogin ?: Route.Problems
+                route = pendingRouteAfterLogin ?: Route.Home
                 pendingRouteAfterLogin = null
             },
             onLogout = {
                 isLoggedIn = false
                 pendingRouteAfterLogin = null
-                route = Route.Problems
+                route = Route.Home
             }
         )
     }
