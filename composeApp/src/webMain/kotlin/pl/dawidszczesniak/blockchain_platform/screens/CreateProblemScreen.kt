@@ -14,7 +14,6 @@ import blockchain_platform.composeapp.generated.resources.create_problem_prize_l
 import blockchain_platform.composeapp.generated.resources.create_problem_submit_until_label
 import blockchain_platform.composeapp.generated.resources.create_problem_title
 import org.jetbrains.compose.resources.stringResource
-import pl.dawidszczesniak.blockchain_platform.ui.AppHeader
 import pl.dawidszczesniak.blockchain_platform.ui.AppSurface
 
 @Composable
@@ -29,9 +28,13 @@ fun CreateProblemScreen() {
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
-        AppHeader(title = stringResource(Res.string.create_problem_title))
-
         AppSurface(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                text = stringResource(Res.string.create_problem_title),
+                style = MaterialTheme.typography.titleLarge
+            )
+            Spacer(Modifier.height(12.dp))
+
             OutlinedTextField(
                 value = prize,
                 onValueChange = { prize = it },

@@ -10,7 +10,6 @@ import blockchain_platform.composeapp.generated.resources.settings_future
 import blockchain_platform.composeapp.generated.resources.settings_placeholder
 import blockchain_platform.composeapp.generated.resources.settings_title
 import org.jetbrains.compose.resources.stringResource
-import pl.dawidszczesniak.blockchain_platform.ui.AppHeader
 import pl.dawidszczesniak.blockchain_platform.ui.AppSurface
 
 @Composable
@@ -19,9 +18,12 @@ fun SettingsScreen() {
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
-        AppHeader(title = stringResource(Res.string.settings_title))
-
         AppSurface(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                text = stringResource(Res.string.settings_title),
+                style = MaterialTheme.typography.titleLarge
+            )
+            Spacer(Modifier.height(10.dp))
             Text(stringResource(Res.string.settings_placeholder))
             Spacer(Modifier.height(8.dp))
             Text(

@@ -11,7 +11,6 @@ import blockchain_platform.composeapp.generated.resources.login_connect_wallet
 import blockchain_platform.composeapp.generated.resources.login_subtitle
 import blockchain_platform.composeapp.generated.resources.login_title
 import org.jetbrains.compose.resources.stringResource
-import pl.dawidszczesniak.blockchain_platform.ui.AppHeader
 import pl.dawidszczesniak.blockchain_platform.ui.AppSurface
 
 @Composable
@@ -20,11 +19,6 @@ fun LoginScreen(onLogin: () -> Unit) {
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
-        AppHeader(
-            title = stringResource(Res.string.login_title),
-            subtitle = stringResource(Res.string.login_subtitle)
-        )
-
         AppSurface(
             modifier = Modifier.fillMaxWidth()
         ) {
@@ -32,7 +26,17 @@ fun LoginScreen(onLogin: () -> Unit) {
                 modifier = Modifier.fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = stringResource(Res.string.login_title),
+                    style = MaterialTheme.typography.titleLarge
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = stringResource(Res.string.login_subtitle),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(16.dp))
                 Button(onClick = onLogin) {
                     Text(stringResource(Res.string.login_connect_wallet))
                 }

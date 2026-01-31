@@ -2,6 +2,7 @@ package pl.dawidszczesniak.blockchain_platform.screens
 
 import androidx.compose.foundation.VerticalScrollbar
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -48,7 +49,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import org.jetbrains.compose.resources.stringResource
-import pl.dawidszczesniak.blockchain_platform.ui.AppHeader
 import pl.dawidszczesniak.blockchain_platform.ui.AppSurface
 import kotlin.math.max
 import kotlin.math.min
@@ -160,19 +160,31 @@ fun ProblemsListScreen() {
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
-        AppHeader(
-            title = stringResource(Res.string.problems_title),
-            subtitle = stringResource(Res.string.problems_mock_info, allProblems.size)
-        )
-
         AppSurface(
             modifier = Modifier.fillMaxSize(),
             surfaceAlpha = 0.65f,
             borderAlpha = 0.34f
         ) {
-            SortRow(
-                sortOption = sortOption,
-                onSortChanged = { sortOption = it }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = stringResource(Res.string.problems_title),
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(Modifier.weight(1f))
+                SortRow(
+                    sortOption = sortOption,
+                    onSortChanged = { sortOption = it }
+                )
+            }
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = stringResource(Res.string.problems_mock_info, allProblems.size),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(Modifier.height(12.dp))
 
@@ -240,9 +252,7 @@ private fun SortRow(
     var expanded by remember { mutableStateOf(false) }
 
     Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.End
+        verticalAlignment = Alignment.CenterVertically
     ) {
         Text(stringResource(Res.string.sort_label), style = MaterialTheme.typography.labelLarge)
         Spacer(Modifier.width(10.dp))
