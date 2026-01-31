@@ -3,7 +3,8 @@
 
     <string name="nav_problem_list">Lista problemów</string>
     <string name="nav_create_problem">Utwórz problem</string>
-    <string name="nav_my_problems">Moje problemy</string>
+    <string name="nav_my_problems">Utworzone problemy</string>
+    <string name="nav_my_participation">Moje uczestnictwo</string>
     <string name="theme_dark">Ciemny</string>
     <string name="theme_light">Jasny</string>
     <string name="profile">Profil</string>
@@ -42,7 +43,7 @@
     <string name="problems_empty_body">Utwórz pierwszy challenge i zacznij zbierać zgłoszenia.</string>
     <string name="problems_empty_action">Utwórz problem</string>
     <string name="loading_more">Dociąganie kolejnych problemów…</string>
-    <string name="my_problems_title">Moje problemy</string>
+    <string name="my_problems_title">Utworzone problemy</string>
     <string name="my_problems_filter_label">Typ:</string>
     <string name="my_problems_filter_all">Wszystkie</string>
     <string name="my_problems_started">Rozpoczęty</string>
@@ -52,6 +53,20 @@
     <string name="my_problems_empty_title">Nie masz jeszcze żadnych problemów.</string>
     <string name="my_problems_empty_body">Utwórz pierwszy challenge i zaproś uczestników.</string>
     <string name="my_problems_empty_action">Utwórz problem</string>
+
+    <string name="participation_title">Moje uczestnictwo</string>
+    <string name="participation_filter_label">Status:</string>
+    <string name="participation_filter_all">Wszystkie</string>
+    <string name="participation_filter_submitted">Wysłane</string>
+    <string name="participation_filter_pending">Niewysłane</string>
+    <string name="participation_time_left">Pozostało: %1$s</string>
+    <string name="participation_participants">Uczestnicy: %1$d</string>
+    <string name="participation_submission">Twoje zgłoszenie: %1$s</string>
+    <string name="participation_submission_sent">wysłane</string>
+    <string name="participation_submission_pending">niewysłane</string>
+    <string name="participation_empty_title">Nie bierzesz jeszcze udziału w żadnych problemach.</string>
+    <string name="participation_empty_body">Wejdź na listę problemów i dołącz do wyzwania.</string>
+    <string name="participation_empty_action">Przejdź do listy problemów</string>
     <string name="my_problem_participants">Uczestnicy: %1$d / %2$d</string>
     <string name="my_problem_started_on">Start: %1$s</string>
     <string name="my_problem_submitted">Zgłoszenia: %1$d</string>

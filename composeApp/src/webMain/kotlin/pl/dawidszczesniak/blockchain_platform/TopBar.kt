@@ -44,6 +44,7 @@ import blockchain_platform.composeapp.generated.resources.login
 import blockchain_platform.composeapp.generated.resources.logout
 import blockchain_platform.composeapp.generated.resources.menu
 import blockchain_platform.composeapp.generated.resources.nav_create_problem
+import blockchain_platform.composeapp.generated.resources.nav_my_participation
 import blockchain_platform.composeapp.generated.resources.nav_my_problems
 import blockchain_platform.composeapp.generated.resources.nav_problem_list
 import blockchain_platform.composeapp.generated.resources.profile
@@ -144,6 +145,14 @@ fun TopBar(
                                         onNavigate(Route.MyProblems)
                                     }
                                 )
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(Res.string.nav_my_participation)) },
+                                    colors = menuItemColors,
+                                    onClick = {
+                                        compactMenuExpanded = false
+                                        onNavigate(Route.MyParticipation)
+                                    }
+                                )
                             }
                             if (isLoggedIn) {
                                 DropdownMenuItem(
@@ -192,6 +201,12 @@ fun TopBar(
                             text = stringResource(Res.string.nav_my_problems),
                             selected = currentRoute == Route.MyProblems,
                             onClick = { onNavigate(Route.MyProblems) }
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        NavTab(
+                            text = stringResource(Res.string.nav_my_participation),
+                            selected = currentRoute == Route.MyParticipation,
+                            onClick = { onNavigate(Route.MyParticipation) }
                         )
                         Spacer(Modifier.width(12.dp))
                         Box(modifier = Modifier.wrapContentSize(Alignment.TopEnd)) {

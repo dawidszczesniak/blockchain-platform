@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import pl.dawidszczesniak.blockchain_platform.screens.CreateProblemScreen
 import pl.dawidszczesniak.blockchain_platform.screens.LoginScreen
+import pl.dawidszczesniak.blockchain_platform.screens.MyParticipationScreen
 import pl.dawidszczesniak.blockchain_platform.screens.MyProblemsScreen
 import pl.dawidszczesniak.blockchain_platform.screens.ProblemsListScreen
 import pl.dawidszczesniak.blockchain_platform.screens.SettingsScreen
@@ -68,6 +69,9 @@ fun AppShell(
                     Route.CreateProblem -> CreateProblemScreen()
                     Route.MyProblems -> MyProblemsScreen(
                         onCreateProblem = { onNavigate(Route.CreateProblem) }
+                    )
+                    Route.MyParticipation -> MyParticipationScreen(
+                        onBrowseProblems = { onNavigate(Route.Problems) }
                     )
                     Route.Settings -> SettingsScreen()
                     Route.Login -> LoginScreen(onLogin = onLogin)
