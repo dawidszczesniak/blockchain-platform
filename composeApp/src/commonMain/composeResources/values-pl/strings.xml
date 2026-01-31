@@ -3,6 +3,7 @@
 
     <string name="nav_problem_list">Lista problemów</string>
     <string name="nav_create_problem">Utwórz problem</string>
+    <string name="nav_my_problems">Moje problemy</string>
     <string name="theme_dark">Ciemny</string>
     <string name="theme_light">Jasny</string>
     <string name="profile">Profil</string>
@@ -37,7 +38,27 @@
 
     <string name="problems_title">Lista problemów</string>
     <string name="problems_mock_info">Mock: %1$d problemów (paginacja + sortowanie).</string>
+    <string name="problems_empty_title">Nie ma jeszcze zgłoszonych problemów.</string>
+    <string name="problems_empty_body">Utwórz pierwszy challenge i zacznij zbierać zgłoszenia.</string>
+    <string name="problems_empty_action">Utwórz problem</string>
     <string name="loading_more">Dociąganie kolejnych problemów…</string>
+    <string name="my_problems_title">Moje problemy</string>
+    <string name="my_problems_filter_label">Typ:</string>
+    <string name="my_problems_filter_all">Wszystkie</string>
+    <string name="my_problems_started">Rozpoczęty</string>
+    <string name="my_problems_waiting">Czeka na uczestników</string>
+    <string name="my_problems_completed">Ukończony</string>
+    <string name="my_problems_expired">Czas minął (brak chętnych)</string>
+    <string name="my_problems_empty_title">Nie masz jeszcze żadnych problemów.</string>
+    <string name="my_problems_empty_body">Utwórz pierwszy challenge i zaproś uczestników.</string>
+    <string name="my_problems_empty_action">Utwórz problem</string>
+    <string name="my_problem_participants">Uczestnicy: %1$d / %2$d</string>
+    <string name="my_problem_started_on">Start: %1$s</string>
+    <string name="my_problem_submitted">Zgłoszenia: %1$d</string>
+    <string name="my_problem_finished_on">Zakończono: %1$s</string>
+    <string name="my_problem_registration_ends">Koniec rejestracji: %1$s</string>
+    <string name="my_problem_time_elapsed">Czas minął: %1$s</string>
+    <string name="my_problem_winner">Zwycięzca: %1$s</string>
 
     <string name="sort_label">Sortowanie:</string>
     <string name="sort_option_newest">Najnowsze dodane</string>

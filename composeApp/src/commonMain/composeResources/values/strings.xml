@@ -3,6 +3,7 @@
 
     <string name="nav_problem_list">Problem list</string>
     <string name="nav_create_problem">Create problem</string>
+    <string name="nav_my_problems">My problems</string>
     <string name="theme_dark">Dark</string>
     <string name="theme_light">Light</string>
     <string name="profile">Profile</string>
@@ -37,7 +38,27 @@
 
     <string name="problems_title">Problem list</string>
     <string name="problems_mock_info">Mock: %1$d problems (pagination + sorting).</string>
+    <string name="problems_empty_title">No problems submitted yet.</string>
+    <string name="problems_empty_body">Create the first challenge to get things started.</string>
+    <string name="problems_empty_action">Create problem</string>
     <string name="loading_more">Loading more problems…</string>
+    <string name="my_problems_title">My problems</string>
+    <string name="my_problems_filter_label">Type:</string>
+    <string name="my_problems_filter_all">All</string>
+    <string name="my_problems_started">Started</string>
+    <string name="my_problems_waiting">Waiting for participants</string>
+    <string name="my_problems_completed">Completed</string>
+    <string name="my_problems_expired">Time elapsed (no participants)</string>
+    <string name="my_problems_empty_title">You haven’t created any problems yet.</string>
+    <string name="my_problems_empty_body">Create your first challenge and invite participants.</string>
+    <string name="my_problems_empty_action">Create problem</string>
+    <string name="my_problem_participants">Participants: %1$d / %2$d</string>
+    <string name="my_problem_started_on">Started: %1$s</string>
+    <string name="my_problem_submitted">Submissions: %1$d</string>
+    <string name="my_problem_finished_on">Finished: %1$s</string>
+    <string name="my_problem_registration_ends">Registration ends: %1$s</string>
+    <string name="my_problem_time_elapsed">Time elapsed: %1$s</string>
+    <string name="my_problem_winner">Winner: %1$s</string>
 
     <string name="sort_label">Sort by:</string>
     <string name="sort_option_newest">Newest added</string>

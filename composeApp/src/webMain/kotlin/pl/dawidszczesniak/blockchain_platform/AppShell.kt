@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import pl.dawidszczesniak.blockchain_platform.screens.CreateProblemScreen
 import pl.dawidszczesniak.blockchain_platform.screens.LoginScreen
+import pl.dawidszczesniak.blockchain_platform.screens.MyProblemsScreen
 import pl.dawidszczesniak.blockchain_platform.screens.ProblemsListScreen
 import pl.dawidszczesniak.blockchain_platform.screens.SettingsScreen
 import pl.dawidszczesniak.blockchain_platform.ui.AppBackdrop
@@ -59,8 +60,15 @@ fun AppShell(
                 contentPadding = pagePadding
             ) {
                 when (currentRoute) {
-                    Route.Problems -> key(problemsScreenKey) { ProblemsListScreen() }
+                    Route.Problems -> key(problemsScreenKey) {
+                        ProblemsListScreen(
+                            onCreateProblem = { onNavigate(Route.CreateProblem) }
+                        )
+                    }
                     Route.CreateProblem -> CreateProblemScreen()
+                    Route.MyProblems -> MyProblemsScreen(
+                        onCreateProblem = { onNavigate(Route.CreateProblem) }
+                    )
                     Route.Settings -> SettingsScreen()
                     Route.Login -> LoginScreen(onLogin = onLogin)
                 }

@@ -44,6 +44,7 @@ import blockchain_platform.composeapp.generated.resources.login
 import blockchain_platform.composeapp.generated.resources.logout
 import blockchain_platform.composeapp.generated.resources.menu
 import blockchain_platform.composeapp.generated.resources.nav_create_problem
+import blockchain_platform.composeapp.generated.resources.nav_my_problems
 import blockchain_platform.composeapp.generated.resources.nav_problem_list
 import blockchain_platform.composeapp.generated.resources.profile
 import blockchain_platform.composeapp.generated.resources.settings
@@ -136,6 +137,16 @@ fun TopBar(
                             )
                             if (isLoggedIn) {
                                 DropdownMenuItem(
+                                    text = { Text(stringResource(Res.string.nav_my_problems)) },
+                                    colors = menuItemColors,
+                                    onClick = {
+                                        compactMenuExpanded = false
+                                        onNavigate(Route.MyProblems)
+                                    }
+                                )
+                            }
+                            if (isLoggedIn) {
+                                DropdownMenuItem(
                                     text = { Text(stringResource(Res.string.settings)) },
                                     colors = menuItemColors,
                                     onClick = {
@@ -177,6 +188,12 @@ fun TopBar(
                     )
                     Spacer(Modifier.width(12.dp))
                     if (isLoggedIn) {
+                        NavTab(
+                            text = stringResource(Res.string.nav_my_problems),
+                            selected = currentRoute == Route.MyProblems,
+                            onClick = { onNavigate(Route.MyProblems) }
+                        )
+                        Spacer(Modifier.width(12.dp))
                         Box(modifier = Modifier.wrapContentSize(Alignment.TopEnd)) {
                             IconButton(onClick = { profileMenuExpanded = true }) {
                                 Icon(

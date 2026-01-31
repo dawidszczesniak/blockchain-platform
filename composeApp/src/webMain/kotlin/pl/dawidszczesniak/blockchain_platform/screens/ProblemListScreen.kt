@@ -27,6 +27,9 @@ import blockchain_platform.composeapp.generated.resources.info_start
 import blockchain_platform.composeapp.generated.resources.participants_summary
 import blockchain_platform.composeapp.generated.resources.problem_title_template
 import blockchain_platform.composeapp.generated.resources.problems_mock_info
+import blockchain_platform.composeapp.generated.resources.problems_empty_action
+import blockchain_platform.composeapp.generated.resources.problems_empty_body
+import blockchain_platform.composeapp.generated.resources.problems_empty_title
 import blockchain_platform.composeapp.generated.resources.problems_title
 import blockchain_platform.composeapp.generated.resources.registration_and_submission
 import blockchain_platform.composeapp.generated.resources.sort_label
@@ -54,6 +57,7 @@ import kotlin.math.min
 private const val PAGE_SIZE = 20
 private const val INITIAL_CREATED_ORDER = 1000
 private const val TOTAL_PROBLEMS = 87
+private const val SHOW_EMPTY_STATE = true
 
 private data class FakeProblem(
     val id: Int,
@@ -96,21 +100,26 @@ private enum class SortOption {
 }
 
 @Composable
-fun ProblemsListScreen() {
+fun ProblemsListScreen(onCreateProblem: () -> Unit) {
     val listState = rememberLazyListState()
 
     val allProblems = remember {
-        generateFakeProblems(
-            startId = 1,
-            startCreatedOrder = INITIAL_CREATED_ORDER,
-            count = TOTAL_PROBLEMS
-        )
+        if (SHOW_EMPTY_STATE) {
+            emptyList()
+        } else {
+            generateFakeProblems(
+                startId = 1,
+                startCreatedOrder = INITIAL_CREATED_ORDER,
+                count = TOTAL_PROBLEMS
+            )
+        }
     }
 
     var sortOption by remember { mutableStateOf(SortOption.Newest) }
     val sortedProblems = remember(allProblems, sortOption) {
         sortProblems(allProblems, sortOption)
     }
+    val isEmpty = sortedProblems.isEmpty()
 
     var currentPage by remember { mutableStateOf(1) }
     val totalPages = max(1, (sortedProblems.size + PAGE_SIZE - 1) / PAGE_SIZE)
@@ -133,7 +142,11 @@ fun ProblemsListScreen() {
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
         AppSurface(
-            modifier = Modifier.fillMaxSize(),
+            modifier = if (isEmpty) {
+                Modifier.fillMaxWidth()
+            } else {
+                Modifier.fillMaxSize()
+            },
             surfaceAlpha = 0.65f,
             borderAlpha = 0.34f
         ) {
@@ -146,22 +159,30 @@ fun ProblemsListScreen() {
                     style = MaterialTheme.typography.titleLarge,
                     color = MaterialTheme.colorScheme.onSurface
                 )
-                Spacer(Modifier.weight(1f))
-                SortRow(
-                    sortOption = sortOption,
-                    onSortChanged = {
-                        sortOption = it
-                        currentPage = 1
-                    }
-                )
+                if (sortedProblems.isNotEmpty()) {
+                    Spacer(Modifier.weight(1f))
+                    SortRow(
+                        sortOption = sortOption,
+                        onSortChanged = {
+                            sortOption = it
+                            currentPage = 1
+                        }
+                    )
+                }
             }
             Spacer(Modifier.height(6.dp))
-            Text(
-                text = stringResource(Res.string.problems_mock_info, allProblems.size),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(Modifier.height(12.dp))
+            if (!isEmpty) {
+                Text(
+                    text = stringResource(Res.string.problems_mock_info, allProblems.size),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(12.dp))
+            } else {
+                Spacer(Modifier.height(12.dp))
+                EmptyProblemList(onCreateProblem = onCreateProblem)
+                return@AppSurface
+            }
 
             Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
                 LazyColumn(
@@ -172,6 +193,15 @@ fun ProblemsListScreen() {
                 ) {
                     items(pageProblems) { p ->
                         ProblemCard(problem = p, onOpen = { /* TODO */ })
+                    }
+                    item {
+                        Spacer(Modifier.height(8.dp))
+                        PaginationRow(
+                            currentPage = pageIndex,
+                            totalPages = totalPages,
+                            onPageSelected = { currentPage = it }
+                        )
+                        Spacer(Modifier.height(8.dp))
                     }
                 }
 
@@ -202,11 +232,6 @@ fun ProblemsListScreen() {
                 }
             }
 
-            PaginationRow(
-                currentPage = pageIndex,
-                totalPages = totalPages,
-                onPageSelected = { currentPage = it }
-            )
         }
     }
 }
@@ -275,6 +300,30 @@ private fun sortOptionLabel(option: SortOption): String {
         SortOption.ProgressLeast -> stringResource(Res.string.sort_option_progress_least)
         SortOption.JoinEndsSoonest -> stringResource(Res.string.sort_option_join_ends_soonest)
         SortOption.JoinEndsLatest -> stringResource(Res.string.sort_option_join_ends_latest)
+    }
+}
+
+@Composable
+private fun EmptyProblemList(onCreateProblem: () -> Unit) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = stringResource(Res.string.problems_empty_title),
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = stringResource(Res.string.problems_empty_body),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(16.dp))
+        Button(onClick = onCreateProblem) {
+            Text(stringResource(Res.string.problems_empty_action))
+        }
     }
 }
 

@@ -4,5 +4,6 @@ enum class Route {
     Login,
     Problems,
     CreateProblem,
+    MyProblems,
     Settings,
 }
