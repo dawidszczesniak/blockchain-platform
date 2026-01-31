@@ -54,7 +54,7 @@ import kotlin.math.max
 
 private const val PAGE_SIZE = 20
 private const val TOTAL_PROBLEMS = 80
-private const val SHOW_EMPTY_STATE = true
+private const val SHOW_EMPTY_STATE = false
 
 private enum class ProblemStatus {
     Started,

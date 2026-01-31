@@ -57,7 +57,7 @@ import kotlin.math.min
 private const val PAGE_SIZE = 20
 private const val INITIAL_CREATED_ORDER = 1000
 private const val TOTAL_PROBLEMS = 87
-private const val SHOW_EMPTY_STATE = true
+private const val SHOW_EMPTY_STATE = false
 
 private data class FakeProblem(
     val id: Int,
