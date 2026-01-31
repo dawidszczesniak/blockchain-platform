@@ -13,7 +13,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -27,12 +26,11 @@ import kotlin.random.Random
 @Composable
 fun AppBackdrop(modifier: Modifier = Modifier) {
     val colors = MaterialTheme.colorScheme
-    val isDark = colors.background.luminance() < 0.5f
-    val gridColor = colors.onBackground.copy(alpha = if (isDark) 0.035f else 0.02f)
-    val glowPrimary = colors.primary.copy(alpha = if (isDark) 0.25f else 0.15f)
-    val glowSecondary = colors.secondary.copy(alpha = if (isDark) 0.2f else 0.12f)
-    val lineBaseColor = colors.primary.copy(alpha = if (isDark) 0.55f else 0.32f)
-    val nodeBaseColor = colors.secondary.copy(alpha = if (isDark) 0.7f else 0.45f)
+    val gridColor = colors.onBackground.copy(alpha = 0.035f)
+    val glowPrimary = colors.primary.copy(alpha = 0.25f)
+    val glowSecondary = colors.secondary.copy(alpha = 0.2f)
+    val lineBaseColor = colors.primary
+    val nodeBaseColor = colors.secondary
 
     val nodes = remember { generateNetworkNodes(120, seed = 17) }
     val edges = remember {
@@ -97,7 +95,7 @@ fun AppBackdrop(modifier: Modifier = Modifier) {
             val dist = sqrt(dx * dx + dy * dy)
             val falloff = (1f - dist / (size.minDimension * 0.55f)).coerceIn(0f, 1f)
             val pulse = 0.6f + 0.4f * sin(t * 1.1f + edge.phase * 6.28f)
-            val alpha = falloff * pulse
+            val alpha = falloff * pulse * 0.35f
             if (alpha > 0.02f) {
                 drawLine(
                     color = lineBaseColor.copy(alpha = alpha),
@@ -109,7 +107,7 @@ fun AppBackdrop(modifier: Modifier = Modifier) {
             if (edge.pulse && alpha > 0.04f) {
                 val progress = ((t * edge.speed + edge.phase) % 1f).coerceIn(0f, 1f)
                 val pulsePos = lerp(p1, p2, progress)
-                val pulseAlpha = (alpha * 1.7f).coerceIn(0f, 1f)
+                val pulseAlpha = (alpha * 1.05f).coerceIn(0f, 1f)
                 drawCircle(
                     color = lineBaseColor.copy(alpha = pulseAlpha),
                     radius = 2.2f + edge.thickness,
