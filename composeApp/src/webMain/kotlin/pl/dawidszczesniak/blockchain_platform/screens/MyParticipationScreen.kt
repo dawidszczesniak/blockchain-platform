@@ -18,7 +18,9 @@ import pl.dawidszczesniak.blockchain_platform.ui.AppSurface
 import kotlin.math.max
 
 private const val PAGE_SIZE = 20
+// TODO(backend): Replace mock counts with real backend totals.
 private const val TOTAL_PARTICIPATIONS = 80
+// TODO(backend): Remove mock toggle when list is fetched from backend.
 private const val USE_MOCK_DATA = true
 
 private enum class ParticipationStatus {
@@ -42,6 +44,7 @@ private data class ParticipationProblem(
 fun MyParticipationScreen(onBrowseProblems: () -> Unit) {
     val listState = rememberLazyListState()
 
+    // TODO(backend): Fetch participation list for the current user from backend.
     val allProblems = if (USE_MOCK_DATA) {
         List(TOTAL_PARTICIPATIONS) { index ->
             val status = if (index % 2 == 0) {

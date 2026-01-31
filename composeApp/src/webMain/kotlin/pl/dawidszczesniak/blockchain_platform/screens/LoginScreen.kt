@@ -37,6 +37,7 @@ fun LoginScreen(onLogin: () -> Unit) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(Modifier.height(16.dp))
+                // TODO(backend): Replace mock wallet login with real auth flow.
                 Button(onClick = onLogin) {
                     Text(stringResource(Res.string.login_connect_wallet))
                 }

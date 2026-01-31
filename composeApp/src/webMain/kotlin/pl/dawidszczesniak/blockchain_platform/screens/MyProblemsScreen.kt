@@ -53,7 +53,9 @@ import pl.dawidszczesniak.blockchain_platform.ui.AppSurface
 import kotlin.math.max
 
 private const val PAGE_SIZE = 20
+// TODO(backend): Replace mock counts with real backend totals.
 private const val TOTAL_PROBLEMS = 80
+// TODO(backend): Remove mock toggle when list is fetched from backend.
 private const val SHOW_EMPTY_STATE = false
 
 private enum class ProblemStatus {
@@ -79,6 +81,7 @@ private data class MyProblem(
 
 @Composable
 fun MyProblemsScreen(onCreateProblem: () -> Unit) {
+    // TODO(backend): Fetch created problems for the current user from backend.
     val problems = if (SHOW_EMPTY_STATE) {
         emptyList()
     } else {

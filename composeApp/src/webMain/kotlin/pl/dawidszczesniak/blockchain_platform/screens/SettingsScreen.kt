@@ -24,6 +24,7 @@ fun SettingsScreen() {
                 style = MaterialTheme.typography.titleLarge
             )
             Spacer(Modifier.height(10.dp))
+            // TODO(backend): Load real user settings from backend.
             Text(stringResource(Res.string.settings_placeholder))
             Spacer(Modifier.height(8.dp))
             Text(

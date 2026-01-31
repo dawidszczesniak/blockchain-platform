@@ -164,7 +164,7 @@ fun CreateProblemScreen() {
             Spacer(Modifier.height(16.dp))
 
             Button(
-                onClick = { /* TODO: call backend */ },
+                onClick = { /* TODO(backend): call create-problem API */ },
                 enabled = false
             ) {
                 Text(stringResource(Res.string.create_problem_action_placeholder))

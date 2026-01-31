@@ -56,9 +56,12 @@ import kotlin.math.min
 
 private const val PAGE_SIZE = 20
 private const val INITIAL_CREATED_ORDER = 1000
+// TODO(backend): Replace mock list size with real pagination metadata from API.
 private const val TOTAL_PROBLEMS = 87
+// TODO(backend): Remove mock toggle when list is fetched from backend.
 private const val SHOW_EMPTY_STATE = false
 
+// TODO(backend): Replace fake models with backend DTOs.
 private data class FakeProblem(
     val id: Int,
     val createdOrder: Int,
@@ -103,6 +106,7 @@ private enum class SortOption {
 fun ProblemsListScreen(onCreateProblem: () -> Unit) {
     val listState = rememberLazyListState()
 
+    // TODO(backend): Fetch problems from backend (paginated) instead of generating mock data.
     val allProblems = remember {
         if (SHOW_EMPTY_STATE) {
             emptyList()
@@ -172,6 +176,7 @@ fun ProblemsListScreen(onCreateProblem: () -> Unit) {
             }
             Spacer(Modifier.height(6.dp))
             if (!isEmpty) {
+                // TODO(backend): Replace mock banner with real backend metadata.
                 Text(
                     text = stringResource(Res.string.problems_mock_info, allProblems.size),
                     style = MaterialTheme.typography.bodySmall,
@@ -502,6 +507,7 @@ private fun generateFakeProblems(
     startCreatedOrder: Int,
     count: Int
 ): List<FakeProblem> {
+    // TODO(backend): Remove mock generator once data comes from backend.
     return List(count) { i ->
         val id = startId + i
         val createdOrder = startCreatedOrder - i
