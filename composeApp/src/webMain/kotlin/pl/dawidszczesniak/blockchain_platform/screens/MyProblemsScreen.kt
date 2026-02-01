@@ -21,8 +21,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -48,117 +49,23 @@ import blockchain_platform.composeapp.generated.resources.my_problems_started
 import blockchain_platform.composeapp.generated.resources.my_problems_title
 import blockchain_platform.composeapp.generated.resources.my_problems_waiting
 import blockchain_platform.composeapp.generated.resources.my_problem_registration_ends
+import blockchain_platform.composeapp.generated.resources.loading_more
 import org.jetbrains.compose.resources.stringResource
+import pl.dawidszczesniak.blockchain_platform.domain.model.CreatedProblem
+import pl.dawidszczesniak.blockchain_platform.domain.model.CreatedProblemStatus
+import pl.dawidszczesniak.blockchain_platform.presentation.created.CreatedProblemsFilter
+import pl.dawidszczesniak.blockchain_platform.presentation.created.CreatedProblemsIntent
+import pl.dawidszczesniak.blockchain_platform.presentation.created.CreatedProblemsStore
+import pl.dawidszczesniak.blockchain_platform.presentation.rememberStore
 import pl.dawidszczesniak.blockchain_platform.ui.AppSurface
-import kotlin.math.max
-
-private const val PAGE_SIZE = 20
-// TODO(backend): Replace mock counts with real backend totals.
-private const val TOTAL_PROBLEMS = 80
-// TODO(backend): Remove mock toggle when list is fetched from backend.
-private const val SHOW_EMPTY_STATE = false
-
-private enum class ProblemStatus {
-    Started,
-    Waiting,
-    Completed,
-    Expired,
-}
-
-private enum class TypeFilter {
-    All,
-    Started,
-    Waiting,
-    Completed,
-    Expired,
-}
-
-private data class MyProblem(
-    val title: String,
-    val status: ProblemStatus,
-    val details: List<String>,
-)
 
 @Composable
 fun MyProblemsScreen(onCreateProblem: () -> Unit) {
-    // TODO(backend): Fetch created problems for the current user from backend.
-    val problems = if (SHOW_EMPTY_STATE) {
-        emptyList()
-    } else {
-        List(TOTAL_PROBLEMS) { index ->
-            val status = ProblemStatus.entries[index % ProblemStatus.entries.size]
-            val required = 20 + (index % 5)
-            val participants = when (status) {
-                ProblemStatus.Started,
-                ProblemStatus.Completed -> required
-                ProblemStatus.Waiting -> (required - 1 - (index % 4)).coerceAtLeast(1)
-                ProblemStatus.Expired -> 0
-            }
-            val submissions = when (status) {
-                ProblemStatus.Started -> (index * 3 % required).coerceAtLeast(1)
-                ProblemStatus.Completed -> (required - (index % 4)).coerceAtLeast(1)
-                ProblemStatus.Waiting -> 0
-                ProblemStatus.Expired -> 0
-            }
-            val day = (index % 28) + 1
-            val dayLabel = day.toString().padStart(2, '0')
-            val title = when (status) {
-                ProblemStatus.Started -> "Started #${index + 1} — Neural net compression"
-                ProblemStatus.Waiting -> "Waiting #${index + 1} — Proof batching"
-                ProblemStatus.Completed -> "Completed #${index + 1} — Oracle aggregation"
-                ProblemStatus.Expired -> "Expired #${index + 1} — ZK proof relay"
-            }
-            val details = when (status) {
-                ProblemStatus.Started -> listOf(
-                    stringResource(Res.string.my_problem_participants, participants, required),
-                    stringResource(Res.string.my_problem_started_on, "2026-01-$dayLabel"),
-                    stringResource(Res.string.my_problem_submitted, submissions)
-                )
-                ProblemStatus.Waiting -> listOf(
-                    stringResource(Res.string.my_problem_participants, participants, required),
-                    stringResource(Res.string.my_problem_registration_ends, "2026-02-$dayLabel"),
-                    stringResource(Res.string.my_problem_submitted, 0)
-                )
-                ProblemStatus.Completed -> listOf(
-                    stringResource(Res.string.my_problem_participants, participants, required),
-                    stringResource(Res.string.my_problem_finished_on, "2026-01-$dayLabel"),
-                    stringResource(Res.string.my_problem_submitted, submissions),
-                    stringResource(
-                        Res.string.my_problem_winner,
-                        "0x${(index + 10).toString(16)}…${(index * 7 + 3).toString(16)}"
-                    )
-                )
-                ProblemStatus.Expired -> listOf(
-                    stringResource(Res.string.my_problem_participants, participants, required),
-                    stringResource(Res.string.my_problem_time_elapsed, "2026-01-$dayLabel"),
-                    stringResource(Res.string.my_problem_submitted, 0)
-                )
-            }
-            MyProblem(
-                title = title,
-                status = status,
-                details = details
-            )
-        }
-    }
+    val store = rememberStore<CreatedProblemsStore>()
+    val state by store.state.collectAsState()
 
-    var filter by remember { mutableStateOf(TypeFilter.All) }
-    var currentPage by remember { mutableStateOf(1) }
-
-    val sorted = problems.sortedBy { statusOrder(it.status) }
-    val filtered = when (filter) {
-        TypeFilter.All -> sorted
-        TypeFilter.Started -> sorted.filter { it.status == ProblemStatus.Started }
-        TypeFilter.Waiting -> sorted.filter { it.status == ProblemStatus.Waiting }
-        TypeFilter.Completed -> sorted.filter { it.status == ProblemStatus.Completed }
-        TypeFilter.Expired -> sorted.filter { it.status == ProblemStatus.Expired }
-    }
-    val totalPages = max(1, (filtered.size + PAGE_SIZE - 1) / PAGE_SIZE)
-    val pageIndex = currentPage.coerceIn(1, totalPages)
-    val pageProblems = filtered.drop((pageIndex - 1) * PAGE_SIZE).take(PAGE_SIZE)
-
-    LaunchedEffect(filter, totalPages) {
-        if (currentPage > totalPages) currentPage = totalPages
+    LaunchedEffect(Unit) {
+        store.dispatch(CreatedProblemsIntent.Refresh)
     }
 
     Column(
@@ -176,40 +83,45 @@ fun MyProblemsScreen(onCreateProblem: () -> Unit) {
                 style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.onSurface
             )
-            if (filtered.isNotEmpty()) {
+            if (!state.isEmpty) {
                 Spacer(Modifier.weight(1f))
                 TypeFilterRow(
-                    current = filter,
+                    current = state.filter,
                     onChange = {
-                        filter = it
-                        currentPage = 1
+                        store.dispatch(CreatedProblemsIntent.ChangeFilter(it))
                     }
                 )
             }
         }
         Spacer(Modifier.height(12.dp))
 
-        if (filtered.isEmpty()) {
+        if (state.isLoading) {
+            Text(
+                text = stringResource(Res.string.loading_more),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        } else if (state.isEmpty) {
             EmptyMyProblems(onCreateProblem = onCreateProblem)
         } else {
-            pageProblems.forEachIndexed { index, problem ->
+            state.pageItems.forEachIndexed { index, problem ->
                 MyProblemCard(problem = problem)
-                if (index < pageProblems.lastIndex) {
+                if (index < state.pageItems.lastIndex) {
                     Spacer(Modifier.height(12.dp))
                 }
             }
             Spacer(Modifier.height(14.dp))
             PaginationRow(
-                currentPage = pageIndex,
-                totalPages = totalPages,
-                onPageSelected = { currentPage = it }
+                currentPage = state.currentPage,
+                totalPages = state.totalPages,
+                onPageSelected = { store.dispatch(CreatedProblemsIntent.ChangePage(it)) }
             )
         }
     }
 }
 
 @Composable
-private fun MyProblemCard(problem: MyProblem) {
+private fun MyProblemCard(problem: CreatedProblem) {
     AppSurface(
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -239,7 +151,7 @@ private fun MyProblemCard(problem: MyProblem) {
         }
         Spacer(Modifier.height(10.dp))
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            problem.details.forEach { detail ->
+            detailsFor(problem).forEach { detail ->
                 Text(
                     text = detail,
                     style = MaterialTheme.typography.bodySmall,
@@ -276,17 +188,17 @@ private fun EmptyMyProblems(onCreateProblem: () -> Unit) {
 
 @Composable
 private fun TypeFilterRow(
-    current: TypeFilter,
-    onChange: (TypeFilter) -> Unit,
+    current: CreatedProblemsFilter,
+    onChange: (CreatedProblemsFilter) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
     val label = stringResource(Res.string.my_problems_filter_label)
     val buttonText = when (current) {
-        TypeFilter.All -> stringResource(Res.string.my_problems_filter_all)
-        TypeFilter.Started -> stringResource(Res.string.my_problems_started)
-        TypeFilter.Waiting -> stringResource(Res.string.my_problems_waiting)
-        TypeFilter.Completed -> stringResource(Res.string.my_problems_completed)
-        TypeFilter.Expired -> stringResource(Res.string.my_problems_expired)
+        CreatedProblemsFilter.All -> stringResource(Res.string.my_problems_filter_all)
+        CreatedProblemsFilter.Started -> stringResource(Res.string.my_problems_started)
+        CreatedProblemsFilter.Waiting -> stringResource(Res.string.my_problems_waiting)
+        CreatedProblemsFilter.Completed -> stringResource(Res.string.my_problems_completed)
+        CreatedProblemsFilter.Expired -> stringResource(Res.string.my_problems_expired)
     }
 
     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -303,16 +215,16 @@ private fun TypeFilterRow(
                 onDismissRequest = { expanded = false },
                 offset = DpOffset(x = 0.dp, y = 6.dp)
             ) {
-                TypeFilter.entries.forEach { option ->
+                CreatedProblemsFilter.entries.forEach { option ->
                     DropdownMenuItem(
                         text = {
                             Text(
                                 when (option) {
-                                    TypeFilter.All -> stringResource(Res.string.my_problems_filter_all)
-                                    TypeFilter.Started -> stringResource(Res.string.my_problems_started)
-                                    TypeFilter.Waiting -> stringResource(Res.string.my_problems_waiting)
-                                    TypeFilter.Completed -> stringResource(Res.string.my_problems_completed)
-                                    TypeFilter.Expired -> stringResource(Res.string.my_problems_expired)
+                                    CreatedProblemsFilter.All -> stringResource(Res.string.my_problems_filter_all)
+                                    CreatedProblemsFilter.Started -> stringResource(Res.string.my_problems_started)
+                                    CreatedProblemsFilter.Waiting -> stringResource(Res.string.my_problems_waiting)
+                                    CreatedProblemsFilter.Completed -> stringResource(Res.string.my_problems_completed)
+                                    CreatedProblemsFilter.Expired -> stringResource(Res.string.my_problems_expired)
                                 }
                             )
                         },
@@ -370,20 +282,43 @@ private fun PaginationRow(
 }
 
 @Composable
-private fun statusLabel(status: ProblemStatus): String {
+private fun statusLabel(status: CreatedProblemStatus): String {
     return when (status) {
-        ProblemStatus.Started -> stringResource(Res.string.my_problems_started)
-        ProblemStatus.Waiting -> stringResource(Res.string.my_problems_waiting)
-        ProblemStatus.Completed -> stringResource(Res.string.my_problems_completed)
-        ProblemStatus.Expired -> stringResource(Res.string.my_problems_expired)
+        CreatedProblemStatus.Started -> stringResource(Res.string.my_problems_started)
+        CreatedProblemStatus.Waiting -> stringResource(Res.string.my_problems_waiting)
+        CreatedProblemStatus.Completed -> stringResource(Res.string.my_problems_completed)
+        CreatedProblemStatus.Expired -> stringResource(Res.string.my_problems_expired)
     }
 }
 
-private fun statusOrder(status: ProblemStatus): Int {
-    return when (status) {
-        ProblemStatus.Started -> 0
-        ProblemStatus.Waiting -> 1
-        ProblemStatus.Completed -> 2
-        ProblemStatus.Expired -> 3
+@Composable
+private fun detailsFor(problem: CreatedProblem): List<String> {
+    val participants = stringResource(
+        Res.string.my_problem_participants,
+        problem.registeredParticipants,
+        problem.requiredParticipants
+    )
+    return when (problem.status) {
+        CreatedProblemStatus.Started -> listOf(
+            participants,
+            stringResource(Res.string.my_problem_started_on, problem.startedOn.orEmpty()),
+            stringResource(Res.string.my_problem_submitted, problem.submissions)
+        )
+        CreatedProblemStatus.Waiting -> listOf(
+            participants,
+            stringResource(Res.string.my_problem_registration_ends, problem.registrationEnds.orEmpty()),
+            stringResource(Res.string.my_problem_submitted, 0)
+        )
+        CreatedProblemStatus.Completed -> listOf(
+            participants,
+            stringResource(Res.string.my_problem_finished_on, problem.finishedOn.orEmpty()),
+            stringResource(Res.string.my_problem_submitted, problem.submissions),
+            stringResource(Res.string.my_problem_winner, problem.winner.orEmpty())
+        )
+        CreatedProblemStatus.Expired -> listOf(
+            participants,
+            stringResource(Res.string.my_problem_time_elapsed, problem.timeElapsed.orEmpty()),
+            stringResource(Res.string.my_problem_submitted, 0)
+        )
     }
 }

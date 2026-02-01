@@ -7,93 +7,49 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
-import blockchain_platform.composeapp.generated.resources.*
+import blockchain_platform.composeapp.generated.resources.Res
+import blockchain_platform.composeapp.generated.resources.loading_more
+import blockchain_platform.composeapp.generated.resources.participation_empty_action
+import blockchain_platform.composeapp.generated.resources.participation_empty_body
+import blockchain_platform.composeapp.generated.resources.participation_empty_title
+import blockchain_platform.composeapp.generated.resources.participation_filter_all
+import blockchain_platform.composeapp.generated.resources.participation_filter_label
+import blockchain_platform.composeapp.generated.resources.participation_filter_pending
+import blockchain_platform.composeapp.generated.resources.participation_filter_submitted
+import blockchain_platform.composeapp.generated.resources.participation_participants
+import blockchain_platform.composeapp.generated.resources.participation_submission
+import blockchain_platform.composeapp.generated.resources.participation_submission_pending
+import blockchain_platform.composeapp.generated.resources.participation_submission_sent
+import blockchain_platform.composeapp.generated.resources.participation_time_left
+import blockchain_platform.composeapp.generated.resources.participation_title
 import org.jetbrains.compose.resources.stringResource
+import pl.dawidszczesniak.blockchain_platform.domain.model.ParticipationProblem
+import pl.dawidszczesniak.blockchain_platform.domain.model.ParticipationStatus
+import pl.dawidszczesniak.blockchain_platform.presentation.participation.ParticipationFilter
+import pl.dawidszczesniak.blockchain_platform.presentation.participation.ParticipationIntent
+import pl.dawidszczesniak.blockchain_platform.presentation.participation.ParticipationStore
+import pl.dawidszczesniak.blockchain_platform.presentation.rememberStore
 import pl.dawidszczesniak.blockchain_platform.ui.AppSurface
-import kotlin.math.max
-
-private const val PAGE_SIZE = 20
-// TODO(backend): Replace mock counts with real backend totals.
-private const val TOTAL_PARTICIPATIONS = 80
-// TODO(backend): Remove mock toggle when list is fetched from backend.
-private const val USE_MOCK_DATA = true
-
-private enum class ParticipationStatus {
-    Submitted,
-    NotSubmitted,
-}
-
-private enum class ParticipationFilter {
-    All,
-    Submitted,
-    NotSubmitted,
-}
-
-private data class ParticipationProblem(
-    val title: String,
-    val status: ParticipationStatus,
-    val details: List<String>,
-)
 
 @Composable
 fun MyParticipationScreen(onBrowseProblems: () -> Unit) {
     val listState = rememberLazyListState()
+    val store = rememberStore<ParticipationStore>()
+    val state by store.state.collectAsState()
 
-    // TODO(backend): Fetch participation list for the current user from backend.
-    val allProblems = if (USE_MOCK_DATA) {
-        List(TOTAL_PARTICIPATIONS) { index ->
-            val status = if (index % 2 == 0) {
-                ParticipationStatus.Submitted
-            } else {
-                ParticipationStatus.NotSubmitted
-            }
-            val dayLeft = (index % 14) + 1
-            val participants = 5 + (index % 20)
-            val title = if (status == ParticipationStatus.Submitted) {
-                "Joined #${index + 1} — Consensus tuning"
-            } else {
-                "Joined #${index + 1} — Proof batching"
-            }
-            val submissionLabel = stringResource(
-                if (status == ParticipationStatus.Submitted) {
-                    Res.string.participation_submission_sent
-                } else {
-                    Res.string.participation_submission_pending
-                }
-            )
-            ParticipationProblem(
-                title = title,
-                status = status,
-                details = listOf(
-                    stringResource(Res.string.participation_time_left, "${dayLeft}d"),
-                    stringResource(Res.string.participation_participants, participants),
-                    stringResource(Res.string.participation_submission, submissionLabel)
-                )
-            )
-        }
-    } else {
-        emptyList()
-    }
-
-    var filter by remember { mutableStateOf(ParticipationFilter.All) }
-    var currentPage by remember { mutableStateOf(1) }
-
-    val filtered = when (filter) {
-        ParticipationFilter.All -> allProblems
-        ParticipationFilter.Submitted -> allProblems.filter { it.status == ParticipationStatus.Submitted }
-        ParticipationFilter.NotSubmitted -> allProblems.filter { it.status == ParticipationStatus.NotSubmitted }
-    }
-    val totalPages = max(1, (filtered.size + PAGE_SIZE - 1) / PAGE_SIZE)
-    val pageIndex = currentPage.coerceIn(1, totalPages)
-    val pageProblems = filtered.drop((pageIndex - 1) * PAGE_SIZE).take(PAGE_SIZE)
-
-    LaunchedEffect(filter, totalPages) {
-        if (currentPage > totalPages) currentPage = totalPages
+    LaunchedEffect(Unit) {
+        store.dispatch(ParticipationIntent.Refresh)
     }
 
     Column(
@@ -109,20 +65,25 @@ fun MyParticipationScreen(onBrowseProblems: () -> Unit) {
                 style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.onSurface
             )
-            if (filtered.isNotEmpty()) {
+            if (!state.isEmpty) {
                 Spacer(Modifier.weight(1f))
                 ParticipationFilterRow(
-                    current = filter,
+                    current = state.filter,
                     onChange = {
-                        filter = it
-                        currentPage = 1
+                        store.dispatch(ParticipationIntent.ChangeFilter(it))
                     }
                 )
             }
         }
         Spacer(Modifier.height(12.dp))
 
-        if (filtered.isEmpty()) {
+        if (state.isLoading) {
+            Text(
+                text = stringResource(Res.string.loading_more),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        } else if (state.isEmpty) {
             EmptyParticipation(onBrowseProblems = onBrowseProblems)
             return@Column
         }
@@ -134,15 +95,15 @@ fun MyParticipationScreen(onBrowseProblems: () -> Unit) {
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(end = 8.dp, bottom = 18.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                items(pageProblems) { item ->
+                items(state.pageItems) { item ->
                     ParticipationCard(problem = item)
                 }
                 item {
                     Spacer(Modifier.height(8.dp))
                     PaginationRow(
-                        currentPage = pageIndex,
-                        totalPages = totalPages,
-                        onPageSelected = { currentPage = it }
+                        currentPage = state.currentPage,
+                        totalPages = state.totalPages,
+                        onPageSelected = { store.dispatch(ParticipationIntent.ChangePage(it)) }
                     )
                     Spacer(Modifier.height(8.dp))
                 }
@@ -153,6 +114,19 @@ fun MyParticipationScreen(onBrowseProblems: () -> Unit) {
 
 @Composable
 private fun ParticipationCard(problem: ParticipationProblem) {
+    val submissionLabel = stringResource(
+        if (problem.status == ParticipationStatus.Submitted) {
+            Res.string.participation_submission_sent
+        } else {
+            Res.string.participation_submission_pending
+        }
+    )
+    val details = listOf(
+        stringResource(Res.string.participation_time_left, problem.timeLeftLabel),
+        stringResource(Res.string.participation_participants, problem.participants),
+        stringResource(Res.string.participation_submission, submissionLabel)
+    )
+
     AppSurface(
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -182,7 +156,7 @@ private fun ParticipationCard(problem: ParticipationProblem) {
         }
         Spacer(Modifier.height(10.dp))
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            problem.details.forEach { detail ->
+            details.forEach { detail ->
                 Text(
                     text = detail,
                     style = MaterialTheme.typography.bodySmall,

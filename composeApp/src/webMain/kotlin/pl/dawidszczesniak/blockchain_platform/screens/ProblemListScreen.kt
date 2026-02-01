@@ -24,6 +24,7 @@ import blockchain_platform.composeapp.generated.resources.details_coming_soon
 import blockchain_platform.composeapp.generated.resources.info_entry_fee
 import blockchain_platform.composeapp.generated.resources.info_prize
 import blockchain_platform.composeapp.generated.resources.info_start
+import blockchain_platform.composeapp.generated.resources.loading_more
 import blockchain_platform.composeapp.generated.resources.participants_summary
 import blockchain_platform.composeapp.generated.resources.problem_title_template
 import blockchain_platform.composeapp.generated.resources.problems_mock_info
@@ -50,94 +51,26 @@ import blockchain_platform.composeapp.generated.resources.sort_option_required_m
 import blockchain_platform.composeapp.generated.resources.sort_option_start_latest
 import blockchain_platform.composeapp.generated.resources.sort_option_start_soonest
 import org.jetbrains.compose.resources.stringResource
+import pl.dawidszczesniak.blockchain_platform.domain.model.ProblemSummary
+import pl.dawidszczesniak.blockchain_platform.presentation.rememberStore
+import pl.dawidszczesniak.blockchain_platform.presentation.problems.ProblemsIntent
+import pl.dawidszczesniak.blockchain_platform.presentation.problems.ProblemsListStore
+import pl.dawidszczesniak.blockchain_platform.presentation.problems.ProblemsSortOption
 import pl.dawidszczesniak.blockchain_platform.ui.AppSurface
 import kotlin.math.max
 import kotlin.math.min
 
-private const val PAGE_SIZE = 20
-private const val INITIAL_CREATED_ORDER = 1000
-// TODO(backend): Replace mock list size with real pagination metadata from API.
-private const val TOTAL_PROBLEMS = 87
-// TODO(backend): Remove mock toggle when list is fetched from backend.
-private const val SHOW_EMPTY_STATE = false
-
-// TODO(backend): Replace fake models with backend DTOs.
-private data class FakeProblem(
-    val id: Int,
-    val createdOrder: Int,
-    val titleLetter: Char,
-    val prizeAmount: Int,
-    val entryFeeAmount: Int,
-    val requiredParticipants: Int,
-    val registeredParticipants: Int,
-    val daysToStart: Int,
-    val daysToJoinEnd: Int,
-    val joinUntilLabel: String,
-    val submitUntilLabel: String,
-)
-
-private enum class SortOption {
-    Newest,
-    Oldest,
-
-    StartSoonest,
-    StartLatest,
-
-    PrizeHighest,
-    PrizeLowest,
-
-    EntryFeeHighest,
-    EntryFeeLowest,
-
-    RequiredMost,
-    RequiredLeast,
-
-    RegisteredMost,
-    RegisteredLeast,
-
-    ProgressMost,
-    ProgressLeast,
-
-    JoinEndsSoonest,
-    JoinEndsLatest,
-}
-
 @Composable
 fun ProblemsListScreen(onCreateProblem: () -> Unit) {
     val listState = rememberLazyListState()
+    val store = rememberStore<ProblemsListStore>()
+    val state by store.state.collectAsState()
 
-    // TODO(backend): Fetch problems from backend (paginated) instead of generating mock data.
-    val allProblems = remember {
-        if (SHOW_EMPTY_STATE) {
-            emptyList()
-        } else {
-            generateFakeProblems(
-                startId = 1,
-                startCreatedOrder = INITIAL_CREATED_ORDER,
-                count = TOTAL_PROBLEMS
-            )
-        }
+    LaunchedEffect(Unit) {
+        store.dispatch(ProblemsIntent.Refresh)
     }
 
-    var sortOption by remember { mutableStateOf(SortOption.Newest) }
-    val sortedProblems = remember(allProblems, sortOption) {
-        sortProblems(allProblems, sortOption)
-    }
-    val isEmpty = sortedProblems.isEmpty()
-
-    var currentPage by remember { mutableStateOf(1) }
-    val totalPages = max(1, (sortedProblems.size + PAGE_SIZE - 1) / PAGE_SIZE)
-    val pageIndex = currentPage.coerceIn(1, totalPages)
-    val startIndex = (pageIndex - 1) * PAGE_SIZE
-    val pageProblems = remember(sortedProblems, pageIndex) {
-        sortedProblems.drop(startIndex).take(PAGE_SIZE)
-    }
-
-    LaunchedEffect(totalPages) {
-        if (currentPage > totalPages) currentPage = totalPages
-    }
-
-    LaunchedEffect(pageIndex, sortOption) {
+    LaunchedEffect(state.currentPage, state.sortOption) {
         listState.scrollToItem(0)
     }
 
@@ -154,22 +87,28 @@ fun ProblemsListScreen(onCreateProblem: () -> Unit) {
                 style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.onSurface
             )
-            if (sortedProblems.isNotEmpty()) {
+            if (!state.isEmpty) {
                 Spacer(Modifier.weight(1f))
                 SortRow(
-                    sortOption = sortOption,
+                    sortOption = state.sortOption,
                     onSortChanged = {
-                        sortOption = it
-                        currentPage = 1
+                        store.dispatch(ProblemsIntent.ChangeSort(it))
                     }
                 )
             }
         }
         Spacer(Modifier.height(6.dp))
-        if (!isEmpty) {
+        if (state.isLoading) {
+            Spacer(Modifier.height(12.dp))
+            Text(
+                text = stringResource(Res.string.loading_more),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        } else if (!state.isEmpty) {
             // TODO(backend): Replace mock banner with real backend metadata.
             Text(
-                text = stringResource(Res.string.problems_mock_info, allProblems.size),
+                text = stringResource(Res.string.problems_mock_info, state.totalCount),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -187,15 +126,15 @@ fun ProblemsListScreen(onCreateProblem: () -> Unit) {
                 contentPadding = PaddingValues(end = 44.dp, bottom = 18.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                items(pageProblems) { p ->
+                items(state.pageItems) { p ->
                     ProblemCard(problem = p, onOpen = { /* TODO */ })
                 }
                 item {
                     Spacer(Modifier.height(8.dp))
                     PaginationRow(
-                        currentPage = pageIndex,
-                        totalPages = totalPages,
-                        onPageSelected = { currentPage = it }
+                        currentPage = state.currentPage,
+                        totalPages = state.totalPages,
+                        onPageSelected = { store.dispatch(ProblemsIntent.ChangePage(it)) }
                     )
                     Spacer(Modifier.height(8.dp))
                 }
@@ -232,8 +171,8 @@ fun ProblemsListScreen(onCreateProblem: () -> Unit) {
 
 @Composable
 private fun SortRow(
-    sortOption: SortOption,
-    onSortChanged: (SortOption) -> Unit
+    sortOption: ProblemsSortOption,
+    onSortChanged: (ProblemsSortOption) -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
 
@@ -261,7 +200,7 @@ private fun SortRow(
                 onDismissRequest = { expanded = false },
                 offset = DpOffset(x = 0.dp, y = 6.dp)
             ) {
-                SortOption.entries.forEach { option ->
+            ProblemsSortOption.entries.forEach { option ->
                     DropdownMenuItem(
                         text = { Text(sortOptionLabel(option)) },
                         onClick = {
@@ -276,24 +215,24 @@ private fun SortRow(
 }
 
 @Composable
-private fun sortOptionLabel(option: SortOption): String {
+private fun sortOptionLabel(option: ProblemsSortOption): String {
     return when (option) {
-        SortOption.Newest -> stringResource(Res.string.sort_option_newest)
-        SortOption.Oldest -> stringResource(Res.string.sort_option_oldest)
-        SortOption.StartSoonest -> stringResource(Res.string.sort_option_start_soonest)
-        SortOption.StartLatest -> stringResource(Res.string.sort_option_start_latest)
-        SortOption.PrizeHighest -> stringResource(Res.string.sort_option_prize_highest)
-        SortOption.PrizeLowest -> stringResource(Res.string.sort_option_prize_lowest)
-        SortOption.EntryFeeHighest -> stringResource(Res.string.sort_option_entry_fee_highest)
-        SortOption.EntryFeeLowest -> stringResource(Res.string.sort_option_entry_fee_lowest)
-        SortOption.RequiredMost -> stringResource(Res.string.sort_option_required_most)
-        SortOption.RequiredLeast -> stringResource(Res.string.sort_option_required_least)
-        SortOption.RegisteredMost -> stringResource(Res.string.sort_option_registered_most)
-        SortOption.RegisteredLeast -> stringResource(Res.string.sort_option_registered_least)
-        SortOption.ProgressMost -> stringResource(Res.string.sort_option_progress_most)
-        SortOption.ProgressLeast -> stringResource(Res.string.sort_option_progress_least)
-        SortOption.JoinEndsSoonest -> stringResource(Res.string.sort_option_join_ends_soonest)
-        SortOption.JoinEndsLatest -> stringResource(Res.string.sort_option_join_ends_latest)
+        ProblemsSortOption.Newest -> stringResource(Res.string.sort_option_newest)
+        ProblemsSortOption.Oldest -> stringResource(Res.string.sort_option_oldest)
+        ProblemsSortOption.StartSoonest -> stringResource(Res.string.sort_option_start_soonest)
+        ProblemsSortOption.StartLatest -> stringResource(Res.string.sort_option_start_latest)
+        ProblemsSortOption.PrizeHighest -> stringResource(Res.string.sort_option_prize_highest)
+        ProblemsSortOption.PrizeLowest -> stringResource(Res.string.sort_option_prize_lowest)
+        ProblemsSortOption.EntryFeeHighest -> stringResource(Res.string.sort_option_entry_fee_highest)
+        ProblemsSortOption.EntryFeeLowest -> stringResource(Res.string.sort_option_entry_fee_lowest)
+        ProblemsSortOption.RequiredMost -> stringResource(Res.string.sort_option_required_most)
+        ProblemsSortOption.RequiredLeast -> stringResource(Res.string.sort_option_required_least)
+        ProblemsSortOption.RegisteredMost -> stringResource(Res.string.sort_option_registered_most)
+        ProblemsSortOption.RegisteredLeast -> stringResource(Res.string.sort_option_registered_least)
+        ProblemsSortOption.ProgressMost -> stringResource(Res.string.sort_option_progress_most)
+        ProblemsSortOption.ProgressLeast -> stringResource(Res.string.sort_option_progress_least)
+        ProblemsSortOption.JoinEndsSoonest -> stringResource(Res.string.sort_option_join_ends_soonest)
+        ProblemsSortOption.JoinEndsLatest -> stringResource(Res.string.sort_option_join_ends_latest)
     }
 }
 
@@ -362,7 +301,7 @@ private fun PaginationRow(
 
 @Composable
 private fun ProblemCard(
-    problem: FakeProblem,
+    problem: ProblemSummary,
     onOpen: () -> Unit
 ) {
     val required = max(1, problem.requiredParticipants)
@@ -453,76 +392,4 @@ private fun InfoChip(label: String, value: String) {
             borderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)
         )
     )
-}
-
-private fun sortProblems(list: List<FakeProblem>, option: SortOption): List<FakeProblem> {
-    return when (option) {
-        SortOption.Newest -> list.sortedByDescending { it.createdOrder }
-        SortOption.Oldest -> list.sortedBy { it.createdOrder }
-
-        SortOption.StartSoonest -> list.sortedBy { it.daysToStart }
-        SortOption.StartLatest -> list.sortedByDescending { it.daysToStart }
-
-        SortOption.PrizeHighest -> list.sortedByDescending { it.prizeAmount }
-        SortOption.PrizeLowest -> list.sortedBy { it.prizeAmount }
-
-        SortOption.EntryFeeHighest -> list.sortedByDescending { it.entryFeeAmount }
-        SortOption.EntryFeeLowest -> list.sortedBy { it.entryFeeAmount }
-
-        SortOption.RequiredMost -> list.sortedByDescending { it.requiredParticipants }
-        SortOption.RequiredLeast -> list.sortedBy { it.requiredParticipants }
-
-        SortOption.RegisteredMost -> list.sortedByDescending { it.registeredParticipants }
-        SortOption.RegisteredLeast -> list.sortedBy { it.registeredParticipants }
-
-        SortOption.ProgressMost -> list.sortedByDescending { progressRatio(it) }
-        SortOption.ProgressLeast -> list.sortedBy { progressRatio(it) }
-
-        SortOption.JoinEndsSoonest -> list.sortedBy { it.daysToJoinEnd }
-        SortOption.JoinEndsLatest -> list.sortedByDescending { it.daysToJoinEnd }
-    }
-}
-
-private fun progressRatio(p: FakeProblem): Float {
-    val required = max(1, p.requiredParticipants)
-    val registered = min(p.registeredParticipants, required)
-    return registered.toFloat() / required.toFloat()
-}
-
-private fun generateFakeProblems(
-    startId: Int,
-    startCreatedOrder: Int,
-    count: Int
-): List<FakeProblem> {
-    // TODO(backend): Remove mock generator once data comes from backend.
-    return List(count) { i ->
-        val id = startId + i
-        val createdOrder = startCreatedOrder - i
-
-        val required = 10 + ((id + createdOrder) % 11)
-        val registered = min(required, (id * 3 + createdOrder) % (required + 1))
-
-        val prize = 10 + ((id + 2) % 10)
-        val entry = 1 + ((id + 1) % 5)
-
-        val daysToJoinEnd = 1 + ((id + createdOrder) % 14)
-        val daysToStart = daysToJoinEnd
-
-        val joinDay = (10 + (id % 18)).toString().padStart(2, '0')
-        val submitDay = (1 + (id % 20)).toString().padStart(2, '0')
-
-        FakeProblem(
-            id = id,
-            createdOrder = createdOrder,
-            titleLetter = 'A' + (id % 26),
-            prizeAmount = prize,
-            entryFeeAmount = entry,
-            requiredParticipants = required,
-            registeredParticipants = registered,
-            daysToStart = daysToStart,
-            daysToJoinEnd = daysToJoinEnd,
-            joinUntilLabel = "2026-02-$joinDay",
-            submitUntilLabel = "2026-03-$submitDay"
-        )
-    }
 }
