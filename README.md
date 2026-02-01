@@ -53,6 +53,28 @@ in your IDE's toolbar or run it directly from the terminal:
       .\gradlew.bat :composeApp:jsBrowserDevelopmentRun
       ```
 
+### Environments (local / staging / prod)
+
+The web app reads environment config from a generated Kotlin file at build time.
+Gradle also injects the values into `<meta>` tags in
+`composeApp/src/webMain/resources/index.html` for easier debugging.
+
+Override the environment and API base URL via Gradle properties:
+
+- local (default): `./gradlew :composeApp:jsBrowserDevelopmentRun -PappEnv=local -PapiBaseUrl=http://localhost:8080`
+- staging: `./gradlew :composeApp:jsBrowserProductionWebpack -PappEnv=staging -PapiBaseUrl=https://staging-api.your-domain.com`
+- prod: `./gradlew :composeApp:jsBrowserProductionWebpack -PappEnv=prod -PapiBaseUrl=https://api.your-domain.com`
+
+Defaults live in `composeApp/build.gradle.kts` and can be adjusted later.
+
+### Trunk-based workflow (recommended)
+
+- `main` is the trunk.
+- Short-lived feature branches are merged quickly into `main`.
+- Staging deploys from `main`.
+- Production deploys from tags (e.g., `v1.2.3`) on `main`.
+- PR preview environments can be added later as a CI/CD step.
+
 ---
 
 Learn more about [Kotlin Multiplatform](https://www.jetbrains.com/help/kotlin-multiplatform-dev/get-started.html),

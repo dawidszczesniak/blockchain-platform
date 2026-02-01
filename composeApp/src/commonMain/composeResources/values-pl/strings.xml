@@ -139,4 +139,7 @@
     <string name="details_coming_soon">Szczegóły (wkrótce)</string>
 
     <string name="problem_title_template">Problem #%1$d – Optymalizacja algorytmu (%2$s)</string>
+
+    <string name="backend_unavailable_title">Backend niedostępny</string>
+    <string name="backend_unavailable_body">Część danych może być nieaktualna. Spróbuj ponownie później.</string>
 </resources>

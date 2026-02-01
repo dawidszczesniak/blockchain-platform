@@ -139,4 +139,7 @@
     <string name="details_coming_soon">Details (soon)</string>
 
     <string name="problem_title_template">Problem #%1$d – Algorithm optimization (%2$s)</string>
+
+    <string name="backend_unavailable_title">Backend unavailable</string>
+    <string name="backend_unavailable_body">Some data may be out of date. Please try again later.</string>
 </resources>

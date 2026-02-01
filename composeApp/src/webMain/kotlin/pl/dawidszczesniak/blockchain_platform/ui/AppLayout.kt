@@ -1,8 +1,10 @@
 package pl.dawidszczesniak.blockchain_platform.ui
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -10,9 +12,14 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import blockchain_platform.composeapp.generated.resources.Res
+import blockchain_platform.composeapp.generated.resources.backend_unavailable_body
+import blockchain_platform.composeapp.generated.resources.backend_unavailable_title
+import org.jetbrains.compose.resources.stringResource
 
 @Composable
 fun AppBackdrop(modifier: Modifier = Modifier) {
@@ -99,5 +106,41 @@ fun AppHeader(
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), content = actions)
+    }
+}
+
+@Composable
+fun BackendStatusBanner(
+    isAvailable: Boolean?,
+    modifier: Modifier = Modifier,
+) {
+    if (isAvailable != false) return
+
+    val colors = MaterialTheme.colorScheme
+    Row(
+        modifier = modifier
+            .border(1.dp, colors.outline, RoundedCornerShape(16.dp))
+            .background(colors.surfaceVariant, RoundedCornerShape(16.dp))
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(8.dp)
+                .background(colors.error, CircleShape)
+        )
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                text = stringResource(Res.string.backend_unavailable_title),
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                color = colors.onSurface
+            )
+            Text(
+                text = stringResource(Res.string.backend_unavailable_body),
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.onSurfaceVariant
+            )
+        }
     }
 }

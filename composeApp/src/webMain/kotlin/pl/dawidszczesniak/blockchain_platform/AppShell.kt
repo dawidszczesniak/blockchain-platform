@@ -1,8 +1,10 @@
 package pl.dawidszczesniak.blockchain_platform
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -19,6 +21,7 @@ import pl.dawidszczesniak.blockchain_platform.screens.MyProblemsScreen
 import pl.dawidszczesniak.blockchain_platform.screens.ProblemsListScreen
 import pl.dawidszczesniak.blockchain_platform.screens.SettingsScreen
 import pl.dawidszczesniak.blockchain_platform.ui.AppBackdrop
+import pl.dawidszczesniak.blockchain_platform.ui.BackendStatusBanner
 import pl.dawidszczesniak.blockchain_platform.ui.AppPageContainer
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -48,25 +51,38 @@ fun AppShell(
             }
         ) { padding ->
             val pagePadding = PaddingValues(top = 24.dp, bottom = 24.dp)
+            val backendHealth = rememberBackendHealth(AppConfigProvider.config.apiBaseUrl)
 
-            AppPageContainer(
-                modifier = Modifier.padding(padding),
-                contentPadding = pagePadding
+            Column(
+                modifier = Modifier
+                    .padding(padding)
+                    .fillMaxSize()
             ) {
-                when (currentRoute) {
-                    Route.Home -> HomeScreen(onNavigateToProblems = { onNavigate(Route.Problems) })
-                    Route.Problems -> ProblemsListScreen(
-                        onCreateProblem = { onNavigate(Route.CreateProblem) }
-                    )
-                    Route.CreateProblem -> CreateProblemScreen()
-                    Route.MyProblems -> MyProblemsScreen(
-                        onCreateProblem = { onNavigate(Route.CreateProblem) }
-                    )
-                    Route.MyParticipation -> MyParticipationScreen(
-                        onBrowseProblems = { onNavigate(Route.Problems) }
-                    )
-                    Route.Settings -> SettingsScreen()
-                    Route.Login -> LoginScreen(onLogin = onLogin)
+                BackendStatusBanner(
+                    isAvailable = backendHealth.value,
+                    modifier = Modifier
+                        .padding(horizontal = 28.dp, vertical = 12.dp)
+                        .fillMaxWidth()
+                )
+                AppPageContainer(
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    contentPadding = pagePadding
+                ) {
+                    when (currentRoute) {
+                        Route.Home -> HomeScreen(onNavigateToProblems = { onNavigate(Route.Problems) })
+                        Route.Problems -> ProblemsListScreen(
+                            onCreateProblem = { onNavigate(Route.CreateProblem) }
+                        )
+                        Route.CreateProblem -> CreateProblemScreen()
+                        Route.MyProblems -> MyProblemsScreen(
+                            onCreateProblem = { onNavigate(Route.CreateProblem) }
+                        )
+                        Route.MyParticipation -> MyParticipationScreen(
+                            onBrowseProblems = { onNavigate(Route.Problems) }
+                        )
+                        Route.Settings -> SettingsScreen()
+                        Route.Login -> LoginScreen(onLogin = onLogin)
+                    }
                 }
             }
         }
