@@ -4,8 +4,8 @@ import org.gradle.api.provider.Property
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.OutputFile
 import org.gradle.api.tasks.TaskAction
-import org.gradle.language.jvm.tasks.ProcessResources
 import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
+import org.jetbrains.kotlin.gradle.targets.js.webpack.KotlinWebpackConfig
 
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
@@ -15,13 +15,25 @@ plugins {
 
 kotlin {
     js {
-        browser()
+        browser {
+            commonWebpackConfig {
+                devServer = (devServer ?: KotlinWebpackConfig.DevServer()).apply {
+                    port = 8080
+                }
+            }
+        }
         binaries.executable()
     }
 
     @OptIn(ExperimentalWasmDsl::class)
     wasmJs {
-        browser()
+        browser {
+            commonWebpackConfig {
+                devServer = (devServer ?: KotlinWebpackConfig.DevServer()).apply {
+                    port = 8080
+                }
+            }
+        }
         binaries.executable()
     }
 
@@ -80,21 +92,10 @@ val apiBaseUrlProvider = providers.gradleProperty("apiBaseUrl")
             when (env) {
                 "prod", "production" -> "https://api.your-domain.com"
                 "staging", "stage" -> "https://staging-api.your-domain.com"
-                else -> "http://localhost:8080"
+                else -> "http://localhost:8081"
             }
         }
     )
-
-tasks.withType<ProcessResources>().configureEach {
-    inputs.property("appEnv", appEnvProvider)
-    inputs.property("apiBaseUrl", apiBaseUrlProvider)
-    filesMatching("index.html") {
-        expand(
-            "APP_ENV" to appEnvProvider.get(),
-            "API_BASE_URL" to apiBaseUrlProvider.get(),
-        )
-    }
-}
 
 val generatedConfigDir = layout.buildDirectory.dir("generated/appConfig")
 val generateAppConfig by tasks.registering(GenerateAppConfig::class) {

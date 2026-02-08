@@ -17,7 +17,19 @@ dependencies {
     implementation(projects.shared)
     implementation(libs.logback)
     implementation(libs.ktor.serverCore)
+    implementation(libs.ktor.serverCors)
     implementation(libs.ktor.serverNetty)
     testImplementation(libs.ktor.serverTestHost)
     testImplementation(libs.kotlin.testJunit)
+}
+
+tasks.withType<JavaExec>().configureEach {
+    val appEnv = (project.findProperty("appEnv") as String?)?.trim()
+    val corsAllowedHosts = (project.findProperty("corsAllowedHosts") as String?)?.trim()
+    if (!appEnv.isNullOrEmpty()) {
+        environment("APP_ENV", appEnv)
+    }
+    if (!corsAllowedHosts.isNullOrEmpty()) {
+        environment("CORS_ALLOWED_HOSTS", corsAllowedHosts)
+    }
 }
