@@ -13,12 +13,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import blockchain_platform.composeapp.generated.resources.Res
 import blockchain_platform.composeapp.generated.resources.backend_unavailable_body
 import blockchain_platform.composeapp.generated.resources.backend_unavailable_title
+import blockchain_platform.composeapp.generated.resources.maintenance_body
+import blockchain_platform.composeapp.generated.resources.maintenance_title
 import org.jetbrains.compose.resources.stringResource
 
 @Composable
@@ -140,6 +143,33 @@ fun BackendStatusBanner(
                 text = stringResource(Res.string.backend_unavailable_body),
                 style = MaterialTheme.typography.bodySmall,
                 color = colors.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+fun BackendMaintenanceScreen(modifier: Modifier = Modifier) {
+    Box(modifier = modifier.fillMaxSize()) {
+        AppBackdrop(modifier = Modifier.fillMaxSize())
+        Column(
+            modifier = Modifier
+                .align(Alignment.Center)
+                .padding(horizontal = 24.dp)
+                .widthIn(max = 520.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                text = stringResource(Res.string.maintenance_title),
+                style = MaterialTheme.typography.headlineMedium,
+                textAlign = TextAlign.Center
+            )
+            Text(
+                text = stringResource(Res.string.maintenance_body),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
             )
         }
     }

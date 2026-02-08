@@ -142,4 +142,6 @@
 
     <string name="backend_unavailable_title">Backend niedostępny</string>
     <string name="backend_unavailable_body">Część danych może być nieaktualna. Spróbuj ponownie później.</string>
+    <string name="maintenance_title">Trwają prace serwisowe</string>
+    <string name="maintenance_body">Strona wkrótce wróci.</string>
 </resources>

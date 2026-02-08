@@ -142,4 +142,6 @@
 
     <string name="backend_unavailable_title">Backend unavailable</string>
     <string name="backend_unavailable_body">Some data may be out of date. Please try again later.</string>
+    <string name="maintenance_title">We\u2019re performing maintenance</string>
+    <string name="maintenance_body">The platform will be back shortly.</string>
 </resources>
