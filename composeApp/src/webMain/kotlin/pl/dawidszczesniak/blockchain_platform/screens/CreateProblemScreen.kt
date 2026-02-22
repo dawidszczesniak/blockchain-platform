@@ -1,12 +1,31 @@
 package pl.dawidszczesniak.blockchain_platform.screens
 
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedCard
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -35,27 +54,19 @@ import blockchain_platform.composeapp.generated.resources.create_problem_test_re
 import blockchain_platform.composeapp.generated.resources.create_problem_tests_title
 import blockchain_platform.composeapp.generated.resources.create_problem_title
 import org.jetbrains.compose.resources.stringResource
-import pl.dawidszczesniak.blockchain_platform.ui.AppSurface
-
-private const val MAX_TESTS = 10
-
-private data class TestDraft(
-    val id: Int,
-    val code: String,
-    val expanded: Boolean,
-)
+import pl.dawidszczesniak.blockchain_platform.di.LocalKoin
+import pl.dawidszczesniak.blockchain_platform.presentation.create.CreateProblemIntent
+import pl.dawidszczesniak.blockchain_platform.presentation.create.CreateProblemState
+import pl.dawidszczesniak.blockchain_platform.presentation.create.CreateProblemTest
+import pl.dawidszczesniak.blockchain_platform.presentation.create.CreateProblemViewModel
+import pl.dawidszczesniak.blockchain_platform.presentation.create.MAX_CREATE_PROBLEM_TESTS
+import pl.dawidszczesniak.blockchain_platform.presentation.create.formatAmount
 
 @Composable
 fun CreateProblemScreen() {
-    var prize by remember { mutableStateOf("") }
-    var participants by remember { mutableStateOf("") }
-    var entryFee by remember { mutableStateOf("") }
-    var description by remember { mutableStateOf("") }
-    var joinUntilDate by remember { mutableStateOf("") }
-    var submitUntilDate by remember { mutableStateOf("") }
-
-    val tests = remember { mutableStateListOf(TestDraft(id = 1, code = "", expanded = true)) }
-    var nextTestId by remember { mutableStateOf(2) }
+    val koin = LocalKoin.current
+    val viewModel = remember { koin.get<CreateProblemViewModel>() }
+    val state by viewModel.state.collectAsState()
 
     Column(
         modifier = Modifier
@@ -69,77 +80,79 @@ fun CreateProblemScreen() {
             if (isCompact) {
                 Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
                     CreateProblemForm(
-                        prize = prize,
-                        onPrizeChange = { prize = it },
-                        participants = participants,
-                        onParticipantsChange = { participants = it },
-                        entryFee = entryFee,
-                        onEntryFeeChange = { entryFee = it },
-                        description = description,
-                        onDescriptionChange = { description = it },
-                        tests = tests,
-                        onAddTest = { tests.add(TestDraft(id = nextTestId++, code = "", expanded = true)) },
-                        onToggleTest = { index ->
-                            val test = tests[index]
-                            tests[index] = test.copy(expanded = !test.expanded)
+                        state = state,
+                        onPrizeChange = {
+                            viewModel.onIntent(CreateProblemIntent.PrizeChanged(it))
                         },
-                        onRemoveTest = { index ->
-                            if (tests.size > 1) {
-                                tests.removeAt(index)
-                            }
+                        onParticipantsChange = {
+                            viewModel.onIntent(CreateProblemIntent.ParticipantsChanged(it))
                         },
-                        onTestCodeChange = { index, value ->
-                            val test = tests[index]
-                            tests[index] = test.copy(code = value)
+                        onEntryFeeChange = {
+                            viewModel.onIntent(CreateProblemIntent.EntryFeeChanged(it))
                         },
-                        joinUntilDate = joinUntilDate,
-                        onJoinUntilChange = { joinUntilDate = it },
-                        submitUntilDate = submitUntilDate,
-                        onSubmitUntilChange = { submitUntilDate = it }
+                        onDescriptionChange = {
+                            viewModel.onIntent(CreateProblemIntent.DescriptionChanged(it))
+                        },
+                        onAddTest = {
+                            viewModel.onIntent(CreateProblemIntent.AddTest)
+                        },
+                        onToggleTest = { id ->
+                            viewModel.onIntent(CreateProblemIntent.ToggleTest(id))
+                        },
+                        onRemoveTest = { id ->
+                            viewModel.onIntent(CreateProblemIntent.RemoveTest(id))
+                        },
+                        onTestCodeChange = { id, value ->
+                            viewModel.onIntent(CreateProblemIntent.TestCodeChanged(id, value))
+                        },
+                        onJoinUntilChange = {
+                            viewModel.onIntent(CreateProblemIntent.JoinUntilChanged(it))
+                        },
+                        onSubmitUntilChange = {
+                            viewModel.onIntent(CreateProblemIntent.SubmitUntilChanged(it))
+                        }
                     )
-                    ProfitPanel(
-                        prize = prize,
-                        participants = participants,
-                        entryFee = entryFee
-                    )
+                    ProfitPanel(state = state)
                 }
             } else {
                 Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
                     CreateProblemForm(
                         modifier = Modifier.weight(2f),
-                        prize = prize,
-                        onPrizeChange = { prize = it },
-                        participants = participants,
-                        onParticipantsChange = { participants = it },
-                        entryFee = entryFee,
-                        onEntryFeeChange = { entryFee = it },
-                        description = description,
-                        onDescriptionChange = { description = it },
-                        tests = tests,
-                        onAddTest = { tests.add(TestDraft(id = nextTestId++, code = "", expanded = true)) },
-                        onToggleTest = { index ->
-                            val test = tests[index]
-                            tests[index] = test.copy(expanded = !test.expanded)
+                        state = state,
+                        onPrizeChange = {
+                            viewModel.onIntent(CreateProblemIntent.PrizeChanged(it))
                         },
-                        onRemoveTest = { index ->
-                            if (tests.size > 1) {
-                                tests.removeAt(index)
-                            }
+                        onParticipantsChange = {
+                            viewModel.onIntent(CreateProblemIntent.ParticipantsChanged(it))
                         },
-                        onTestCodeChange = { index, value ->
-                            val test = tests[index]
-                            tests[index] = test.copy(code = value)
+                        onEntryFeeChange = {
+                            viewModel.onIntent(CreateProblemIntent.EntryFeeChanged(it))
                         },
-                        joinUntilDate = joinUntilDate,
-                        onJoinUntilChange = { joinUntilDate = it },
-                        submitUntilDate = submitUntilDate,
-                        onSubmitUntilChange = { submitUntilDate = it }
+                        onDescriptionChange = {
+                            viewModel.onIntent(CreateProblemIntent.DescriptionChanged(it))
+                        },
+                        onAddTest = {
+                            viewModel.onIntent(CreateProblemIntent.AddTest)
+                        },
+                        onToggleTest = { id ->
+                            viewModel.onIntent(CreateProblemIntent.ToggleTest(id))
+                        },
+                        onRemoveTest = { id ->
+                            viewModel.onIntent(CreateProblemIntent.RemoveTest(id))
+                        },
+                        onTestCodeChange = { id, value ->
+                            viewModel.onIntent(CreateProblemIntent.TestCodeChanged(id, value))
+                        },
+                        onJoinUntilChange = {
+                            viewModel.onIntent(CreateProblemIntent.JoinUntilChanged(it))
+                        },
+                        onSubmitUntilChange = {
+                            viewModel.onIntent(CreateProblemIntent.SubmitUntilChanged(it))
+                        }
                     )
                     ProfitPanel(
                         modifier = Modifier.weight(1f),
-                        prize = prize,
-                        participants = participants,
-                        entryFee = entryFee
+                        state = state
                     )
                 }
             }
@@ -150,22 +163,16 @@ fun CreateProblemScreen() {
 @Composable
 private fun CreateProblemForm(
     modifier: Modifier = Modifier,
-    prize: String,
+    state: CreateProblemState,
     onPrizeChange: (String) -> Unit,
-    participants: String,
     onParticipantsChange: (String) -> Unit,
-    entryFee: String,
     onEntryFeeChange: (String) -> Unit,
-    description: String,
     onDescriptionChange: (String) -> Unit,
-    tests: List<TestDraft>,
     onAddTest: () -> Unit,
     onToggleTest: (Int) -> Unit,
     onRemoveTest: (Int) -> Unit,
     onTestCodeChange: (Int, String) -> Unit,
-    joinUntilDate: String,
     onJoinUntilChange: (String) -> Unit,
-    submitUntilDate: String,
     onSubmitUntilChange: (String) -> Unit,
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
@@ -176,7 +183,7 @@ private fun CreateProblemForm(
         Spacer(Modifier.height(12.dp))
 
         OutlinedTextField(
-            value = prize,
+            value = state.prize,
             onValueChange = onPrizeChange,
             label = { Text(stringResource(Res.string.create_problem_prize_label)) },
             modifier = Modifier.fillMaxWidth()
@@ -184,7 +191,7 @@ private fun CreateProblemForm(
         Spacer(Modifier.height(10.dp))
 
         OutlinedTextField(
-            value = participants,
+            value = state.participants,
             onValueChange = onParticipantsChange,
             label = { Text(stringResource(Res.string.create_problem_participants_label)) },
             modifier = Modifier.fillMaxWidth()
@@ -192,7 +199,7 @@ private fun CreateProblemForm(
         Spacer(Modifier.height(10.dp))
 
         OutlinedTextField(
-            value = entryFee,
+            value = state.entryFee,
             onValueChange = onEntryFeeChange,
             label = { Text(stringResource(Res.string.create_problem_entry_fee_label)) },
             modifier = Modifier.fillMaxWidth()
@@ -200,7 +207,7 @@ private fun CreateProblemForm(
         Spacer(Modifier.height(10.dp))
 
         OutlinedTextField(
-            value = description,
+            value = state.description,
             onValueChange = onDescriptionChange,
             label = { Text(stringResource(Res.string.create_problem_description_label)) },
             modifier = Modifier.fillMaxWidth(),
@@ -216,40 +223,40 @@ private fun CreateProblemForm(
             Text(
                 text = stringResource(
                     Res.string.create_problem_tests_title,
-                    tests.size,
-                    MAX_TESTS
+                    state.tests.size,
+                    MAX_CREATE_PROBLEM_TESTS
                 ),
                 style = MaterialTheme.typography.titleSmall
             )
             Spacer(Modifier.weight(1f))
             OutlinedButton(
-                onClick = { if (tests.size < MAX_TESTS) onAddTest() },
-                enabled = tests.size < MAX_TESTS
+                onClick = onAddTest,
+                enabled = state.canAddTest
             ) {
                 Text(stringResource(Res.string.create_problem_add_test))
             }
         }
         Spacer(Modifier.height(8.dp))
 
-        tests.forEachIndexed { index, test ->
+        state.tests.forEachIndexed { index, test ->
             key(test.id) {
                 TestCaseCard(
                     index = index,
                     test = test,
-                    onToggle = { onToggleTest(index) },
-                    canRemove = tests.size > 1,
-                    onRemove = { onRemoveTest(index) },
-                    onCodeChange = { value -> onTestCodeChange(index, value) }
+                    onToggle = { onToggleTest(test.id) },
+                    canRemove = state.tests.size > 1,
+                    onRemove = { onRemoveTest(test.id) },
+                    onCodeChange = { value -> onTestCodeChange(test.id, value) }
                 )
             }
-            if (index < tests.lastIndex) {
+            if (index < state.tests.lastIndex) {
                 Spacer(Modifier.height(10.dp))
             }
         }
         Spacer(Modifier.height(10.dp))
 
         OutlinedTextField(
-            value = joinUntilDate,
+            value = state.joinUntilDate,
             onValueChange = onJoinUntilChange,
             label = { Text(stringResource(Res.string.create_problem_join_until_label)) },
             modifier = Modifier.fillMaxWidth()
@@ -257,7 +264,7 @@ private fun CreateProblemForm(
         Spacer(Modifier.height(10.dp))
 
         OutlinedTextField(
-            value = submitUntilDate,
+            value = state.submitUntilDate,
             onValueChange = onSubmitUntilChange,
             label = { Text(stringResource(Res.string.create_problem_submit_until_label)) },
             modifier = Modifier.fillMaxWidth()
@@ -276,20 +283,11 @@ private fun CreateProblemForm(
 @Composable
 private fun ProfitPanel(
     modifier: Modifier = Modifier,
-    prize: String,
-    participants: String,
-    entryFee: String,
+    state: CreateProblemState,
 ) {
-    val prizeValue = parseAmount(prize)
-    val entryFeeValue = parseAmount(entryFee)
-    val participantsValue = participants.trim().toIntOrNull() ?: 0
-
-    val gross = entryFeeValue * participantsValue
-    val platformFee = gross * 0.02
-    val net = gross - prizeValue - platformFee
     val netColor = when {
-        net > 0 -> Color(0xFF33C97A)
-        net < 0 -> MaterialTheme.colorScheme.error
+        state.netRevenue > 0 -> Color(0xFF33C97A)
+        state.netRevenue < 0 -> MaterialTheme.colorScheme.error
         else -> MaterialTheme.colorScheme.onSurface
     }
 
@@ -308,24 +306,24 @@ private fun ProfitPanel(
 
         ProfitRow(
             label = stringResource(Res.string.create_problem_profit_prize),
-            value = formatAmount(prizeValue)
+            value = formatAmount(state.prizeValue)
         )
         ProfitRow(
             label = stringResource(Res.string.create_problem_profit_entry_fee),
-            value = formatAmount(entryFeeValue)
+            value = formatAmount(state.entryFeeValue)
         )
         ProfitRow(
             label = stringResource(Res.string.create_problem_profit_participants),
-            value = participantsValue.toString()
+            value = state.participantsValue.toString()
         )
         ProfitRow(
             label = stringResource(Res.string.create_problem_profit_platform_fee),
-            value = formatAmount(platformFee)
+            value = formatAmount(state.platformFee)
         )
         Spacer(Modifier.height(8.dp))
         ProfitRow(
             label = stringResource(Res.string.create_problem_profit_net),
-            value = formatAmount(net),
+            value = formatAmount(state.netRevenue),
             highlight = true,
             valueColor = netColor
         )
@@ -337,7 +335,7 @@ private fun ProfitRow(
     label: String,
     value: String,
     highlight: Boolean = false,
-    valueColor: androidx.compose.ui.graphics.Color? = null
+    valueColor: Color? = null
 ) {
     val resolvedColor = valueColor ?: MaterialTheme.colorScheme.onSurface
     Row(
@@ -359,25 +357,10 @@ private fun ProfitRow(
     Spacer(Modifier.height(6.dp))
 }
 
-private fun parseAmount(value: String): Double {
-    val normalized = value.replace(",", ".").trim()
-    return normalized.toDoubleOrNull() ?: 0.0
-}
-
-private fun formatAmount(value: Double): String {
-    val rounded = kotlin.math.round(value * 100) / 100
-    val asLong = rounded.toLong().toDouble()
-    return if (kotlin.math.abs(rounded - asLong) < 0.0001) {
-        asLong.toLong().toString()
-    } else {
-        rounded.toString()
-    }
-}
-
 @Composable
 private fun TestCaseCard(
     index: Int,
-    test: TestDraft,
+    test: CreateProblemTest,
     onToggle: () -> Unit,
     canRemove: Boolean,
     onRemove: () -> Unit,

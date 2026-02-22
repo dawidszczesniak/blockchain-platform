@@ -1,3 +1,21 @@
+### Architecture (MVI + Clean Architecture)
+
+- `shared`:
+  domain layer (`model`, `repository` interfaces, `usecase`).
+- `data`:
+  data layer (`ProblemRepository` implementation and data configuration).
+- `composeApp`:
+  presentation/UI layer (MVI stores, Compose screens, routing shell, DI composition root).
+- `server`:
+  backend module (Ktor API).
+
+Rules:
+
+- UI talks only to presentation stores.
+- stores talk to use cases.
+- use cases talk to repository interfaces from `shared`.
+- concrete repositories are provided by `data` in DI.
+
 ### Environments (local / staging / prod)
 
 The web app reads environment config from a generated Kotlin file at build time.

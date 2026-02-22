@@ -52,10 +52,10 @@ import blockchain_platform.composeapp.generated.resources.sort_option_start_late
 import blockchain_platform.composeapp.generated.resources.sort_option_start_soonest
 import org.jetbrains.compose.resources.stringResource
 import pl.dawidszczesniak.blockchain_platform.domain.model.ProblemSummary
-import pl.dawidszczesniak.blockchain_platform.presentation.rememberStore
+import pl.dawidszczesniak.blockchain_platform.di.LocalKoin
 import pl.dawidszczesniak.blockchain_platform.presentation.problems.ProblemsIntent
-import pl.dawidszczesniak.blockchain_platform.presentation.problems.ProblemsListStore
 import pl.dawidszczesniak.blockchain_platform.presentation.problems.ProblemsSortOption
+import pl.dawidszczesniak.blockchain_platform.presentation.problems.ProblemsListViewModel
 import pl.dawidszczesniak.blockchain_platform.ui.AppSurface
 import kotlin.math.max
 import kotlin.math.min
@@ -63,12 +63,12 @@ import kotlin.math.min
 @Composable
 fun ProblemsListScreen(onCreateProblem: () -> Unit) {
     val listState = rememberLazyListState()
-    val store = rememberStore<ProblemsListStore>()
-    val state by store.state.collectAsState()
-
-    LaunchedEffect(Unit) {
-        store.dispatch(ProblemsIntent.Refresh)
+    val koin = LocalKoin.current
+    val viewModel = remember { koin.get<ProblemsListViewModel>() }
+    DisposableEffect(viewModel) {
+        onDispose { viewModel.close() }
     }
+    val state by viewModel.state.collectAsState()
 
     LaunchedEffect(state.currentPage, state.sortOption) {
         listState.scrollToItem(0)
@@ -92,7 +92,7 @@ fun ProblemsListScreen(onCreateProblem: () -> Unit) {
                 SortRow(
                     sortOption = state.sortOption,
                     onSortChanged = {
-                        store.dispatch(ProblemsIntent.ChangeSort(it))
+                        viewModel.onIntent(ProblemsIntent.ChangeSort(it))
                     }
                 )
             }
@@ -134,7 +134,7 @@ fun ProblemsListScreen(onCreateProblem: () -> Unit) {
                     PaginationRow(
                         currentPage = state.currentPage,
                         totalPages = state.totalPages,
-                        onPageSelected = { store.dispatch(ProblemsIntent.ChangePage(it)) }
+                        onPageSelected = { viewModel.onIntent(ProblemsIntent.ChangePage(it)) }
                     )
                     Spacer(Modifier.height(8.dp))
                 }

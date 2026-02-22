@@ -1,40 +1,32 @@
 package pl.dawidszczesniak.blockchain_platform
 
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import pl.dawidszczesniak.blockchain_platform.di.LocalKoin
+import pl.dawidszczesniak.blockchain_platform.presentation.app.AppIntent
+import pl.dawidszczesniak.blockchain_platform.presentation.app.AppViewModel
 
 @Composable
 fun App() {
-
-    var isLoggedIn by remember { mutableStateOf(false) }
-    var route by remember { mutableStateOf(Route.Home) }
-    var pendingRouteAfterLogin by remember { mutableStateOf<Route?>(null) }
+    val koin = LocalKoin.current
+    val appViewModel = remember { koin.get<AppViewModel>() }
+    val state by appViewModel.state.collectAsState()
 
     AppTheme {
-        fun navigate(target: Route) {
-            if (!isLoggedIn && (target == Route.CreateProblem || target == Route.Settings || target == Route.MyProblems || target == Route.MyParticipation)) {
-                pendingRouteAfterLogin = target
-                route = Route.Login
-            } else {
-                route = target
-            }
-        }
-
         AppShell(
-            currentRoute = route,
-            onNavigate = { navigate(it) },
-            isLoggedIn = isLoggedIn,
+            currentRoute = state.route,
+            onNavigate = { appViewModel.onIntent(AppIntent.Navigate(it)) },
+            isLoggedIn = state.isLoggedIn,
             onLoginClick = {
-                route = Route.Login
+                appViewModel.onIntent(AppIntent.OpenLogin)
             },
             onLogin = {
-                isLoggedIn = true
-                route = pendingRouteAfterLogin ?: Route.Home
-                pendingRouteAfterLogin = null
+                appViewModel.onIntent(AppIntent.LoginSucceeded)
             },
             onLogout = {
-                isLoggedIn = false
-                pendingRouteAfterLogin = null
-                route = Route.Home
+                appViewModel.onIntent(AppIntent.Logout)
             }
         )
     }

@@ -9,7 +9,6 @@ import pl.dawidszczesniak.blockchain_platform.domain.model.ProblemSummary
 import pl.dawidszczesniak.blockchain_platform.domain.repository.ProblemRepository
 
 // TODO(backend): Replace mock flags and generators with real API calls.
-
 class MockProblemRepository(
     private val config: MockDataConfig,
 ) : ProblemRepository {

@@ -19,7 +19,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ArrowForward
+import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -151,7 +151,7 @@ private fun HeroCopy(
                     contentColor = MaterialTheme.colorScheme.onPrimary
                 )
             ) {
-                Icon(Icons.Outlined.ArrowForward, contentDescription = null)
+                Icon(Icons.AutoMirrored.Outlined.ArrowForward, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
                 Text(stringResource(Res.string.home_hero_primary_cta))
             }

@@ -22,8 +22,8 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -53,20 +53,20 @@ import blockchain_platform.composeapp.generated.resources.loading_more
 import org.jetbrains.compose.resources.stringResource
 import pl.dawidszczesniak.blockchain_platform.domain.model.CreatedProblem
 import pl.dawidszczesniak.blockchain_platform.domain.model.CreatedProblemStatus
+import pl.dawidszczesniak.blockchain_platform.di.LocalKoin
 import pl.dawidszczesniak.blockchain_platform.presentation.created.CreatedProblemsFilter
 import pl.dawidszczesniak.blockchain_platform.presentation.created.CreatedProblemsIntent
-import pl.dawidszczesniak.blockchain_platform.presentation.created.CreatedProblemsStore
-import pl.dawidszczesniak.blockchain_platform.presentation.rememberStore
+import pl.dawidszczesniak.blockchain_platform.presentation.created.CreatedProblemsViewModel
 import pl.dawidszczesniak.blockchain_platform.ui.AppSurface
 
 @Composable
 fun MyProblemsScreen(onCreateProblem: () -> Unit) {
-    val store = rememberStore<CreatedProblemsStore>()
-    val state by store.state.collectAsState()
-
-    LaunchedEffect(Unit) {
-        store.dispatch(CreatedProblemsIntent.Refresh)
+    val koin = LocalKoin.current
+    val viewModel = remember { koin.get<CreatedProblemsViewModel>() }
+    DisposableEffect(viewModel) {
+        onDispose { viewModel.close() }
     }
+    val state by viewModel.state.collectAsState()
 
     Column(
         modifier = Modifier
@@ -88,7 +88,7 @@ fun MyProblemsScreen(onCreateProblem: () -> Unit) {
                 TypeFilterRow(
                     current = state.filter,
                     onChange = {
-                        store.dispatch(CreatedProblemsIntent.ChangeFilter(it))
+                        viewModel.onIntent(CreatedProblemsIntent.ChangeFilter(it))
                     }
                 )
             }
@@ -114,7 +114,7 @@ fun MyProblemsScreen(onCreateProblem: () -> Unit) {
             PaginationRow(
                 currentPage = state.currentPage,
                 totalPages = state.totalPages,
-                onPageSelected = { store.dispatch(CreatedProblemsIntent.ChangePage(it)) }
+                onPageSelected = { viewModel.onIntent(CreatedProblemsIntent.ChangePage(it)) }
             )
         }
     }

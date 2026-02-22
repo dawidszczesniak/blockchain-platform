@@ -9,8 +9,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -36,21 +36,21 @@ import blockchain_platform.composeapp.generated.resources.participation_title
 import org.jetbrains.compose.resources.stringResource
 import pl.dawidszczesniak.blockchain_platform.domain.model.ParticipationProblem
 import pl.dawidszczesniak.blockchain_platform.domain.model.ParticipationStatus
+import pl.dawidszczesniak.blockchain_platform.di.LocalKoin
 import pl.dawidszczesniak.blockchain_platform.presentation.participation.ParticipationFilter
 import pl.dawidszczesniak.blockchain_platform.presentation.participation.ParticipationIntent
-import pl.dawidszczesniak.blockchain_platform.presentation.participation.ParticipationStore
-import pl.dawidszczesniak.blockchain_platform.presentation.rememberStore
+import pl.dawidszczesniak.blockchain_platform.presentation.participation.ParticipationViewModel
 import pl.dawidszczesniak.blockchain_platform.ui.AppSurface
 
 @Composable
 fun MyParticipationScreen(onBrowseProblems: () -> Unit) {
     val listState = rememberLazyListState()
-    val store = rememberStore<ParticipationStore>()
-    val state by store.state.collectAsState()
-
-    LaunchedEffect(Unit) {
-        store.dispatch(ParticipationIntent.Refresh)
+    val koin = LocalKoin.current
+    val viewModel = remember { koin.get<ParticipationViewModel>() }
+    DisposableEffect(viewModel) {
+        onDispose { viewModel.close() }
     }
+    val state by viewModel.state.collectAsState()
 
     Column(
         modifier = Modifier.fillMaxSize(),
@@ -70,7 +70,7 @@ fun MyParticipationScreen(onBrowseProblems: () -> Unit) {
                 ParticipationFilterRow(
                     current = state.filter,
                     onChange = {
-                        store.dispatch(ParticipationIntent.ChangeFilter(it))
+                        viewModel.onIntent(ParticipationIntent.ChangeFilter(it))
                     }
                 )
             }
@@ -103,7 +103,7 @@ fun MyParticipationScreen(onBrowseProblems: () -> Unit) {
                     PaginationRow(
                         currentPage = state.currentPage,
                         totalPages = state.totalPages,
-                        onPageSelected = { store.dispatch(ParticipationIntent.ChangePage(it)) }
+                        onPageSelected = { viewModel.onIntent(ParticipationIntent.ChangePage(it)) }
                     )
                     Spacer(Modifier.height(8.dp))
                 }

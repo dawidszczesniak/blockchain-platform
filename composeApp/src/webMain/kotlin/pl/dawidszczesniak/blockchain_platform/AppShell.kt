@@ -9,9 +9,15 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import pl.dawidszczesniak.blockchain_platform.di.LocalKoin
+import pl.dawidszczesniak.blockchain_platform.presentation.app.BackendHealthViewModel
 import pl.dawidszczesniak.blockchain_platform.screens.CreateProblemScreen
 import pl.dawidszczesniak.blockchain_platform.screens.HomeScreen
 import pl.dawidszczesniak.blockchain_platform.screens.LoginScreen
@@ -33,8 +39,13 @@ fun AppShell(
     onLogin: () -> Unit,
     onLogout: () -> Unit,
 ) {
-    val backendHealth = rememberBackendHealth(AppConfigProvider.config.apiBaseUrl)
-    if (backendHealth.value == false) {
+    val koin = LocalKoin.current
+    val backendHealthViewModel = remember { koin.get<BackendHealthViewModel>() }
+    DisposableEffect(backendHealthViewModel) {
+        onDispose { backendHealthViewModel.close() }
+    }
+    val backendHealthState by backendHealthViewModel.state.collectAsState()
+    if (backendHealthState.isAvailable == false) {
         BackendMaintenanceScreen()
         return
     }

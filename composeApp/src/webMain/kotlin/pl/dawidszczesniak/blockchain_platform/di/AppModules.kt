@@ -8,9 +8,12 @@ import pl.dawidszczesniak.blockchain_platform.domain.repository.ProblemRepositor
 import pl.dawidszczesniak.blockchain_platform.domain.usecase.GetCreatedProblems
 import pl.dawidszczesniak.blockchain_platform.domain.usecase.GetParticipationProblems
 import pl.dawidszczesniak.blockchain_platform.domain.usecase.GetProblemSummaries
-import pl.dawidszczesniak.blockchain_platform.presentation.created.CreatedProblemsStore
-import pl.dawidszczesniak.blockchain_platform.presentation.participation.ParticipationStore
-import pl.dawidszczesniak.blockchain_platform.presentation.problems.ProblemsListStore
+import pl.dawidszczesniak.blockchain_platform.presentation.app.AppViewModel
+import pl.dawidszczesniak.blockchain_platform.presentation.app.BackendHealthViewModel
+import pl.dawidszczesniak.blockchain_platform.presentation.created.CreatedProblemsViewModel
+import pl.dawidszczesniak.blockchain_platform.presentation.create.CreateProblemViewModel
+import pl.dawidszczesniak.blockchain_platform.presentation.participation.ParticipationViewModel
+import pl.dawidszczesniak.blockchain_platform.presentation.problems.ProblemsListViewModel
 
 fun appModules() = module {
     single { AppConfigProvider.config }
@@ -19,7 +22,10 @@ fun appModules() = module {
     factory { GetProblemSummaries(get()) }
     factory { GetCreatedProblems(get()) }
     factory { GetParticipationProblems(get()) }
-    factory { ProblemsListStore(get()) }
-    factory { CreatedProblemsStore(get()) }
-    factory { ParticipationStore(get()) }
+    factory { AppViewModel() }
+    factory { BackendHealthViewModel(get()) }
+    factory { CreateProblemViewModel() }
+    factory { ProblemsListViewModel(get()) }
+    factory { CreatedProblemsViewModel(get()) }
+    factory { ParticipationViewModel(get()) }
 }
