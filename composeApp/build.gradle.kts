@@ -1,3 +1,4 @@
+import org.gradle.api.GradleException
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.Property
@@ -13,12 +14,17 @@ plugins {
     alias(libs.plugins.composeCompiler)
 }
 
+val localHost = "localhost"
+val frontendPort = 8081
+val backendPort = 8080
+val localApiBaseUrl = "http://$localHost:$backendPort"
+
 kotlin {
     js {
         browser {
             commonWebpackConfig {
                 devServer = (devServer ?: KotlinWebpackConfig.DevServer()).apply {
-                    port = 8080
+                    port = frontendPort
                 }
             }
         }
@@ -30,7 +36,7 @@ kotlin {
         browser {
             commonWebpackConfig {
                 devServer = (devServer ?: KotlinWebpackConfig.DevServer()).apply {
-                    port = 8080
+                    port = frontendPort
                 }
             }
         }
@@ -87,21 +93,26 @@ abstract class GenerateAppConfig : DefaultTask() {
 val appEnvProvider = providers.gradleProperty("appEnv")
     .map { it.lowercase() }
     .orElse("local")
+val defaultApiBaseUrlProvider = appEnvProvider.map { env ->
+    when (env) {
+        "prod", "production" -> "https://api.your-domain.com"
+        "staging", "stage" -> "https://staging-api.your-domain.com"
+        else -> localApiBaseUrl
+    }
+}
 val apiBaseUrlProvider = providers.gradleProperty("apiBaseUrl")
-    .orElse(
-        appEnvProvider.map { env ->
-            when (env) {
-                "prod", "production" -> "https://api.your-domain.com"
-                "staging", "stage" -> "https://staging-api.your-domain.com"
-                else -> "http://localhost:8081"
-            }
-        }
-    )
+    .orElse(defaultApiBaseUrlProvider)
+val restrictedApiBaseUrlProvider = appEnvProvider.zip(apiBaseUrlProvider) { env, apiBaseUrl ->
+    if (env == "local" && apiBaseUrl != localApiBaseUrl) {
+        throw GradleException("Local frontend can use only $localApiBaseUrl as backend URL.")
+    }
+    apiBaseUrl
+}
 
 val generatedConfigDir = layout.buildDirectory.dir("generated/appConfig")
 val generateAppConfig by tasks.registering(GenerateAppConfig::class) {
     appEnv.set(appEnvProvider)
-    apiBaseUrl.set(apiBaseUrlProvider)
+    apiBaseUrl.set(restrictedApiBaseUrlProvider)
     outputFile.set(
         generatedConfigDir.map {
             it.file("pl/dawidszczesniak/blockchain_platform/AppBuildConfig.kt")

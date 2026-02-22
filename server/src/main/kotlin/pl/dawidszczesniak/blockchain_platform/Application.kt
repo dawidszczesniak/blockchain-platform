@@ -9,7 +9,7 @@ import io.ktor.server.routing.*
 import io.ktor.http.HttpMethod
 
 fun main() {
-    embeddedServer(Netty, port = SERVER_PORT, host = "0.0.0.0", module = Application::module)
+    embeddedServer(Netty, port = SERVER_PORT, host = LOCAL_HOST, module = Application::module)
         .start(wait = true)
 }
 
@@ -37,21 +37,8 @@ fun Application.module() {
 }
 
 private fun resolveAllowedCorsHosts(env: AppEnvironment): List<String> {
-    val configured = System.getenv("CORS_ALLOWED_HOSTS")
-        ?.split(',')
-        ?.map { it.trim() }
-        ?.filter { it.isNotEmpty() }
-        .orEmpty()
-
-    if (configured.isNotEmpty()) {
-        return configured
-    }
-
     return when (env) {
-        AppEnvironment.Local -> listOf(
-            "localhost:8080",
-            "127.0.0.1:8080",
-        )
+        AppEnvironment.Local -> listOf("$LOCAL_HOST:$FRONTEND_PORT")
         AppEnvironment.Staging,
         AppEnvironment.Prod,
         -> emptyList()
