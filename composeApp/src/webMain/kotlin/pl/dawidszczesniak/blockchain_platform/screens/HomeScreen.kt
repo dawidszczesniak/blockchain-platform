@@ -1,6 +1,5 @@
 package pl.dawidszczesniak.blockchain_platform.screens
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -30,8 +29,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
@@ -81,38 +78,11 @@ fun HomeScreen(onNavigateToProblems: () -> Unit) {
 
 @Composable
 private fun HeroSection(onNavigateToProblems: () -> Unit) {
-    val colors = MaterialTheme.colorScheme
     AppSurface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(32.dp)
     ) {
-        BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-            val stacked = maxWidth < 900.dp
-
-            if (stacked) {
-                Column(verticalArrangement = Arrangement.spacedBy(24.dp)) {
-                    HeroCopy(onNavigateToProblems = onNavigateToProblems)
-                    HeroArt(modifier = Modifier.fillMaxWidth().height(240.dp))
-                }
-            } else {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(24.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    HeroCopy(
-                        modifier = Modifier.weight(1.05f),
-                        onNavigateToProblems = onNavigateToProblems
-                    )
-                    HeroArt(
-                        modifier = Modifier
-                            .weight(0.95f)
-                            .height(300.dp)
-                            .border(1.dp, colors.outline.copy(alpha = 0.5f), RoundedCornerShape(24.dp))
-                    )
-                }
-            }
-        }
+        HeroCopy(onNavigateToProblems = onNavigateToProblems)
     }
 }
 
@@ -168,46 +138,6 @@ private fun HeroCopy(
             ) {
                 Text(stringResource(Res.string.home_hero_secondary_cta))
             }
-        }
-    }
-}
-
-@Composable
-private fun HeroArt(modifier: Modifier = Modifier) {
-    val colors = MaterialTheme.colorScheme
-    Box(
-        modifier = modifier
-            .background(
-                brush = Brush.linearGradient(
-                    colors = listOf(colors.surfaceVariant, colors.surface)
-                ),
-                shape = RoundedCornerShape(24.dp)
-            )
-            .padding(12.dp)
-    ) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            drawRoundRect(
-                brush = Brush.linearGradient(
-                    colors = listOf(Color(0xFFEEEFF4), Color(0xFFD7DAE3))
-                ),
-                cornerRadius = androidx.compose.ui.geometry.CornerRadius(28f, 28f)
-            )
-            val radius = size.minDimension * 0.18f
-            drawCircle(
-                color = Color(0xFFCCCCCC).copy(alpha = 0.35f),
-                radius = radius,
-                center = androidx.compose.ui.geometry.Offset(size.width * 0.25f, size.height * 0.4f)
-            )
-            drawCircle(
-                color = Color(0xFFBDBDBD).copy(alpha = 0.35f),
-                radius = radius * 1.2f,
-                center = androidx.compose.ui.geometry.Offset(size.width * 0.7f, size.height * 0.3f)
-            )
-            drawCircle(
-                color = Color(0xFFDFDFDF).copy(alpha = 0.5f),
-                radius = radius * 0.8f,
-                center = androidx.compose.ui.geometry.Offset(size.width * 0.6f, size.height * 0.7f)
-            )
         }
     }
 }
@@ -310,23 +240,54 @@ private fun UpdatesSection() {
                 CommunityCard()
             }
         } else {
-            Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-                UpdatesList(modifier = Modifier.weight(1.2f))
-                CommunityCard(modifier = Modifier.weight(0.8f))
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    text = stringResource(Res.string.home_updates_title),
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(18.dp),
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        Box(
+                            modifier = Modifier.weight(1.2f),
+                            contentAlignment = Alignment.TopStart
+                        ) {
+                            UpdatesList(
+                                modifier = Modifier.fillMaxWidth(),
+                                showHeader = false
+                            )
+                        }
+                        Box(
+                            modifier = Modifier.weight(0.8f),
+                            contentAlignment = Alignment.TopStart
+                        ) {
+                            CommunityCard(modifier = Modifier.fillMaxWidth())
+                        }
+                    }
+                }
             }
         }
     }
 }
 
 @Composable
-private fun UpdatesList(modifier: Modifier = Modifier) {
+private fun UpdatesList(
+    modifier: Modifier = Modifier,
+    showHeader: Boolean = true,
+) {
     Column(modifier = modifier) {
-        Text(
-            text = stringResource(Res.string.home_updates_title),
-            style = MaterialTheme.typography.titleLarge,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-        Spacer(Modifier.height(12.dp))
+        if (showHeader) {
+            Text(
+                text = stringResource(Res.string.home_updates_title),
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(Modifier.height(12.dp))
+        }
         // TODO(backend): Replace mock updates with real backend entries.
         val updates = listOf(
             stringResource(Res.string.home_update_title_1) to stringResource(Res.string.home_update_body_1),
