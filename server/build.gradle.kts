@@ -19,6 +19,8 @@ dependencies {
     implementation(libs.ktor.serverCore)
     implementation(libs.ktor.serverCors)
     implementation(libs.ktor.serverNetty)
+    implementation(libs.postgresql)
+    implementation(libs.kotlinx.serialization.json)
     testImplementation(libs.ktor.serverTestHost)
     testImplementation(libs.kotlin.testJunit)
 }

@@ -18,8 +18,8 @@ class ProblemUseCasesTest {
         val expected = listOf(
             ProblemSummary(
                 id = 1,
-                createdOrder = 100,
-                titleLetter = 'A',
+                title = "Neural Network Compression",
+                description = "Optimize an inference pipeline while preserving model quality.",
                 prizeAmount = 10,
                 entryFeeAmount = 2,
                 requiredParticipants = 8,
@@ -74,6 +74,7 @@ class ProblemUseCasesTest {
                 status = ParticipationStatus.Submitted,
                 timeLeftLabel = "4d",
                 participants = 11,
+                attemptsCount = 2,
             )
         )
         val repository = FakeProblemRepository(participationProblems = expected)

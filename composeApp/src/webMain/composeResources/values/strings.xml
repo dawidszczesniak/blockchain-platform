@@ -70,6 +70,7 @@
     <string name="participation_filter_pending">Not submitted</string>
     <string name="participation_time_left">Time left: %1$s</string>
     <string name="participation_participants">Participants: %1$d</string>
+    <string name="participation_attempts">Attempts: %1$d</string>
     <string name="participation_submission">Your submission: %1$s</string>
     <string name="participation_submission_sent">sent</string>
     <string name="participation_submission_pending">not sent</string>

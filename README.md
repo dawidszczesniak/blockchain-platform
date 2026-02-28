@@ -30,6 +30,42 @@ Run backend + frontend together (two terminals):
 - prod backend: `./gradlew :server:run -PappEnv=prod`
 - prod frontend: `./gradlew :composeApp:jsBrowserProductionWebpack -PappEnv=prod -PapiBaseUrl=https://api.your-domain.com`
 
+### PostgreSQL (3NF)
+
+Backend endpoint `/problems` is now read from PostgreSQL.
+`/problems` returns only rows with `problem_status = 'open'`.
+Additional read-only endpoints:
+
+- `/problems/created`
+- `/problems/participation`
+
+Database schema (3NF):
+
+- `problems`: core problem attributes (`title`, `description`, `problem_status` = `open|closed`, `prize_amount`, `entry_fee_amount`, dates, participant limits, `created_by_user_id`).
+- `users`: unique user identities (`registered_at`, `last_login_at`).
+- `problem_participants`: mapping of participants (users) assigned/registered to a specific problem.
+- `problem_submissions`: submission attempts history (multiple tries per user/problem).
+- `problem_winners`: winner history per problem and winner user (`winner_user_id`, `payout_amount`, `won_at`).
+
+Local startup:
+
+- start DB: `docker compose up -d postgres`
+- start backend: `./gradlew :server:run -PappEnv=local`
+
+On startup, backend automatically:
+
+- creates schema from `server/src/main/resources/db/schema.sql`,
+- seeds sample problems if the database is empty.
+
+Database environment variables:
+
+- `DATABASE_URL` (optional, full JDBC URL, e.g. `jdbc:postgresql://localhost:5432/blockchain_platform`)
+- `DB_HOST` (default: `localhost`)
+- `DB_PORT` (default: `5432`)
+- `DB_NAME` (default: `blockchain_platform`)
+- `DB_USER` (default: `blockchain_user`)
+- `DB_PASSWORD` (default: `blockchain_pass`)
+
 ### Trunk-based workflow (recommended)
 
 - `main` is the trunk.

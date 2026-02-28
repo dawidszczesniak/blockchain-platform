@@ -26,8 +26,6 @@ import blockchain_platform.composeapp.generated.resources.info_prize
 import blockchain_platform.composeapp.generated.resources.info_start
 import blockchain_platform.composeapp.generated.resources.loading_more
 import blockchain_platform.composeapp.generated.resources.participants_summary
-import blockchain_platform.composeapp.generated.resources.problem_title_template
-import blockchain_platform.composeapp.generated.resources.problems_mock_info
 import blockchain_platform.composeapp.generated.resources.problems_empty_action
 import blockchain_platform.composeapp.generated.resources.problems_empty_body
 import blockchain_platform.composeapp.generated.resources.problems_empty_title
@@ -52,7 +50,6 @@ import blockchain_platform.composeapp.generated.resources.sort_option_start_late
 import blockchain_platform.composeapp.generated.resources.sort_option_start_soonest
 import org.jetbrains.compose.resources.stringResource
 import pl.dawidszczesniak.blockchain_platform.domain.model.ProblemSummary
-import pl.dawidszczesniak.blockchain_platform.di.LocalKoin
 import pl.dawidszczesniak.blockchain_platform.presentation.problems.ProblemsIntent
 import pl.dawidszczesniak.blockchain_platform.presentation.problems.ProblemsSortOption
 import pl.dawidszczesniak.blockchain_platform.presentation.problems.ProblemsListViewModel
@@ -61,10 +58,11 @@ import kotlin.math.max
 import kotlin.math.min
 
 @Composable
-fun ProblemsListScreen(onCreateProblem: () -> Unit) {
+fun ProblemsListScreen(
+    viewModel: ProblemsListViewModel,
+    onCreateProblem: () -> Unit,
+) {
     val listState = rememberLazyListState()
-    val koin = LocalKoin.current
-    val viewModel = remember { koin.get<ProblemsListViewModel>() }
     DisposableEffect(viewModel) {
         onDispose { viewModel.close() }
     }
@@ -106,12 +104,6 @@ fun ProblemsListScreen(onCreateProblem: () -> Unit) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         } else if (!state.isEmpty) {
-            // TODO(backend): Replace mock banner with real backend metadata.
-            Text(
-                text = stringResource(Res.string.problems_mock_info, state.totalCount),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
             Spacer(Modifier.height(12.dp))
         } else {
             Spacer(Modifier.height(12.dp))
@@ -312,12 +304,14 @@ private fun ProblemCard(
         modifier = Modifier.fillMaxWidth()
     ) {
         Text(
-            stringResource(
-                Res.string.problem_title_template,
-                problem.id,
-                problem.titleLetter.toString()
-            ),
+            problem.title,
             style = MaterialTheme.typography.titleMedium
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            problem.description,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(Modifier.height(8.dp))
 

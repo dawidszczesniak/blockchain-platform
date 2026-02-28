@@ -136,8 +136,8 @@ private fun sortProblems(
     sortOption: ProblemsSortOption,
 ): List<ProblemSummary> {
     return when (sortOption) {
-        ProblemsSortOption.Newest -> problems.sortedByDescending { it.createdOrder }
-        ProblemsSortOption.Oldest -> problems.sortedBy { it.createdOrder }
+        ProblemsSortOption.Newest -> problems.sortedByDescending { it.id }
+        ProblemsSortOption.Oldest -> problems.sortedBy { it.id }
         ProblemsSortOption.StartSoonest -> problems.sortedBy { it.daysToStart }
         ProblemsSortOption.StartLatest -> problems.sortedByDescending { it.daysToStart }
         ProblemsSortOption.PrizeHighest -> problems.sortedByDescending { it.prizeAmount }

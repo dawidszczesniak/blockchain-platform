@@ -70,6 +70,7 @@
     <string name="participation_filter_pending">Niewysłane</string>
     <string name="participation_time_left">Pozostało: %1$s</string>
     <string name="participation_participants">Uczestnicy: %1$d</string>
+    <string name="participation_attempts">Liczba prób: %1$d</string>
     <string name="participation_submission">Twoje zgłoszenie: %1$s</string>
     <string name="participation_submission_sent">wysłane</string>
     <string name="participation_submission_pending">niewysłane</string>

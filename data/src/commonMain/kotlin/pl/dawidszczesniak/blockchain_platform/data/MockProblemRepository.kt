@@ -18,7 +18,6 @@ class MockProblemRepository(
         } else {
             generateProblems(
                 startId = 1,
-                startCreatedOrder = 1000,
                 count = config.totalProblems.coerceAtLeast(0)
             )
         }
@@ -43,24 +42,24 @@ class MockProblemRepository(
 
 private fun generateProblems(
     startId: Int,
-    startCreatedOrder: Int,
     count: Int,
 ): List<ProblemSummary> {
     return List(count) { i ->
         val id = startId + i
-        val createdOrder = startCreatedOrder - i
-        val required = 10 + ((id + createdOrder) % 11)
-        val registered = min(required, (id * 3 + createdOrder) % (required + 1))
+        val required = 10 + (id % 11)
+        val registered = min(required, (id * 3) % (required + 1))
         val prize = 10 + ((id + 2) % 10)
         val entry = 1 + ((id + 1) % 5)
-        val daysToJoinEnd = 1 + ((id + createdOrder) % 14)
+        val daysToJoinEnd = 1 + (id % 14)
         val joinDay = (10 + (id % 18)).toString().padStart(2, '0')
         val submitDay = (1 + (id % 20)).toString().padStart(2, '0')
+        val title = "Problem #$id - Algorithm optimization"
+        val description = "Design a more efficient algorithm for dataset batch #$id."
 
         ProblemSummary(
             id = id,
-            createdOrder = createdOrder,
-            titleLetter = 'A' + (id % 26),
+            title = title,
+            description = description,
             prizeAmount = prize,
             entryFeeAmount = entry,
             requiredParticipants = required,
@@ -127,6 +126,11 @@ private fun generateParticipationProblems(count: Int): List<ParticipationProblem
         }
         val dayLeft = (index % 14) + 1
         val participants = 5 + (index % 20)
+        val attempts = if (status == ParticipationStatus.Submitted) {
+            (index % 4) + 1
+        } else {
+            0
+        }
         val title = if (status == ParticipationStatus.Submitted) {
             "Joined #${index + 1} — Consensus tuning"
         } else {
@@ -139,6 +143,7 @@ private fun generateParticipationProblems(count: Int): List<ParticipationProblem
             status = status,
             timeLeftLabel = "${dayLeft}d",
             participants = participants,
+            attemptsCount = attempts,
         )
     }
 }

@@ -11,4 +11,5 @@ data class ParticipationProblem(
     val status: ParticipationStatus,
     val timeLeftLabel: String,
     val participants: Int,
+    val attemptsCount: Int,
 )

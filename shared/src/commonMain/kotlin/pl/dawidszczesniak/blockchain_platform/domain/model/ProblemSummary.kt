@@ -2,8 +2,8 @@ package pl.dawidszczesniak.blockchain_platform.domain.model
 
 data class ProblemSummary(
     val id: Int,
-    val createdOrder: Int,
-    val titleLetter: Char,
+    val title: String,
+    val description: String,
     val prizeAmount: Int,
     val entryFeeAmount: Int,
     val requiredParticipants: Int,

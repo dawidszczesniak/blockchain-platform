@@ -27,6 +27,7 @@ import blockchain_platform.composeapp.generated.resources.participation_filter_a
 import blockchain_platform.composeapp.generated.resources.participation_filter_label
 import blockchain_platform.composeapp.generated.resources.participation_filter_pending
 import blockchain_platform.composeapp.generated.resources.participation_filter_submitted
+import blockchain_platform.composeapp.generated.resources.participation_attempts
 import blockchain_platform.composeapp.generated.resources.participation_participants
 import blockchain_platform.composeapp.generated.resources.participation_submission
 import blockchain_platform.composeapp.generated.resources.participation_submission_pending
@@ -124,6 +125,7 @@ private fun ParticipationCard(problem: ParticipationProblem) {
     val details = listOf(
         stringResource(Res.string.participation_time_left, problem.timeLeftLabel),
         stringResource(Res.string.participation_participants, problem.participants),
+        stringResource(Res.string.participation_attempts, problem.attemptsCount),
         stringResource(Res.string.participation_submission, submissionLabel)
     )
 

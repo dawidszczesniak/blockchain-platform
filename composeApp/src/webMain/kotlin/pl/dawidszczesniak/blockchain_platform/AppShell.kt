@@ -18,6 +18,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import pl.dawidszczesniak.blockchain_platform.di.LocalKoin
 import pl.dawidszczesniak.blockchain_platform.presentation.app.BackendHealthViewModel
+import pl.dawidszczesniak.blockchain_platform.presentation.problems.ProblemsListViewModel
 import pl.dawidszczesniak.blockchain_platform.screens.CreateProblemScreen
 import pl.dawidszczesniak.blockchain_platform.screens.HomeScreen
 import pl.dawidszczesniak.blockchain_platform.screens.LoginScreen
@@ -76,9 +77,13 @@ fun AppShell(
             ) {
                 when (currentRoute) {
                     Route.Home -> HomeScreen(onNavigateToProblems = { onNavigate(Route.Problems) })
-                    Route.Problems -> ProblemsListScreen(
-                        onCreateProblem = { onNavigate(Route.CreateProblem) }
-                    )
+                    Route.Problems -> {
+                        val problemsListViewModel = remember { koin.get<ProblemsListViewModel>() }
+                        ProblemsListScreen(
+                            viewModel = problemsListViewModel,
+                            onCreateProblem = { onNavigate(Route.CreateProblem) }
+                        )
+                    }
                     Route.CreateProblem -> CreateProblemScreen()
                     Route.MyProblems -> MyProblemsScreen(
                         onCreateProblem = { onNavigate(Route.CreateProblem) }
