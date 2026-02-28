@@ -1,9 +1,20 @@
 package pl.dawidszczesniak.blockchain_platform
 
-import java.sql.Connection
 import java.sql.DriverManager
 import java.time.LocalDate
+import java.time.temporal.ChronoUnit
 import kotlin.math.max
+import org.jetbrains.exposed.sql.Database
+import org.jetbrains.exposed.sql.SortOrder
+import org.jetbrains.exposed.sql.Table
+import org.jetbrains.exposed.sql.count
+import org.jetbrains.exposed.sql.insert
+import org.jetbrains.exposed.sql.innerJoin
+import org.jetbrains.exposed.sql.select
+import org.jetbrains.exposed.sql.selectAll
+import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.sql.javatime.date
+import org.jetbrains.exposed.sql.javatime.datetime
 import pl.dawidszczesniak.blockchain_platform.domain.model.CreatedProblem
 import pl.dawidszczesniak.blockchain_platform.domain.model.CreatedProblemStatus
 import pl.dawidszczesniak.blockchain_platform.domain.model.ParticipationProblem
@@ -13,267 +24,314 @@ import pl.dawidszczesniak.blockchain_platform.domain.model.ProblemSummary
 internal class PostgresProblemStore(
     private val config: PostgresConfig = PostgresConfig.fromEnvironment(),
 ) {
+    private val database: Database
+
     init {
         Class.forName("org.postgresql.Driver")
+        database = Database.connect(
+            url = config.jdbcUrl,
+            user = config.user,
+            password = config.password,
+        )
     }
 
     fun initialize() {
-        withConnection { connection ->
-            connection.autoCommit = false
-            try {
-                applySchema(connection)
-                seedProblemsIfEmpty(connection)
-                connection.commit()
-            } catch (exception: Exception) {
-                connection.rollback()
-                throw exception
-            } finally {
-                connection.autoCommit = true
-            }
-        }
+        applySchema()
+        seedProblemsIfEmpty()
     }
 
     fun fetchProblemSummaries(): List<ProblemSummary> {
-        return withConnection { connection ->
-            connection.prepareStatement(FETCH_PROBLEMS_SQL).use { statement ->
-                statement.executeQuery().use { resultSet ->
-                    buildList {
-                        while (resultSet.next()) {
-                            add(
-                                ProblemSummary(
-                                    id = resultSet.getLong("id").toInt(),
-                                    title = resultSet.getString("title"),
-                                    description = resultSet.getString("description"),
-                                    prizeAmount = resultSet.getInt("prize_amount"),
-                                    entryFeeAmount = resultSet.getInt("entry_fee_amount"),
-                                    requiredParticipants = resultSet.getInt("required_participants"),
-                                    registeredParticipants = resultSet.getInt("registered_participants"),
-                                    daysToStart = resultSet.getInt("days_to_start"),
-                                    daysToJoinEnd = resultSet.getInt("days_to_join_end"),
-                                    joinUntilLabel = resultSet.getString("join_until_label"),
-                                    submitUntilLabel = resultSet.getString("submit_until_label"),
-                                )
-                            )
-                        }
-                    }
+        return transaction(database) {
+            val participantCounts = participantCountsByProblem()
+            val today = LocalDate.now()
+
+            ProblemsTable
+                .selectAll()
+                .where { ProblemsTable.problemStatus eq ProblemLifecycleStatus.Open.dbValue }
+                .orderBy(
+                    ProblemsTable.createdAt to SortOrder.DESC,
+                    ProblemsTable.problemId to SortOrder.DESC,
+                )
+                .map { row ->
+                    val problemId = row[ProblemsTable.problemId]
+                    val daysToJoinEnd = daysBetween(today, row[ProblemsTable.joinUntilDate]).coerceAtLeast(0)
+                    ProblemSummary(
+                        id = problemId.toInt(),
+                        title = row[ProblemsTable.title],
+                        description = row[ProblemsTable.description],
+                        prizeAmount = row[ProblemsTable.prizeAmount],
+                        entryFeeAmount = row[ProblemsTable.entryFeeAmount],
+                        requiredParticipants = row[ProblemsTable.requiredParticipants],
+                        registeredParticipants = participantCounts[problemId] ?: 0,
+                        daysToStart = daysToJoinEnd,
+                        daysToJoinEnd = daysToJoinEnd,
+                        joinUntilLabel = row[ProblemsTable.joinUntilDate].toString(),
+                        submitUntilLabel = row[ProblemsTable.submitUntilDate].toString(),
+                    )
                 }
-            }
         }
     }
 
     fun fetchCreatedProblemsForDefaultUser(): List<CreatedProblem> {
-        return withConnection { connection ->
-            val userId = resolveDefaultUserId(connection) ?: return@withConnection emptyList()
-            connection.prepareStatement(FETCH_CREATED_PROBLEMS_SQL).use { statement ->
-                statement.setLong(1, userId)
-                statement.executeQuery().use { resultSet ->
-                    buildList {
-                        while (resultSet.next()) {
-                            val daysToJoinEnd = resultSet.getInt("days_to_join_end")
-                            val daysToSubmitEnd = resultSet.getInt("days_to_submit_end")
-                            val winnerWallet = resultSet.getString("winner_wallet")
-                            val winnerWonAtLabel = resultSet.getString("winner_won_at_label")
-                            val status = createdProblemStatus(
-                                problemStatus = resultSet.getString("problem_status"),
-                                daysToJoinEnd = daysToJoinEnd,
-                                daysToSubmitEnd = daysToSubmitEnd,
-                                winnerWallet = winnerWallet,
-                            )
-                            add(
-                                CreatedProblem(
-                                    id = resultSet.getLong("id").toInt(),
-                                    title = resultSet.getString("title"),
-                                    status = status,
-                                    requiredParticipants = resultSet.getInt("required_participants"),
-                                    registeredParticipants = resultSet.getInt("registered_participants"),
-                                    submissions = resultSet.getInt("submissions"),
-                                    startedOn = if (status == CreatedProblemStatus.Started) {
-                                        resultSet.getString("started_on_label")
-                                    } else {
-                                        null
-                                    },
-                                    finishedOn = if (status == CreatedProblemStatus.Completed) {
-                                        winnerWonAtLabel ?: resultSet.getString("finished_on_label")
-                                    } else {
-                                        null
-                                    },
-                                    registrationEnds = if (status == CreatedProblemStatus.Waiting) {
-                                        resultSet.getString("registration_ends_label")
-                                    } else {
-                                        null
-                                    },
-                                    timeElapsed = if (status == CreatedProblemStatus.Expired) {
-                                        resultSet.getString("time_elapsed_label")
-                                    } else {
-                                        null
-                                    },
-                                    winner = if (status == CreatedProblemStatus.Completed) {
-                                        winnerWallet
-                                    } else {
-                                        null
-                                    },
-                                )
-                            )
-                        }
-                    }
+        return transaction(database) {
+            val userId = resolveDefaultUserId() ?: return@transaction emptyList()
+            val participantCounts = participantCountsByProblem()
+            val submissionCounts = submissionCountsByProblem()
+            val winnerByProblem = winnerInfoByProblem()
+            val today = LocalDate.now()
+
+            ProblemsTable
+                .selectAll()
+                .where { ProblemsTable.createdByUserId eq userId }
+                .orderBy(
+                    ProblemsTable.createdAt to SortOrder.DESC,
+                    ProblemsTable.problemId to SortOrder.DESC,
+                )
+                .map { row ->
+                    val problemId = row[ProblemsTable.problemId]
+                    val daysToJoinEnd = daysBetween(today, row[ProblemsTable.joinUntilDate])
+                    val daysToSubmitEnd = daysBetween(today, row[ProblemsTable.submitUntilDate])
+                    val winnerInfo = winnerByProblem[problemId]
+                    val status = createdProblemStatus(
+                        problemStatus = row[ProblemsTable.problemStatus],
+                        daysToJoinEnd = daysToJoinEnd,
+                        daysToSubmitEnd = daysToSubmitEnd,
+                        winnerWallet = winnerInfo?.walletAddress,
+                    )
+                    CreatedProblem(
+                        id = problemId.toInt(),
+                        title = row[ProblemsTable.title],
+                        status = status,
+                        requiredParticipants = row[ProblemsTable.requiredParticipants],
+                        registeredParticipants = participantCounts[problemId] ?: 0,
+                        submissions = submissionCounts[problemId] ?: 0,
+                        startedOn = if (status == CreatedProblemStatus.Started) {
+                            row[ProblemsTable.joinUntilDate].toString()
+                        } else {
+                            null
+                        },
+                        finishedOn = if (status == CreatedProblemStatus.Completed) {
+                            winnerInfo?.wonAtLabel ?: row[ProblemsTable.submitUntilDate].toString()
+                        } else {
+                            null
+                        },
+                        registrationEnds = if (status == CreatedProblemStatus.Waiting) {
+                            row[ProblemsTable.joinUntilDate].toString()
+                        } else {
+                            null
+                        },
+                        timeElapsed = if (status == CreatedProblemStatus.Expired) {
+                            row[ProblemsTable.submitUntilDate].toString()
+                        } else {
+                            null
+                        },
+                        winner = if (status == CreatedProblemStatus.Completed) {
+                            winnerInfo?.walletAddress
+                        } else {
+                            null
+                        },
+                    )
                 }
-            }
         }
     }
 
     fun fetchParticipationProblemsForDefaultUser(): List<ParticipationProblem> {
-        return withConnection { connection ->
-            val userId = resolveDefaultUserId(connection) ?: return@withConnection emptyList()
-            connection.prepareStatement(FETCH_PARTICIPATION_PROBLEMS_SQL).use { statement ->
-                statement.setLong(1, userId)
-                statement.executeQuery().use { resultSet ->
-                    buildList {
-                        while (resultSet.next()) {
-                            val attemptsCount = resultSet.getInt("attempts_count")
-                            val daysToSubmitEnd = resultSet.getInt("days_to_submit_end")
-                            add(
-                                ParticipationProblem(
-                                    id = resultSet.getLong("id").toInt(),
-                                    title = resultSet.getString("title"),
-                                    status = if (attemptsCount > 0) {
-                                        ParticipationStatus.Submitted
-                                    } else {
-                                        ParticipationStatus.NotSubmitted
-                                    },
-                                    timeLeftLabel = "${max(0, daysToSubmitEnd)}d",
-                                    participants = resultSet.getInt("participants"),
-                                    attemptsCount = attemptsCount,
-                                )
-                            )
-                        }
-                    }
+        return transaction(database) {
+            val userId = resolveDefaultUserId() ?: return@transaction emptyList()
+            val participantCounts = participantCountsByProblem()
+            val attemptCounts = submissionAttemptsByProblemAndUser()
+            val today = LocalDate.now()
+
+            (ProblemParticipantsTable innerJoin ProblemsTable)
+                .selectAll()
+                .where { ProblemParticipantsTable.userId eq userId }
+                .orderBy(
+                    ProblemsTable.createdAt to SortOrder.DESC,
+                    ProblemsTable.problemId to SortOrder.DESC,
+                )
+                .map { row ->
+                    val problemId = row[ProblemsTable.problemId]
+                    val attempts = attemptCounts[problemId to userId] ?: 0
+                    val daysToSubmitEnd = daysBetween(today, row[ProblemsTable.submitUntilDate])
+                    ParticipationProblem(
+                        id = problemId.toInt(),
+                        title = row[ProblemsTable.title],
+                        status = if (attempts > 0) {
+                            ParticipationStatus.Submitted
+                        } else {
+                            ParticipationStatus.NotSubmitted
+                        },
+                        timeLeftLabel = "${max(0, daysToSubmitEnd)}d",
+                        participants = participantCounts[problemId] ?: 0,
+                        attemptsCount = attempts,
+                    )
                 }
-            }
         }
     }
 
-    private fun <T> withConnection(block: (Connection) -> T): T {
-        return DriverManager.getConnection(config.jdbcUrl, config.user, config.password).use(block)
-    }
-
-    private fun applySchema(connection: Connection) {
+    private fun applySchema() {
         val schemaSql = javaClass.classLoader.getResource(SCHEMA_RESOURCE_PATH)?.readText()
             ?: error("Missing SQL resource '$SCHEMA_RESOURCE_PATH'.")
-        connection.createStatement().use { statement ->
-            statement.execute(schemaSql)
-        }
-    }
-
-    private fun resolveDefaultUserId(connection: Connection): Long? {
-        connection.prepareStatement(FETCH_DEFAULT_USER_ID_SQL).use { statement ->
-            statement.executeQuery().use { resultSet ->
-                return if (resultSet.next()) {
-                    resultSet.getLong("user_id")
-                } else {
-                    null
-                }
+        DriverManager.getConnection(config.jdbcUrl, config.user, config.password).use { connection ->
+            connection.createStatement().use { statement ->
+                statement.execute(schemaSql)
             }
         }
     }
 
-    private fun seedProblemsIfEmpty(connection: Connection) {
-        val existingCount = connection.createStatement().use { statement ->
-            statement.executeQuery("SELECT COUNT(*) FROM problems").use { resultSet ->
-                check(resultSet.next()) { "Failed to read problem count." }
-                resultSet.getInt(1)
+    private fun seedProblemsIfEmpty() {
+        transaction(database) {
+            val existingCount = ProblemsTable.selectAll().count()
+            if (existingCount > 0L) {
+                return@transaction
+            }
+
+            val userIds = (1..11).map { index ->
+                insertUser(walletAddressForSeed(index))
+            }
+
+            val firstProblemId = insertProblem(
+                title = "Neural Network Compression",
+                description = "Optimize a neural model pipeline to reduce inference cost.",
+                problemStatus = ProblemLifecycleStatus.Open,
+                prizeAmount = 25,
+                entryFeeAmount = 3,
+                requiredParticipants = 12,
+                joinUntilDate = LocalDate.parse("2026-03-08"),
+                submitUntilDate = LocalDate.parse("2026-03-15"),
+                createdByUserId = userIds[0],
+            )
+
+            val secondProblemId = insertProblem(
+                title = "Oracle Aggregation",
+                description = "Build robust oracle aggregation logic for volatile market feeds.",
+                problemStatus = ProblemLifecycleStatus.Closed,
+                prizeAmount = 40,
+                entryFeeAmount = 5,
+                requiredParticipants = 18,
+                joinUntilDate = LocalDate.parse("2026-03-10"),
+                submitUntilDate = LocalDate.parse("2026-03-17"),
+                createdByUserId = userIds[1],
+            )
+
+            userIds.take(7).forEach { userId ->
+                registerUser(problemId = firstProblemId, userId = userId)
+            }
+            userIds.forEach { userId ->
+                registerUser(problemId = secondProblemId, userId = userId)
+            }
+
+            insertProblemSubmission(
+                problemId = firstProblemId,
+                userId = userIds[0],
+                status = SubmissionAttemptStatus.Rejected,
+            )
+            insertProblemSubmission(
+                problemId = firstProblemId,
+                userId = userIds[0],
+                status = SubmissionAttemptStatus.Accepted,
+            )
+            insertProblemSubmission(
+                problemId = firstProblemId,
+                userId = userIds[2],
+                status = SubmissionAttemptStatus.Accepted,
+            )
+            insertProblemSubmission(
+                problemId = secondProblemId,
+                userId = userIds[4],
+                status = SubmissionAttemptStatus.Error,
+            )
+            insertProblemSubmission(
+                problemId = secondProblemId,
+                userId = userIds[4],
+                status = SubmissionAttemptStatus.Rejected,
+            )
+            insertProblemSubmission(
+                problemId = secondProblemId,
+                userId = userIds[4],
+                status = SubmissionAttemptStatus.Accepted,
+            )
+
+            insertProblemWinner(
+                problemId = firstProblemId,
+                winnerUserId = userIds[2],
+                payoutAmount = 25,
+            )
+            insertProblemWinner(
+                problemId = secondProblemId,
+                winnerUserId = userIds[4],
+                payoutAmount = 40,
+            )
+        }
+    }
+
+    private fun resolveDefaultUserId(): Long? {
+        return UsersTable
+            .selectAll()
+            .orderBy(UsersTable.userId to SortOrder.ASC)
+            .limit(1)
+            .firstOrNull()
+            ?.get(UsersTable.userId)
+    }
+
+    private fun participantCountsByProblem(): Map<Long, Int> {
+        val countExpression = ProblemParticipantsTable.userId.count()
+        return ProblemParticipantsTable
+            .select(ProblemParticipantsTable.problemId, countExpression)
+            .groupBy(ProblemParticipantsTable.problemId)
+            .associate { row ->
+                row[ProblemParticipantsTable.problemId] to row[countExpression].toInt()
+            }
+    }
+
+    private fun submissionCountsByProblem(): Map<Long, Int> {
+        val countExpression = ProblemSubmissionsTable.submissionId.count()
+        return ProblemSubmissionsTable
+            .select(ProblemSubmissionsTable.problemId, countExpression)
+            .groupBy(ProblemSubmissionsTable.problemId)
+            .associate { row ->
+                row[ProblemSubmissionsTable.problemId] to row[countExpression].toInt()
+            }
+    }
+
+    private fun submissionAttemptsByProblemAndUser(): Map<Pair<Long, Long>, Int> {
+        val countExpression = ProblemSubmissionsTable.submissionId.count()
+        return ProblemSubmissionsTable
+            .select(ProblemSubmissionsTable.problemId, ProblemSubmissionsTable.userId, countExpression)
+            .groupBy(ProblemSubmissionsTable.problemId, ProblemSubmissionsTable.userId)
+            .associate { row ->
+                (row[ProblemSubmissionsTable.problemId] to row[ProblemSubmissionsTable.userId]) to
+                    row[countExpression].toInt()
+            }
+    }
+
+    private fun winnerInfoByProblem(): Map<Long, WinnerInfo> {
+        val winnersWithUsers = ProblemWinnersTable.innerJoin(
+            UsersTable,
+            { ProblemWinnersTable.winnerUserId },
+            { UsersTable.userId },
+        )
+
+        val rows = winnersWithUsers
+            .selectAll()
+            .orderBy(
+                ProblemWinnersTable.problemId to SortOrder.ASC,
+                ProblemWinnersTable.wonAt to SortOrder.DESC,
+                ProblemWinnersTable.winnerUserId to SortOrder.DESC,
+            )
+
+        val result = mutableMapOf<Long, WinnerInfo>()
+        rows.forEach { row ->
+            val problemId = row[ProblemWinnersTable.problemId]
+            if (problemId !in result) {
+                val wonAtLabel = row[ProblemWinnersTable.wonAt].toLocalDate().toString()
+                result[problemId] = WinnerInfo(
+                    walletAddress = row[UsersTable.walletAddress],
+                    wonAtLabel = wonAtLabel,
+                )
             }
         }
-
-        if (existingCount > 0) {
-            return
-        }
-
-        val userIds = (1..11).map { index ->
-            insertUser(connection, walletAddressForSeed(index))
-        }
-
-        val firstProblemId = insertProblem(
-            connection = connection,
-            title = "Neural Network Compression",
-            description = "Optimize a neural model pipeline to reduce inference cost.",
-            problemStatus = ProblemLifecycleStatus.Open,
-            prizeAmount = 25,
-            entryFeeAmount = 3,
-            requiredParticipants = 12,
-            joinUntilDate = LocalDate.parse("2026-03-08"),
-            submitUntilDate = LocalDate.parse("2026-03-15"),
-            createdByUserId = userIds[0],
-        )
-
-        val secondProblemId = insertProblem(
-            connection = connection,
-            title = "Oracle Aggregation",
-            description = "Build robust oracle aggregation logic for volatile market feeds.",
-            problemStatus = ProblemLifecycleStatus.Closed,
-            prizeAmount = 40,
-            entryFeeAmount = 5,
-            requiredParticipants = 18,
-            joinUntilDate = LocalDate.parse("2026-03-10"),
-            submitUntilDate = LocalDate.parse("2026-03-17"),
-            createdByUserId = userIds[1],
-        )
-
-        userIds.take(7).forEach { userId ->
-            registerUser(connection, problemId = firstProblemId, userId = userId)
-        }
-        userIds.forEach { userId ->
-            registerUser(connection, problemId = secondProblemId, userId = userId)
-        }
-
-        insertProblemSubmission(
-            connection = connection,
-            problemId = firstProblemId,
-            userId = userIds[0],
-            status = SubmissionAttemptStatus.Rejected,
-        )
-        insertProblemSubmission(
-            connection = connection,
-            problemId = firstProblemId,
-            userId = userIds[0],
-            status = SubmissionAttemptStatus.Accepted,
-        )
-        insertProblemSubmission(
-            connection = connection,
-            problemId = firstProblemId,
-            userId = userIds[2],
-            status = SubmissionAttemptStatus.Accepted,
-        )
-        insertProblemSubmission(
-            connection = connection,
-            problemId = secondProblemId,
-            userId = userIds[4],
-            status = SubmissionAttemptStatus.Error,
-        )
-        insertProblemSubmission(
-            connection = connection,
-            problemId = secondProblemId,
-            userId = userIds[4],
-            status = SubmissionAttemptStatus.Rejected,
-        )
-        insertProblemSubmission(
-            connection = connection,
-            problemId = secondProblemId,
-            userId = userIds[4],
-            status = SubmissionAttemptStatus.Accepted,
-        )
-
-        insertProblemWinner(
-            connection = connection,
-            problemId = firstProblemId,
-            winnerUserId = userIds[2],
-            payoutAmount = 25,
-        )
-        insertProblemWinner(
-            connection = connection,
-            problemId = secondProblemId,
-            winnerUserId = userIds[4],
-            payoutAmount = 40,
-        )
+        return result
     }
 
     private fun createdProblemStatus(
@@ -302,7 +360,6 @@ internal class PostgresProblemStore(
     }
 
     private fun insertProblem(
-        connection: Connection,
         title: String,
         description: String,
         problemStatus: ProblemLifecycleStatus,
@@ -313,73 +370,71 @@ internal class PostgresProblemStore(
         submitUntilDate: LocalDate,
         createdByUserId: Long,
     ): Long {
-        connection.prepareStatement(INSERT_PROBLEM_SQL).use { statement ->
-            statement.setString(1, title)
-            statement.setString(2, description)
-            statement.setString(3, problemStatus.dbValue)
-            statement.setInt(4, prizeAmount)
-            statement.setInt(5, entryFeeAmount)
-            statement.setInt(6, requiredParticipants)
-            statement.setObject(7, joinUntilDate)
-            statement.setObject(8, submitUntilDate)
-            statement.setLong(9, createdByUserId)
-            statement.executeQuery().use { resultSet ->
-                check(resultSet.next()) { "Failed to insert problem '$title'." }
-                return resultSet.getLong("problem_id")
-            }
+        val inserted = ProblemsTable.insert {
+            it[ProblemsTable.createdByUserId] = createdByUserId
+            it[ProblemsTable.problemStatus] = problemStatus.dbValue
+            it[ProblemsTable.title] = title
+            it[ProblemsTable.description] = description
+            it[ProblemsTable.prizeAmount] = prizeAmount
+            it[ProblemsTable.entryFeeAmount] = entryFeeAmount
+            it[ProblemsTable.requiredParticipants] = requiredParticipants
+            it[ProblemsTable.joinUntilDate] = joinUntilDate
+            it[ProblemsTable.submitUntilDate] = submitUntilDate
         }
+        return inserted[ProblemsTable.problemId]
     }
 
-    private fun insertUser(connection: Connection, walletAddress: String): Long {
-        connection.prepareStatement(INSERT_USER_SQL).use { statement ->
-            statement.setString(1, walletAddress)
-            statement.executeQuery().use { resultSet ->
-                check(resultSet.next()) { "Failed to insert user '$walletAddress'." }
-                return resultSet.getLong("user_id")
-            }
+    private fun insertUser(walletAddress: String): Long {
+        val inserted = UsersTable.insert {
+            it[UsersTable.walletAddress] = walletAddress
         }
+        return inserted[UsersTable.userId]
     }
 
-    private fun registerUser(connection: Connection, problemId: Long, userId: Long) {
-        connection.prepareStatement(INSERT_PROBLEM_PARTICIPANT_SQL).use { statement ->
-            statement.setLong(1, problemId)
-            statement.setLong(2, userId)
-            statement.executeUpdate()
+    private fun registerUser(problemId: Long, userId: Long) {
+        ProblemParticipantsTable.insert {
+            it[ProblemParticipantsTable.problemId] = problemId
+            it[ProblemParticipantsTable.userId] = userId
         }
     }
 
     private fun insertProblemSubmission(
-        connection: Connection,
         problemId: Long,
         userId: Long,
         status: SubmissionAttemptStatus,
     ) {
-        connection.prepareStatement(INSERT_PROBLEM_SUBMISSION_SQL).use { statement ->
-            statement.setLong(1, problemId)
-            statement.setLong(2, userId)
-            statement.setString(3, status.dbValue)
-            statement.executeUpdate()
+        ProblemSubmissionsTable.insert {
+            it[ProblemSubmissionsTable.problemId] = problemId
+            it[ProblemSubmissionsTable.userId] = userId
+            it[ProblemSubmissionsTable.status] = status.dbValue
         }
     }
 
     private fun insertProblemWinner(
-        connection: Connection,
         problemId: Long,
         winnerUserId: Long,
         payoutAmount: Int,
     ) {
-        connection.prepareStatement(INSERT_PROBLEM_WINNER_SQL).use { statement ->
-            statement.setLong(1, problemId)
-            statement.setLong(2, winnerUserId)
-            statement.setInt(3, payoutAmount)
-            statement.executeUpdate()
+        ProblemWinnersTable.insert {
+            it[ProblemWinnersTable.problemId] = problemId
+            it[ProblemWinnersTable.winnerUserId] = winnerUserId
+            it[ProblemWinnersTable.payoutAmount] = payoutAmount
         }
     }
 
     private fun walletAddressForSeed(index: Int): String {
         return "0x${index.toString(16).padStart(40, '0')}"
     }
+
+    private fun daysBetween(fromDate: LocalDate, toDate: LocalDate): Int {
+        return ChronoUnit.DAYS.between(fromDate, toDate).toInt()
+    }
 }
+
+private data class WinnerInfo(
+    val walletAddress: String,
+    val wonAtLabel: String,
+)
 
 private enum class ProblemLifecycleStatus(val dbValue: String) {
     Open("open"),
@@ -420,149 +475,56 @@ internal data class PostgresConfig(
     }
 }
 
+private object UsersTable : Table("users") {
+    val userId = long("user_id").autoIncrement()
+    val walletAddress = varchar("wallet_address", length = 66)
+    val registeredAt = datetime("registered_at")
+    val lastLoginAt = datetime("last_login_at")
+
+    override val primaryKey = PrimaryKey(userId)
+}
+
+private object ProblemsTable : Table("problems") {
+    val problemId = long("problem_id").autoIncrement()
+    val createdByUserId = long("created_by_user_id")
+    val problemStatus = varchar("problem_status", length = 16)
+    val title = text("title")
+    val description = text("description")
+    val prizeAmount = integer("prize_amount")
+    val entryFeeAmount = integer("entry_fee_amount")
+    val requiredParticipants = integer("required_participants")
+    val joinUntilDate = date("join_until_date")
+    val submitUntilDate = date("submit_until_date")
+    val createdAt = datetime("created_at")
+
+    override val primaryKey = PrimaryKey(problemId)
+}
+
+private object ProblemParticipantsTable : Table("problem_participants") {
+    val problemId = long("problem_id")
+    val userId = long("user_id")
+    val registeredAt = datetime("registered_at")
+
+    override val primaryKey = PrimaryKey(problemId, userId)
+}
+
+private object ProblemSubmissionsTable : Table("problem_submissions") {
+    val submissionId = long("submission_id").autoIncrement()
+    val problemId = long("problem_id")
+    val userId = long("user_id")
+    val status = varchar("status", length = 16)
+    val submittedAt = datetime("submitted_at")
+
+    override val primaryKey = PrimaryKey(submissionId)
+}
+
+private object ProblemWinnersTable : Table("problem_winners") {
+    val problemId = long("problem_id")
+    val winnerUserId = long("winner_user_id")
+    val payoutAmount = integer("payout_amount")
+    val wonAt = datetime("won_at")
+
+    override val primaryKey = PrimaryKey(problemId, winnerUserId)
+}
+
 private const val SCHEMA_RESOURCE_PATH = "db/schema.sql"
-
-private const val FETCH_DEFAULT_USER_ID_SQL = """
-SELECT user_id
-FROM users
-ORDER BY user_id ASC
-LIMIT 1
-"""
-
-private const val FETCH_PROBLEMS_SQL = """
-SELECT
-    p.problem_id AS id,
-    p.title,
-    p.description,
-    p.prize_amount,
-    p.entry_fee_amount,
-    p.required_participants,
-    COALESCE(COUNT(pp.user_id), 0)::int AS registered_participants,
-    GREATEST(0, p.join_until_date - CURRENT_DATE) AS days_to_start,
-    GREATEST(0, p.join_until_date - CURRENT_DATE) AS days_to_join_end,
-    TO_CHAR(p.join_until_date, 'YYYY-MM-DD') AS join_until_label,
-    TO_CHAR(p.submit_until_date, 'YYYY-MM-DD') AS submit_until_label
-FROM problems p
-LEFT JOIN problem_participants pp ON pp.problem_id = p.problem_id
-WHERE p.problem_status = 'open'
-GROUP BY
-    p.problem_id,
-    p.title,
-    p.description,
-    p.prize_amount,
-    p.entry_fee_amount,
-    p.required_participants,
-    p.join_until_date,
-    p.submit_until_date
-ORDER BY p.created_at DESC, p.problem_id DESC
-"""
-
-private const val FETCH_CREATED_PROBLEMS_SQL = """
-SELECT
-    p.problem_id AS id,
-    p.problem_status,
-    p.title,
-    p.required_participants,
-    COALESCE(participant_counts.registered_participants, 0)::int AS registered_participants,
-    COALESCE(submission_counts.submissions, 0)::int AS submissions,
-    (p.join_until_date - CURRENT_DATE)::int AS days_to_join_end,
-    (p.submit_until_date - CURRENT_DATE)::int AS days_to_submit_end,
-    TO_CHAR(p.join_until_date, 'YYYY-MM-DD') AS registration_ends_label,
-    TO_CHAR(p.join_until_date, 'YYYY-MM-DD') AS started_on_label,
-    TO_CHAR(p.submit_until_date, 'YYYY-MM-DD') AS finished_on_label,
-    TO_CHAR(p.submit_until_date, 'YYYY-MM-DD') AS time_elapsed_label,
-    winner.winner_wallet,
-    winner.winner_won_at_label
-FROM problems p
-LEFT JOIN (
-    SELECT problem_id, COUNT(*)::int AS registered_participants
-    FROM problem_participants
-    GROUP BY problem_id
-) participant_counts ON participant_counts.problem_id = p.problem_id
-LEFT JOIN (
-    SELECT problem_id, COUNT(*)::int AS submissions
-    FROM problem_submissions
-    GROUP BY problem_id
-) submission_counts ON submission_counts.problem_id = p.problem_id
-LEFT JOIN LATERAL (
-    SELECT
-        u.wallet_address AS winner_wallet,
-        TO_CHAR(pw.won_at, 'YYYY-MM-DD') AS winner_won_at_label
-    FROM problem_winners pw
-    JOIN users u ON u.user_id = pw.winner_user_id
-    WHERE pw.problem_id = p.problem_id
-    ORDER BY pw.won_at DESC, pw.winner_user_id DESC
-    LIMIT 1
-) winner ON TRUE
-WHERE p.created_by_user_id = ?
-ORDER BY p.created_at DESC, p.problem_id DESC
-"""
-
-private const val FETCH_PARTICIPATION_PROBLEMS_SQL = """
-SELECT
-    p.problem_id AS id,
-    p.title,
-    COALESCE(participant_counts.participants, 0)::int AS participants,
-    (p.submit_until_date - CURRENT_DATE)::int AS days_to_submit_end,
-    COALESCE(submission_stats.attempts_count, 0)::int AS attempts_count
-FROM problem_participants pp
-JOIN problems p ON p.problem_id = pp.problem_id
-LEFT JOIN (
-    SELECT problem_id, COUNT(*)::int AS participants
-    FROM problem_participants
-    GROUP BY problem_id
-) participant_counts ON participant_counts.problem_id = p.problem_id
-LEFT JOIN (
-    SELECT problem_id, user_id, COUNT(*)::int AS attempts_count
-    FROM problem_submissions
-    GROUP BY problem_id, user_id
-) submission_stats
-    ON submission_stats.problem_id = pp.problem_id
-   AND submission_stats.user_id = pp.user_id
-WHERE pp.user_id = ?
-ORDER BY p.created_at DESC, p.problem_id DESC
-"""
-
-private const val INSERT_PROBLEM_SQL = """
-INSERT INTO problems (
-    title,
-    description,
-    problem_status,
-    prize_amount,
-    entry_fee_amount,
-    required_participants,
-    join_until_date,
-    submit_until_date,
-    created_by_user_id
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING problem_id
-"""
-
-private const val INSERT_USER_SQL = """
-INSERT INTO users (wallet_address)
-VALUES (?)
-RETURNING user_id
-"""
-
-private const val INSERT_PROBLEM_PARTICIPANT_SQL = """
-INSERT INTO problem_participants (
-    problem_id,
-    user_id
-) VALUES (?, ?)
-"""
-
-private const val INSERT_PROBLEM_SUBMISSION_SQL = """
-INSERT INTO problem_submissions (
-    problem_id,
-    user_id,
-    status
-) VALUES (?, ?, ?)
-"""
-
-private const val INSERT_PROBLEM_WINNER_SQL = """
-INSERT INTO problem_winners (
-    problem_id,
-    winner_user_id,
-    payout_amount
-) VALUES (?, ?, ?)
-"""
