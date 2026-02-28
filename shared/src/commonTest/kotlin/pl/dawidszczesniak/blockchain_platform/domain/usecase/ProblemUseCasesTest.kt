@@ -14,7 +14,7 @@ import pl.dawidszczesniak.blockchain_platform.domain.repository.ProblemRepositor
 
 class ProblemUseCasesTest {
     @Test
-    fun getProblemSummaries_delegatesToRepository() {
+    fun getProblemList_delegatesToRepository() {
         val expected = listOf(
             ProblemSummary(
                 id = 1,
@@ -31,9 +31,9 @@ class ProblemUseCasesTest {
             )
         )
         val repository = FakeProblemRepository(problemSummaries = expected)
-        val useCase = GetProblemSummaries(repository)
+        val getProblemListUseCase = GetProblemListUseCase(repository)
 
-        val actual = runSuspend { useCase() }
+        val actual = runSuspend { getProblemListUseCase() }
 
         assertEquals(expected, actual)
         assertEquals(1, repository.fetchProblemsCalls)
@@ -57,9 +57,9 @@ class ProblemUseCasesTest {
             )
         )
         val repository = FakeProblemRepository(createdProblems = expected)
-        val useCase = GetCreatedProblems(repository)
+        val getCreatedProblemsUseCase = GetCreatedProblemsUseCase(repository)
 
-        val actual = runSuspend { useCase() }
+        val actual = runSuspend { getCreatedProblemsUseCase() }
 
         assertEquals(expected, actual)
         assertEquals(1, repository.fetchCreatedProblemsCalls)
@@ -78,9 +78,9 @@ class ProblemUseCasesTest {
             )
         )
         val repository = FakeProblemRepository(participationProblems = expected)
-        val useCase = GetParticipationProblems(repository)
+        val getParticipationProblemsUseCase = GetParticipationProblemsUseCase(repository)
 
-        val actual = runSuspend { useCase() }
+        val actual = runSuspend { getParticipationProblemsUseCase() }
 
         assertEquals(expected, actual)
         assertEquals(1, repository.fetchParticipationProblemsCalls)

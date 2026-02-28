@@ -12,7 +12,7 @@ import kotlinx.coroutines.launch
 import kotlin.math.max
 import pl.dawidszczesniak.blockchain_platform.domain.model.ParticipationProblem
 import pl.dawidszczesniak.blockchain_platform.domain.model.ParticipationStatus
-import pl.dawidszczesniak.blockchain_platform.domain.usecase.GetParticipationProblems
+import pl.dawidszczesniak.blockchain_platform.domain.usecase.GetParticipationProblemsUseCase
 
 enum class ParticipationFilter {
     All,
@@ -39,7 +39,7 @@ sealed interface ParticipationIntent {
 }
 
 class ParticipationViewModel(
-    private val getParticipationProblems: GetParticipationProblems,
+    private val getParticipationProblemsUseCase: GetParticipationProblemsUseCase,
     private val pageSize: Int = 20,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -82,7 +82,7 @@ class ParticipationViewModel(
     private fun refresh() {
         _state.update { current -> current.copy(isLoading = true, errorMessage = null) }
         scope.launch {
-            runCatching { getParticipationProblems() }
+            runCatching { getParticipationProblemsUseCase() }
                 .onSuccess { problems ->
                     _state.update { current ->
                         current.copy(

@@ -12,7 +12,7 @@ import kotlinx.coroutines.launch
 import kotlin.math.max
 import pl.dawidszczesniak.blockchain_platform.domain.model.CreatedProblem
 import pl.dawidszczesniak.blockchain_platform.domain.model.CreatedProblemStatus
-import pl.dawidszczesniak.blockchain_platform.domain.usecase.GetCreatedProblems
+import pl.dawidszczesniak.blockchain_platform.domain.usecase.GetCreatedProblemsUseCase
 
 enum class CreatedProblemsFilter {
     All,
@@ -41,7 +41,7 @@ sealed interface CreatedProblemsIntent {
 }
 
 class CreatedProblemsViewModel(
-    private val getCreatedProblems: GetCreatedProblems,
+    private val getCreatedProblemsUseCase: GetCreatedProblemsUseCase,
     private val pageSize: Int = 20,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -84,7 +84,7 @@ class CreatedProblemsViewModel(
     private fun refresh() {
         _state.update { current -> current.copy(isLoading = true, errorMessage = null) }
         scope.launch {
-            runCatching { getCreatedProblems() }
+            runCatching { getCreatedProblemsUseCase() }
                 .onSuccess { problems ->
                     _state.update { current ->
                         current.copy(

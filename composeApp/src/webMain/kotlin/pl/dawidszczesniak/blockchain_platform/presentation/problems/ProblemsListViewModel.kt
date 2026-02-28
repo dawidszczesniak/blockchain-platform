@@ -11,7 +11,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlin.math.max
 import pl.dawidszczesniak.blockchain_platform.domain.model.ProblemSummary
-import pl.dawidszczesniak.blockchain_platform.domain.usecase.GetProblemSummaries
+import pl.dawidszczesniak.blockchain_platform.domain.usecase.GetProblemListUseCase
 
 enum class ProblemsSortOption {
     Newest,
@@ -51,7 +51,7 @@ sealed interface ProblemsIntent {
 }
 
 class ProblemsListViewModel(
-    private val getProblemSummaries: GetProblemSummaries,
+    private val getProblemListUseCase: GetProblemListUseCase,
     private val pageSize: Int = 20,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -94,7 +94,7 @@ class ProblemsListViewModel(
     private fun refresh() {
         _state.update { current -> current.copy(isLoading = true, errorMessage = null) }
         scope.launch {
-            runCatching { getProblemSummaries() }
+            runCatching { getProblemListUseCase() }
                 .onSuccess { problems ->
                     _state.update { current ->
                         current.copy(

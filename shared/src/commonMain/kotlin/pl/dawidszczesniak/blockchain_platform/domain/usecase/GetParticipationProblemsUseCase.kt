@@ -3,7 +3,7 @@ package pl.dawidszczesniak.blockchain_platform.domain.usecase
 import pl.dawidszczesniak.blockchain_platform.domain.model.ParticipationProblem
 import pl.dawidszczesniak.blockchain_platform.domain.repository.ProblemRepository
 
-class GetParticipationProblems(
+class GetParticipationProblemsUseCase(
     private val repository: ProblemRepository,
 ) {
     suspend operator fun invoke(): List<ParticipationProblem> {

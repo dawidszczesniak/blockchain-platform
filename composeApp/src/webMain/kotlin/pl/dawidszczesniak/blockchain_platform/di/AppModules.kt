@@ -13,9 +13,9 @@ import pl.dawidszczesniak.blockchain_platform.AppConfig
 import pl.dawidszczesniak.blockchain_platform.AppConfigProvider
 import pl.dawidszczesniak.blockchain_platform.data.BackendProblemRepository
 import pl.dawidszczesniak.blockchain_platform.domain.repository.ProblemRepository
-import pl.dawidszczesniak.blockchain_platform.domain.usecase.GetCreatedProblems
-import pl.dawidszczesniak.blockchain_platform.domain.usecase.GetParticipationProblems
-import pl.dawidszczesniak.blockchain_platform.domain.usecase.GetProblemSummaries
+import pl.dawidszczesniak.blockchain_platform.domain.usecase.GetCreatedProblemsUseCase
+import pl.dawidszczesniak.blockchain_platform.domain.usecase.GetParticipationProblemsUseCase
+import pl.dawidszczesniak.blockchain_platform.domain.usecase.GetProblemListUseCase
 import pl.dawidszczesniak.blockchain_platform.presentation.app.AppViewModel
 import pl.dawidszczesniak.blockchain_platform.presentation.app.BackendHealthViewModel
 import pl.dawidszczesniak.blockchain_platform.presentation.created.CreatedProblemsViewModel
@@ -31,9 +31,9 @@ fun appModules() = module {
             fetchText = ::fetchBackendText,
         )
     }
-    factory { GetProblemSummaries(get()) }
-    factory { GetCreatedProblems(get()) }
-    factory { GetParticipationProblems(get()) }
+    factory { GetProblemListUseCase(get()) }
+    factory { GetCreatedProblemsUseCase(get()) }
+    factory { GetParticipationProblemsUseCase(get()) }
     factory { AppViewModel() }
     factory { BackendHealthViewModel(get()) }
     factory { CreateProblemViewModel() }
