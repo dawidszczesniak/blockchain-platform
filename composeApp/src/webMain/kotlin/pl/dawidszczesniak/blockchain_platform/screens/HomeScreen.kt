@@ -58,10 +58,24 @@ import blockchain_platform.composeapp.generated.resources.home_update_title_2
 import blockchain_platform.composeapp.generated.resources.home_update_title_3
 import blockchain_platform.composeapp.generated.resources.home_updates_title
 import org.jetbrains.compose.resources.stringResource
+import pl.dawidszczesniak.blockchain_platform.DashboardConfig
 import pl.dawidszczesniak.blockchain_platform.ui.AppSurface
 
 @Composable
 fun HomeScreen(onNavigateToProblems: () -> Unit) {
+    if (!DashboardConfig.showFullDashboardContent) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "dashboard",
+                style = MaterialTheme.typography.headlineMedium
+            )
+        }
+        return
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
