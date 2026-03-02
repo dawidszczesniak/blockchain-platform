@@ -36,6 +36,9 @@ fun Application.module() {
     }
 
     routing {
+        get("/") {
+            call.respondText("Ktor OK")
+        }
         get("/health") {
             call.respondText("OK")
         }
