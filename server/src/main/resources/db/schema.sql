@@ -59,6 +59,20 @@ CREATE TABLE IF NOT EXISTS problem_winners (
         ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS dashboard_daily_metrics (
+    metric_date DATE PRIMARY KEY,
+    active_challenges INTEGER NOT NULL CHECK (active_challenges >= 0),
+    prize_pool_amount BIGINT NOT NULL CHECK (prize_pool_amount >= 0),
+    submissions_count INTEGER NOT NULL CHECK (submissions_count >= 0)
+);
+
+CREATE TABLE IF NOT EXISTS website_updates (
+    update_id BIGSERIAL PRIMARY KEY,
+    title TEXT NOT NULL,
+    body TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 ALTER TABLE problems
     ALTER COLUMN prize_amount TYPE BIGINT USING prize_amount::BIGINT;
 
@@ -88,6 +102,14 @@ ALTER TABLE problem_submissions
 ALTER TABLE problem_submissions
     ALTER COLUMN language SET NOT NULL;
 
+ALTER TABLE dashboard_daily_metrics
+    DROP COLUMN IF EXISTS created_at;
+
+DROP INDEX IF EXISTS idx_website_updates_published_created_at;
+
+ALTER TABLE website_updates
+    DROP COLUMN IF EXISTS is_published;
+
 DROP INDEX IF EXISTS idx_problem_participants_problem_id;
 
 CREATE INDEX IF NOT EXISTS idx_problem_participants_user_id
@@ -107,3 +129,9 @@ CREATE INDEX IF NOT EXISTS idx_problems_problem_status
 
 CREATE INDEX IF NOT EXISTS idx_problem_winners_winner_user_id
     ON problem_winners(winner_user_id);
+
+CREATE INDEX IF NOT EXISTS idx_dashboard_daily_metrics_metric_date
+    ON dashboard_daily_metrics(metric_date DESC);
+
+CREATE INDEX IF NOT EXISTS idx_website_updates_created_at
+    ON website_updates(created_at DESC);

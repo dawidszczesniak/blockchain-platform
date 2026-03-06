@@ -27,6 +27,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -44,21 +45,11 @@ import blockchain_platform.composeapp.generated.resources.home_hero_primary_cta
 import blockchain_platform.composeapp.generated.resources.home_hero_secondary_cta
 import blockchain_platform.composeapp.generated.resources.home_hero_title_emphasis
 import blockchain_platform.composeapp.generated.resources.home_hero_title_lead
-import blockchain_platform.composeapp.generated.resources.home_stat_block_note
 import blockchain_platform.composeapp.generated.resources.home_stat_block_title
-import blockchain_platform.composeapp.generated.resources.home_stat_block_value
 import blockchain_platform.composeapp.generated.resources.home_stat_nodes_note
 import blockchain_platform.composeapp.generated.resources.home_stat_nodes_title
-import blockchain_platform.composeapp.generated.resources.home_stat_nodes_value
 import blockchain_platform.composeapp.generated.resources.home_stat_status_note
 import blockchain_platform.composeapp.generated.resources.home_stat_status_title
-import blockchain_platform.composeapp.generated.resources.home_stat_status_value
-import blockchain_platform.composeapp.generated.resources.home_update_body_1
-import blockchain_platform.composeapp.generated.resources.home_update_body_2
-import blockchain_platform.composeapp.generated.resources.home_update_body_3
-import blockchain_platform.composeapp.generated.resources.home_update_title_1
-import blockchain_platform.composeapp.generated.resources.home_update_title_2
-import blockchain_platform.composeapp.generated.resources.home_update_title_3
 import blockchain_platform.composeapp.generated.resources.home_updates_title
 import org.jetbrains.compose.resources.stringResource
 import pl.dawidszczesniak.blockchain_platform.di.LocalKoin
@@ -68,6 +59,9 @@ import pl.dawidszczesniak.blockchain_platform.ui.AppSurface
 fun HomeScreen(onNavigateToProblems: () -> Unit) {
     val koin = LocalKoin.current
     val viewModel = remember { koin.get<HomeViewModel>() }
+    DisposableEffect(viewModel) {
+        onDispose { viewModel.close() }
+    }
     val state by viewModel.state.collectAsState()
 
     if (!state.showFullDashboardContent) {
@@ -90,10 +84,8 @@ fun HomeScreen(onNavigateToProblems: () -> Unit) {
         verticalArrangement = Arrangement.spacedBy(24.dp)
     ) {
         HeroSection(onNavigateToProblems = onNavigateToProblems)
-        // TODO(backend): Replace dashboard stats with real metrics from backend.
-        StatsSection()
-        // TODO(backend): Replace updates feed with backend data.
-        UpdatesSection()
+        StatsSection(state = state)
+        UpdatesSection(state = state)
     }
 }
 
@@ -164,27 +156,49 @@ private fun HeroCopy(
 }
 
 @Composable
-private fun StatsSection() {
+private fun StatsSection(state: HomeState) {
+    val hasError = state.errorMessage != null
+    val activeChallengesValue = metricValue(
+        value = state.activeChallenges,
+        isLoading = state.isLoading,
+        hasError = hasError,
+    )
+    val submissionsTodayValue = metricValue(
+        value = state.submissionsToday,
+        isLoading = state.isLoading,
+        hasError = hasError,
+    )
+    val prizePoolValue = prizePoolLabel(
+        amount = state.prizePoolAmount,
+        isLoading = state.isLoading,
+        hasError = hasError,
+    )
+    val submissionsTrend = submissionsTrendLabel(
+        submissionsDayOverDayPercent = state.submissionsDayOverDayPercent,
+        isLoading = state.isLoading,
+        hasError = hasError,
+    )
+
     BoxWithConstraints {
         val stacked = maxWidth < 900.dp
         if (stacked) {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 StatCard(
                     title = stringResource(Res.string.home_stat_status_title),
-                    value = stringResource(Res.string.home_stat_status_value),
+                    value = activeChallengesValue,
                     note = stringResource(Res.string.home_stat_status_note),
                     badge = "S"
                 )
                 StatCard(
                     title = stringResource(Res.string.home_stat_nodes_title),
-                    value = stringResource(Res.string.home_stat_nodes_value),
+                    value = prizePoolValue,
                     note = stringResource(Res.string.home_stat_nodes_note),
                     badge = "N"
                 )
                 StatCard(
                     title = stringResource(Res.string.home_stat_block_title),
-                    value = stringResource(Res.string.home_stat_block_value),
-                    note = stringResource(Res.string.home_stat_block_note),
+                    value = submissionsTodayValue,
+                    note = submissionsTrend,
                     badge = "#"
                 )
             }
@@ -193,22 +207,22 @@ private fun StatsSection() {
                 StatCard(
                     modifier = Modifier.weight(1f),
                     title = stringResource(Res.string.home_stat_status_title),
-                    value = stringResource(Res.string.home_stat_status_value),
+                    value = activeChallengesValue,
                     note = stringResource(Res.string.home_stat_status_note),
                     badge = "S"
                 )
                 StatCard(
                     modifier = Modifier.weight(1f),
                     title = stringResource(Res.string.home_stat_nodes_title),
-                    value = stringResource(Res.string.home_stat_nodes_value),
+                    value = prizePoolValue,
                     note = stringResource(Res.string.home_stat_nodes_note),
                     badge = "N"
                 )
                 StatCard(
                     modifier = Modifier.weight(1f),
                     title = stringResource(Res.string.home_stat_block_title),
-                    value = stringResource(Res.string.home_stat_block_value),
-                    note = stringResource(Res.string.home_stat_block_note),
+                    value = submissionsTodayValue,
+                    note = submissionsTrend,
                     badge = "#"
                 )
             }
@@ -252,12 +266,12 @@ private fun StatCard(
 }
 
 @Composable
-private fun UpdatesSection() {
+private fun UpdatesSection(state: HomeState) {
     BoxWithConstraints {
         val stacked = maxWidth < 900.dp
         if (stacked) {
             Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
-                UpdatesList()
+                UpdatesList(state = state)
                 CommunityCard()
             }
         } else {
@@ -279,7 +293,8 @@ private fun UpdatesSection() {
                         ) {
                             UpdatesList(
                                 modifier = Modifier.fillMaxWidth(),
-                                showHeader = false
+                                showHeader = false,
+                                state = state,
                             )
                         }
                         Box(
@@ -299,6 +314,7 @@ private fun UpdatesSection() {
 private fun UpdatesList(
     modifier: Modifier = Modifier,
     showHeader: Boolean = true,
+    state: HomeState,
 ) {
     Column(modifier = modifier) {
         if (showHeader) {
@@ -309,13 +325,27 @@ private fun UpdatesList(
             )
             Spacer(Modifier.height(12.dp))
         }
-        // TODO(backend): Replace mock updates with real backend entries.
-        val updates = listOf(
-            stringResource(Res.string.home_update_title_1) to stringResource(Res.string.home_update_body_1),
-            stringResource(Res.string.home_update_title_2) to stringResource(Res.string.home_update_body_2),
-            stringResource(Res.string.home_update_title_3) to stringResource(Res.string.home_update_body_3),
-        )
-        updates.forEachIndexed { index, (title, body) ->
+        val updates = state.updates
+        if (updates.isEmpty()) {
+            val emptyMessage = when {
+                state.isLoading -> "Loading updates..."
+                state.errorMessage != null -> "Updates unavailable."
+                else -> "No updates yet."
+            }
+            AppSurface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp)
+            ) {
+                Text(
+                    text = emptyMessage,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            return@Column
+        }
+
+        updates.forEachIndexed { index, update ->
             AppSurface(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(20.dp)
@@ -331,9 +361,9 @@ private fun UpdatesList(
                     }
                     Spacer(Modifier.width(12.dp))
                     Column {
-                        Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                        Text(update.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                         Spacer(Modifier.height(4.dp))
-                        Text(body, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(update.body, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
@@ -342,6 +372,63 @@ private fun UpdatesList(
             }
         }
     }
+}
+
+private fun metricValue(
+    value: Int?,
+    isLoading: Boolean,
+    hasError: Boolean,
+): String {
+    return when {
+        value != null -> value.toString()
+        isLoading -> "..."
+        hasError -> "N/A"
+        else -> "0"
+    }
+}
+
+private fun prizePoolLabel(
+    amount: Long?,
+    isLoading: Boolean,
+    hasError: Boolean,
+): String {
+    return when {
+        amount != null -> "${groupByThousands(amount)} USDC"
+        isLoading -> "... USDC"
+        hasError -> "N/A"
+        else -> "0 USDC"
+    }
+}
+
+private fun submissionsTrendLabel(
+    submissionsDayOverDayPercent: Int?,
+    isLoading: Boolean,
+    hasError: Boolean,
+): String {
+    return when {
+        submissionsDayOverDayPercent != null && submissionsDayOverDayPercent >= 0 ->
+            "+$submissionsDayOverDayPercent% vs previous day"
+
+        submissionsDayOverDayPercent != null ->
+            "$submissionsDayOverDayPercent% vs previous day"
+
+        isLoading -> "Loading trend..."
+        hasError -> "Trend unavailable."
+        else -> "No previous-day data."
+    }
+}
+
+private fun groupByThousands(value: Long): String {
+    val raw = value.toString()
+    val reversed = raw.reversed()
+    val builder = StringBuilder()
+    reversed.forEachIndexed { index, char ->
+        if (index > 0 && index % 3 == 0) {
+            builder.append(',')
+        }
+        builder.append(char)
+    }
+    return builder.reverse().toString()
 }
 
 @Composable

@@ -38,6 +38,8 @@ Additional read-only endpoints:
 
 - `/problems/created`
 - `/problems/participation`
+- `/dashboard/metrics?limit=30`
+- `/dashboard/updates?limit=3`
 
 Database schema (3NF):
 
@@ -46,6 +48,8 @@ Database schema (3NF):
 - `problem_participants`: mapping of participants (users) assigned/registered to a specific problem.
 - `problem_submissions`: submission attempts history (multiple tries per user/problem).
 - `problem_winners`: winner history per problem and winner user (`winner_user_id`, `payout_amount`, `won_at`).
+- `dashboard_daily_metrics`: daily snapshot history (`metric_date`, `active_challenges`, `prize_pool_amount`, `submissions_count`).
+- `website_updates`: website update feed consumed by dashboard (`title`, `body`, `created_at`).
 
 Local startup:
 

@@ -60,6 +60,20 @@ fun Application.module() {
             }
             call.respond(problems.map { it.toPayload() })
         }
+        get("/dashboard/metrics") {
+            val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 30
+            val metrics = withContext(Dispatchers.IO) {
+                problemStore.fetchDashboardMetricsHistory(limit = limit)
+            }
+            call.respond(metrics.map { it.toPayload() })
+        }
+        get("/dashboard/updates") {
+            val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 3
+            val updates = withContext(Dispatchers.IO) {
+                problemStore.fetchLatestWebsiteUpdates(limit = limit)
+            }
+            call.respond(updates.map { it.toPayload() })
+        }
     }
 }
 

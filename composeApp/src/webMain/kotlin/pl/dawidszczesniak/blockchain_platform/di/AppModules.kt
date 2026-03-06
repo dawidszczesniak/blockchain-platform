@@ -11,7 +11,9 @@ import kotlin.js.Promise
 import org.koin.dsl.module
 import pl.dawidszczesniak.blockchain_platform.config.AppConfig
 import pl.dawidszczesniak.blockchain_platform.config.AppConfigProvider
+import pl.dawidszczesniak.blockchain_platform.data.BackendDashboardRepository
 import pl.dawidszczesniak.blockchain_platform.data.BackendProblemRepository
+import pl.dawidszczesniak.blockchain_platform.data.DashboardRepository
 import pl.dawidszczesniak.blockchain_platform.domain.repository.ProblemRepository
 import pl.dawidszczesniak.blockchain_platform.domain.usecase.GetCreatedProblemsUseCase
 import pl.dawidszczesniak.blockchain_platform.domain.usecase.GetParticipationProblemsUseCase
@@ -35,11 +37,17 @@ fun appModules() = module {
             fetchText = ::fetchBackendText,
         )
     }
+    single<DashboardRepository> {
+        BackendDashboardRepository(
+            apiBaseUrl = get<AppConfig>().apiBaseUrl,
+            fetchText = ::fetchBackendText,
+        )
+    }
     factory { GetProblemListUseCase(get()) }
     factory { GetCreatedProblemsUseCase(get()) }
     factory { GetParticipationProblemsUseCase(get()) }
     factory { AppViewModel() }
-    factory { HomeViewModel() }
+    factory { HomeViewModel(get()) }
     factory { LoginViewModel() }
     factory { SettingsViewModel() }
     factory { BackendHealthViewModel(get()) }

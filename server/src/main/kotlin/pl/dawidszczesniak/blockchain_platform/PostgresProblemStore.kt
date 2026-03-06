@@ -12,6 +12,7 @@ import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.innerJoin
 import org.jetbrains.exposed.sql.select
 import org.jetbrains.exposed.sql.selectAll
+import org.jetbrains.exposed.sql.update
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.javatime.date
 import org.jetbrains.exposed.sql.javatime.datetime
@@ -38,6 +39,8 @@ internal class PostgresProblemStore(
     fun initialize() {
         applySchema()
         seedProblemsIfEmpty()
+        seedWebsiteUpdatesIfEmpty()
+        refreshTodayDashboardMetrics()
     }
 
     fun fetchProblemSummaries(): List<ProblemSummary> {
@@ -169,6 +172,46 @@ internal class PostgresProblemStore(
         }
     }
 
+    fun fetchDashboardMetricsHistory(limit: Int): List<DashboardDailyMetric> {
+        refreshTodayDashboardMetrics()
+        val safeLimit = limit.coerceIn(1, 365)
+        return transaction(database) {
+            DashboardDailyMetricsTable
+                .selectAll()
+                .orderBy(DashboardDailyMetricsTable.metricDate to SortOrder.DESC)
+                .limit(safeLimit)
+                .map { row ->
+                    DashboardDailyMetric(
+                        metricDate = row[DashboardDailyMetricsTable.metricDate],
+                        activeChallenges = row[DashboardDailyMetricsTable.activeChallenges],
+                        prizePoolAmount = row[DashboardDailyMetricsTable.prizePoolAmount],
+                        submissionsCount = row[DashboardDailyMetricsTable.submissionsCount],
+                    )
+                }
+        }
+    }
+
+    fun fetchLatestWebsiteUpdates(limit: Int): List<WebsiteUpdate> {
+        val safeLimit = limit.coerceIn(1, 20)
+        return transaction(database) {
+            WebsiteUpdatesTable
+                .selectAll()
+                .orderBy(
+                    WebsiteUpdatesTable.createdAt to SortOrder.DESC,
+                    WebsiteUpdatesTable.updateId to SortOrder.DESC,
+                )
+                .limit(safeLimit)
+                .map { row ->
+                    WebsiteUpdate(
+                        id = row[WebsiteUpdatesTable.updateId],
+                        title = row[WebsiteUpdatesTable.title],
+                        body = row[WebsiteUpdatesTable.body],
+                        createdAt = row[WebsiteUpdatesTable.createdAt].toString(),
+                    )
+                }
+        }
+    }
+
     private fun applySchema() {
         val schemaSql = javaClass.classLoader.getResource(SCHEMA_RESOURCE_PATH)?.readText()
             ?: error("Missing SQL resource '$SCHEMA_RESOURCE_PATH'.")
@@ -274,6 +317,55 @@ internal class PostgresProblemStore(
                 winnerUserId = userIds[4],
                 payoutAmount = 40L,
             )
+        }
+    }
+
+    private fun seedWebsiteUpdatesIfEmpty() {
+        transaction(database) {
+            val existingCount = WebsiteUpdatesTable.selectAll().count()
+            if (existingCount > 0L) {
+                return@transaction
+            }
+
+            insertWebsiteUpdate(
+                title = "Dashboard metrics enabled",
+                body = "Daily active challenges, prize pool, and submissions are now persisted."
+            )
+            insertWebsiteUpdate(
+                title = "Backend health polling shipped",
+                body = "Frontend now reacts to backend availability and shows maintenance mode."
+            )
+            insertWebsiteUpdate(
+                title = "Challenge lifecycle updated",
+                body = "Problem listing now distinguishes open and closed challenges from PostgreSQL."
+            )
+        }
+    }
+
+    private fun refreshTodayDashboardMetrics() {
+        transaction(database) {
+            val today = LocalDate.now()
+            val snapshot = calculateDashboardMetrics(metricDate = today)
+            val existingRow = DashboardDailyMetricsTable
+                .selectAll()
+                .where { DashboardDailyMetricsTable.metricDate eq today }
+                .limit(1)
+                .firstOrNull()
+
+            if (existingRow == null) {
+                DashboardDailyMetricsTable.insert {
+                    it[metricDate] = snapshot.metricDate
+                    it[activeChallenges] = snapshot.activeChallenges
+                    it[prizePoolAmount] = snapshot.prizePoolAmount
+                    it[submissionsCount] = snapshot.submissionsCount
+                }
+            } else {
+                DashboardDailyMetricsTable.update({ DashboardDailyMetricsTable.metricDate eq today }) {
+                    it[activeChallenges] = snapshot.activeChallenges
+                    it[prizePoolAmount] = snapshot.prizePoolAmount
+                    it[submissionsCount] = snapshot.submissionsCount
+                }
+            }
         }
     }
 
@@ -438,6 +530,42 @@ internal class PostgresProblemStore(
         }
     }
 
+    private fun insertWebsiteUpdate(
+        title: String,
+        body: String,
+    ) {
+        WebsiteUpdatesTable.insert {
+            it[WebsiteUpdatesTable.title] = title
+            it[WebsiteUpdatesTable.body] = body
+        }
+    }
+
+    private fun calculateDashboardMetrics(metricDate: LocalDate): DashboardDailyMetric {
+        val activeChallenges = ProblemsTable
+            .selectAll()
+            .where { ProblemsTable.problemStatus eq ProblemLifecycleStatus.Open.dbValue }
+            .count()
+            .toInt()
+
+        val prizePoolAmount = ProblemsTable
+            .selectAll()
+            .where { ProblemsTable.problemStatus eq ProblemLifecycleStatus.Open.dbValue }
+            .sumOf { row -> row[ProblemsTable.prizeAmount] }
+
+        val submissionsCount = ProblemSubmissionsTable
+            .selectAll()
+            .count { row ->
+                row[ProblemSubmissionsTable.submittedAt].toLocalDate() == metricDate
+            }
+
+        return DashboardDailyMetric(
+            metricDate = metricDate,
+            activeChallenges = activeChallenges,
+            prizePoolAmount = prizePoolAmount,
+            submissionsCount = submissionsCount,
+        )
+    }
+
     private fun walletAddressForSeed(index: Int): String {
         return "0x${index.toString(16).padStart(40, '0')}"
     }
@@ -450,6 +578,20 @@ internal class PostgresProblemStore(
 private data class WinnerInfo(
     val walletAddress: String,
     val wonAtLabel: String,
+)
+
+internal data class DashboardDailyMetric(
+    val metricDate: LocalDate,
+    val activeChallenges: Int,
+    val prizePoolAmount: Long,
+    val submissionsCount: Int,
+)
+
+internal data class WebsiteUpdate(
+    val id: Long,
+    val title: String,
+    val body: String,
+    val createdAt: String,
 )
 
 private enum class ProblemLifecycleStatus(val dbValue: String) {
@@ -543,6 +685,24 @@ private object ProblemWinnersTable : Table("problem_winners") {
     val wonAt = datetime("won_at")
 
     override val primaryKey = PrimaryKey(problemId, winnerUserId)
+}
+
+private object DashboardDailyMetricsTable : Table("dashboard_daily_metrics") {
+    val metricDate = date("metric_date")
+    val activeChallenges = integer("active_challenges")
+    val prizePoolAmount = long("prize_pool_amount")
+    val submissionsCount = integer("submissions_count")
+
+    override val primaryKey = PrimaryKey(metricDate)
+}
+
+private object WebsiteUpdatesTable : Table("website_updates") {
+    val updateId = long("update_id").autoIncrement()
+    val title = text("title")
+    val body = text("body")
+    val createdAt = datetime("created_at")
+
+    override val primaryKey = PrimaryKey(updateId)
 }
 
 private const val SCHEMA_RESOURCE_PATH = "db/schema.sql"

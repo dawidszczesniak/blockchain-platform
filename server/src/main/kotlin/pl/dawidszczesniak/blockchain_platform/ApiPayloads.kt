@@ -45,6 +45,22 @@ internal data class ParticipationProblemPayload(
     val attemptsCount: Int,
 )
 
+@Serializable
+internal data class DashboardDailyMetricPayload(
+    val metricDate: String,
+    val activeChallenges: Int,
+    val prizePoolAmount: Long,
+    val submissionsCount: Int,
+)
+
+@Serializable
+internal data class WebsiteUpdatePayload(
+    val id: Long,
+    val title: String,
+    val body: String,
+    val createdAt: String,
+)
+
 internal fun ProblemSummary.toPayload(): ProblemSummaryPayload {
     return ProblemSummaryPayload(
         id = id,
@@ -85,5 +101,23 @@ internal fun ParticipationProblem.toPayload(): ParticipationProblemPayload {
         timeLeftLabel = timeLeftLabel,
         participants = participants,
         attemptsCount = attemptsCount,
+    )
+}
+
+internal fun DashboardDailyMetric.toPayload(): DashboardDailyMetricPayload {
+    return DashboardDailyMetricPayload(
+        metricDate = metricDate.toString(),
+        activeChallenges = activeChallenges,
+        prizePoolAmount = prizePoolAmount,
+        submissionsCount = submissionsCount,
+    )
+}
+
+internal fun WebsiteUpdate.toPayload(): WebsiteUpdatePayload {
+    return WebsiteUpdatePayload(
+        id = id,
+        title = title,
+        body = body,
+        createdAt = createdAt,
     )
 }
