@@ -194,8 +194,8 @@ internal class PostgresProblemStore(
                 title = "Neural Network Compression",
                 description = "Optimize a neural model pipeline to reduce inference cost.",
                 problemStatus = ProblemLifecycleStatus.Open,
-                prizeAmount = 25,
-                entryFeeAmount = 3,
+                prizeAmount = 25L,
+                entryFeeAmount = 3L,
                 requiredParticipants = 12,
                 joinUntilDate = LocalDate.parse("2026-03-08"),
                 submitUntilDate = LocalDate.parse("2026-03-15"),
@@ -206,8 +206,8 @@ internal class PostgresProblemStore(
                 title = "Oracle Aggregation",
                 description = "Build robust oracle aggregation logic for volatile market feeds.",
                 problemStatus = ProblemLifecycleStatus.Closed,
-                prizeAmount = 40,
-                entryFeeAmount = 5,
+                prizeAmount = 40L,
+                entryFeeAmount = 5L,
                 requiredParticipants = 18,
                 joinUntilDate = LocalDate.parse("2026-03-10"),
                 submitUntilDate = LocalDate.parse("2026-03-17"),
@@ -225,42 +225,54 @@ internal class PostgresProblemStore(
                 problemId = firstProblemId,
                 userId = userIds[0],
                 status = SubmissionAttemptStatus.Rejected,
+                sourceCode = "fun solve(input: String): String = input.reversed()",
+                language = "kotlin",
             )
             insertProblemSubmission(
                 problemId = firstProblemId,
                 userId = userIds[0],
                 status = SubmissionAttemptStatus.Accepted,
+                sourceCode = "fun solve(input: String): String = input.lowercase()",
+                language = "kotlin",
             )
             insertProblemSubmission(
                 problemId = firstProblemId,
                 userId = userIds[2],
                 status = SubmissionAttemptStatus.Accepted,
+                sourceCode = "def solve(text):\n    return text.strip().lower()",
+                language = "python",
             )
             insertProblemSubmission(
                 problemId = secondProblemId,
                 userId = userIds[4],
                 status = SubmissionAttemptStatus.Error,
+                sourceCode = "function solve(input) { throw new Error('runtime'); }",
+                language = "javascript",
             )
             insertProblemSubmission(
                 problemId = secondProblemId,
                 userId = userIds[4],
                 status = SubmissionAttemptStatus.Rejected,
+                sourceCode = "function solve(input) { return input; }",
+                language = "javascript",
             )
             insertProblemSubmission(
                 problemId = secondProblemId,
                 userId = userIds[4],
                 status = SubmissionAttemptStatus.Accepted,
+                sourceCode = "function solve(input) { return input.trim(); }",
+                language = "javascript",
             )
 
             insertProblemWinner(
                 problemId = firstProblemId,
                 winnerUserId = userIds[2],
-                payoutAmount = 25,
+                payoutAmount = 25L,
             )
             insertProblemWinner(
                 problemId = secondProblemId,
                 winnerUserId = userIds[4],
-                payoutAmount = 40,
+                payoutAmount = 40L,
             )
         }
     }
@@ -363,8 +375,8 @@ internal class PostgresProblemStore(
         title: String,
         description: String,
         problemStatus: ProblemLifecycleStatus,
-        prizeAmount: Int,
-        entryFeeAmount: Int,
+        prizeAmount: Long,
+        entryFeeAmount: Long,
         requiredParticipants: Int,
         joinUntilDate: LocalDate,
         submitUntilDate: LocalDate,
@@ -402,18 +414,22 @@ internal class PostgresProblemStore(
         problemId: Long,
         userId: Long,
         status: SubmissionAttemptStatus,
+        sourceCode: String,
+        language: String,
     ) {
         ProblemSubmissionsTable.insert {
             it[ProblemSubmissionsTable.problemId] = problemId
             it[ProblemSubmissionsTable.userId] = userId
             it[ProblemSubmissionsTable.status] = status.dbValue
+            it[ProblemSubmissionsTable.sourceCode] = sourceCode
+            it[ProblemSubmissionsTable.language] = language
         }
     }
 
     private fun insertProblemWinner(
         problemId: Long,
         winnerUserId: Long,
-        payoutAmount: Int,
+        payoutAmount: Long,
     ) {
         ProblemWinnersTable.insert {
             it[ProblemWinnersTable.problemId] = problemId
@@ -490,8 +506,8 @@ private object ProblemsTable : Table("problems") {
     val problemStatus = varchar("problem_status", length = 16)
     val title = text("title")
     val description = text("description")
-    val prizeAmount = integer("prize_amount")
-    val entryFeeAmount = integer("entry_fee_amount")
+    val prizeAmount = long("prize_amount")
+    val entryFeeAmount = long("entry_fee_amount")
     val requiredParticipants = integer("required_participants")
     val joinUntilDate = date("join_until_date")
     val submitUntilDate = date("submit_until_date")
@@ -513,6 +529,8 @@ private object ProblemSubmissionsTable : Table("problem_submissions") {
     val problemId = long("problem_id")
     val userId = long("user_id")
     val status = varchar("status", length = 16)
+    val sourceCode = text("source_code")
+    val language = varchar("language", length = 32)
     val submittedAt = datetime("submitted_at")
 
     override val primaryKey = PrimaryKey(submissionId)
@@ -521,7 +539,7 @@ private object ProblemSubmissionsTable : Table("problem_submissions") {
 private object ProblemWinnersTable : Table("problem_winners") {
     val problemId = long("problem_id")
     val winnerUserId = long("winner_user_id")
-    val payoutAmount = integer("payout_amount")
+    val payoutAmount = long("payout_amount")
     val wonAt = datetime("won_at")
 
     override val primaryKey = PrimaryKey(problemId, winnerUserId)

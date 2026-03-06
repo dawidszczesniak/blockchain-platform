@@ -48,8 +48,8 @@ private fun generateProblems(
         val id = startId + i
         val required = 10 + (id % 11)
         val registered = min(required, (id * 3) % (required + 1))
-        val prize = 10 + ((id + 2) % 10)
-        val entry = 1 + ((id + 1) % 5)
+        val prize = (10 + ((id + 2) % 10)).toLong()
+        val entry = (1 + ((id + 1) % 5)).toLong()
         val daysToJoinEnd = 1 + (id % 14)
         val joinDay = (10 + (id % 18)).toString().padStart(2, '0')
         val submitDay = (1 + (id % 20)).toString().padStart(2, '0')

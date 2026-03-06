@@ -19,8 +19,8 @@ CREATE TABLE IF NOT EXISTS problems (
         CHECK (problem_status IN ('open', 'closed')),
     title TEXT NOT NULL,
     description TEXT NOT NULL,
-    prize_amount INTEGER NOT NULL CHECK (prize_amount >= 0),
-    entry_fee_amount INTEGER NOT NULL CHECK (entry_fee_amount >= 0),
+    prize_amount BIGINT NOT NULL CHECK (prize_amount >= 0),
+    entry_fee_amount BIGINT NOT NULL CHECK (entry_fee_amount >= 0),
     required_participants INTEGER NOT NULL CHECK (required_participants > 0),
     join_until_date DATE NOT NULL,
     submit_until_date DATE NOT NULL,
@@ -40,6 +40,8 @@ CREATE TABLE IF NOT EXISTS problem_submissions (
     problem_id BIGINT NOT NULL,
     user_id BIGINT NOT NULL,
     status VARCHAR(16) NOT NULL CHECK (status IN ('accepted', 'rejected', 'error')),
+    source_code TEXT NOT NULL,
+    language VARCHAR(32) NOT NULL,
     submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     FOREIGN KEY (problem_id, user_id)
         REFERENCES problem_participants(problem_id, user_id)
@@ -49,7 +51,7 @@ CREATE TABLE IF NOT EXISTS problem_submissions (
 CREATE TABLE IF NOT EXISTS problem_winners (
     problem_id BIGINT NOT NULL,
     winner_user_id BIGINT NOT NULL,
-    payout_amount INTEGER NOT NULL CHECK (payout_amount >= 0),
+    payout_amount BIGINT NOT NULL CHECK (payout_amount >= 0),
     won_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (problem_id, winner_user_id),
     FOREIGN KEY (problem_id, winner_user_id)
@@ -57,8 +59,39 @@ CREATE TABLE IF NOT EXISTS problem_winners (
         ON DELETE CASCADE
 );
 
-CREATE INDEX IF NOT EXISTS idx_problem_participants_problem_id
-    ON problem_participants(problem_id);
+ALTER TABLE problems
+    ALTER COLUMN prize_amount TYPE BIGINT USING prize_amount::BIGINT;
+
+ALTER TABLE problems
+    ALTER COLUMN entry_fee_amount TYPE BIGINT USING entry_fee_amount::BIGINT;
+
+ALTER TABLE problem_winners
+    ALTER COLUMN payout_amount TYPE BIGINT USING payout_amount::BIGINT;
+
+ALTER TABLE problem_submissions
+    ADD COLUMN IF NOT EXISTS source_code TEXT;
+
+ALTER TABLE problem_submissions
+    ADD COLUMN IF NOT EXISTS language VARCHAR(32);
+
+UPDATE problem_submissions
+SET source_code = COALESCE(source_code, '')
+WHERE source_code IS NULL;
+
+UPDATE problem_submissions
+SET language = COALESCE(NULLIF(language, ''), 'unknown')
+WHERE language IS NULL OR language = '';
+
+ALTER TABLE problem_submissions
+    ALTER COLUMN source_code SET NOT NULL;
+
+ALTER TABLE problem_submissions
+    ALTER COLUMN language SET NOT NULL;
+
+DROP INDEX IF EXISTS idx_problem_participants_problem_id;
+
+CREATE INDEX IF NOT EXISTS idx_problem_participants_user_id
+    ON problem_participants(user_id);
 
 CREATE INDEX IF NOT EXISTS idx_problem_submissions_user_id
     ON problem_submissions(user_id);

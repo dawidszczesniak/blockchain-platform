@@ -66,8 +66,8 @@ private fun parseProblemSummaries(payload: String): List<ProblemSummary> {
             id = obj.requiredInt("id"),
             title = obj.requiredString("title"),
             description = obj.requiredString("description"),
-            prizeAmount = obj.requiredInt("prizeAmount"),
-            entryFeeAmount = obj.requiredInt("entryFeeAmount"),
+            prizeAmount = obj.requiredLong("prizeAmount"),
+            entryFeeAmount = obj.requiredLong("entryFeeAmount"),
             requiredParticipants = obj.requiredInt("requiredParticipants"),
             registeredParticipants = obj.requiredInt("registeredParticipants"),
             daysToStart = obj.requiredInt("daysToStart"),
@@ -118,6 +118,12 @@ private fun parseParticipationProblems(payload: String): List<ParticipationProbl
 private fun JsonObject.requiredInt(name: String): Int {
     val value = requiredField(name)
     return value.jsonPrimitive.int
+}
+
+private fun JsonObject.requiredLong(name: String): Long {
+    val primitive = requiredField(name).jsonPrimitive
+    return primitive.contentOrNull?.toLongOrNull()
+        ?: error("Field '$name' must be a JSON long.")
 }
 
 private fun JsonObject.requiredString(name: String): String {
