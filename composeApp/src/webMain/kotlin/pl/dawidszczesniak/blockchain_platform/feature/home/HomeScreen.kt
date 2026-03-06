@@ -6,8 +6,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -283,7 +285,9 @@ private fun UpdatesSection(state: HomeState) {
                 )
                 Box(modifier = Modifier.fillMaxWidth()) {
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(IntrinsicSize.Min),
                         horizontalArrangement = Arrangement.spacedBy(18.dp),
                         verticalAlignment = Alignment.Top
                     ) {
@@ -298,10 +302,16 @@ private fun UpdatesSection(state: HomeState) {
                             )
                         }
                         Box(
-                            modifier = Modifier.weight(0.8f),
+                            modifier = Modifier
+                                .weight(0.8f)
+                                .fillMaxHeight(),
                             contentAlignment = Alignment.TopStart
                         ) {
-                            CommunityCard(modifier = Modifier.fillMaxWidth())
+                            CommunityCard(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .fillMaxHeight()
+                            )
                         }
                     }
                 }
