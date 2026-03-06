@@ -9,19 +9,23 @@ import kotlin.coroutines.suspendCoroutine
 import kotlin.js.JsAny
 import kotlin.js.Promise
 import org.koin.dsl.module
-import pl.dawidszczesniak.blockchain_platform.AppConfig
-import pl.dawidszczesniak.blockchain_platform.AppConfigProvider
+import pl.dawidszczesniak.blockchain_platform.config.AppConfig
+import pl.dawidszczesniak.blockchain_platform.config.AppConfigProvider
 import pl.dawidszczesniak.blockchain_platform.data.BackendProblemRepository
 import pl.dawidszczesniak.blockchain_platform.domain.repository.ProblemRepository
 import pl.dawidszczesniak.blockchain_platform.domain.usecase.GetCreatedProblemsUseCase
 import pl.dawidszczesniak.blockchain_platform.domain.usecase.GetParticipationProblemsUseCase
 import pl.dawidszczesniak.blockchain_platform.domain.usecase.GetProblemListUseCase
-import pl.dawidszczesniak.blockchain_platform.presentation.app.AppViewModel
-import pl.dawidszczesniak.blockchain_platform.presentation.app.BackendHealthViewModel
-import pl.dawidszczesniak.blockchain_platform.presentation.created.CreatedProblemsViewModel
-import pl.dawidszczesniak.blockchain_platform.presentation.create.CreateProblemViewModel
-import pl.dawidszczesniak.blockchain_platform.presentation.participation.ParticipationViewModel
-import pl.dawidszczesniak.blockchain_platform.presentation.problems.ProblemsListViewModel
+import pl.dawidszczesniak.blockchain_platform.app.AppViewModel
+import pl.dawidszczesniak.blockchain_platform.feature.create.CreateProblemViewModel
+import pl.dawidszczesniak.blockchain_platform.feature.home.HomeViewModel
+import pl.dawidszczesniak.blockchain_platform.feature.login.LoginViewModel
+import pl.dawidszczesniak.blockchain_platform.feature.maintenance.BackendHealthViewModel
+import pl.dawidszczesniak.blockchain_platform.feature.maintenance.BackendMaintenanceViewModel
+import pl.dawidszczesniak.blockchain_platform.feature.myparticipation.MyParticipationViewModel
+import pl.dawidszczesniak.blockchain_platform.feature.myproblems.MyProblemsViewModel
+import pl.dawidszczesniak.blockchain_platform.feature.problems.ProblemsListViewModel
+import pl.dawidszczesniak.blockchain_platform.feature.settings.SettingsViewModel
 
 fun appModules() = module {
     single { AppConfigProvider.config }
@@ -35,11 +39,15 @@ fun appModules() = module {
     factory { GetCreatedProblemsUseCase(get()) }
     factory { GetParticipationProblemsUseCase(get()) }
     factory { AppViewModel() }
+    factory { HomeViewModel() }
+    factory { LoginViewModel() }
+    factory { SettingsViewModel() }
     factory { BackendHealthViewModel(get()) }
+    factory { BackendMaintenanceViewModel() }
     factory { CreateProblemViewModel() }
     factory { ProblemsListViewModel(get()) }
-    factory { CreatedProblemsViewModel(get()) }
-    factory { ParticipationViewModel(get()) }
+    factory { MyProblemsViewModel(get()) }
+    factory { MyParticipationViewModel(get()) }
 }
 
 private suspend fun fetchBackendText(url: String): String {
