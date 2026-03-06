@@ -10,9 +10,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlin.math.max
-import pl.dawidszczesniak.blockchain_platform.domain.model.CreatedProblem
-import pl.dawidszczesniak.blockchain_platform.domain.model.CreatedProblemStatus
-import pl.dawidszczesniak.blockchain_platform.domain.usecase.GetCreatedProblemsUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.CreatedProblem
+import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.CreatedProblemStatus
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetCreatedProblemsUseCase
 
 enum class MyProblemsFilter {
     All,

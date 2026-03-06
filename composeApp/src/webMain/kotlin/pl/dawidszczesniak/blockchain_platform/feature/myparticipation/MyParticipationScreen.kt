@@ -35,8 +35,8 @@ import blockchain_platform.composeapp.generated.resources.participation_submissi
 import blockchain_platform.composeapp.generated.resources.participation_time_left
 import blockchain_platform.composeapp.generated.resources.participation_title
 import org.jetbrains.compose.resources.stringResource
-import pl.dawidszczesniak.blockchain_platform.domain.model.ParticipationProblem
-import pl.dawidszczesniak.blockchain_platform.domain.model.ParticipationStatus
+import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.ParticipationProblem
+import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.ParticipationStatus
 import pl.dawidszczesniak.blockchain_platform.di.LocalKoin
 import pl.dawidszczesniak.blockchain_platform.ui.AppSurface
 

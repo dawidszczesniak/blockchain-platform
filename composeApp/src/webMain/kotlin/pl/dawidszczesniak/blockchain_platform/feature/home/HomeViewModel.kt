@@ -10,7 +10,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import pl.dawidszczesniak.blockchain_platform.data.DashboardRepository
+import pl.dawidszczesniak.blockchain_platform.feature.dashboard.usecase.GetDashboardMetricsHistoryUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.dashboard.usecase.GetDashboardUpdatesUseCase
 
 data class HomeState(
     val showFullDashboardContent: Boolean = true,
@@ -38,7 +39,8 @@ sealed interface HomeIntent {
 }
 
 class HomeViewModel(
-    private val dashboardRepository: DashboardRepository,
+    private val getDashboardMetricsHistoryUseCase: GetDashboardMetricsHistoryUseCase,
+    private val getDashboardUpdatesUseCase: GetDashboardUpdatesUseCase,
     private val dashboardConfig: DashboardConfig,
     private val metricsLimit: Int = 30,
     private val updatesLimit: Int = 3,
@@ -69,8 +71,8 @@ class HomeViewModel(
         }
         scope.launch {
             runCatching {
-                val metrics = dashboardRepository.fetchMetricsHistory(limit = metricsLimit)
-                val updates = dashboardRepository.fetchLatestUpdates(limit = updatesLimit)
+                val metrics = getDashboardMetricsHistoryUseCase(limit = metricsLimit)
+                val updates = getDashboardUpdatesUseCase(limit = updatesLimit)
                 val orderedMetrics = metrics.sortedByDescending { it.metricDate }
                 val latestMetric = orderedMetrics.firstOrNull()
                 val previousMetric = orderedMetrics.getOrNull(1)

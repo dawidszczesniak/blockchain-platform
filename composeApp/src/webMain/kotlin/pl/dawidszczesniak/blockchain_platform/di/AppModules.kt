@@ -1,23 +1,26 @@
-@file:OptIn(kotlin.js.ExperimentalWasmJsInterop::class)
-
 package pl.dawidszczesniak.blockchain_platform.di
 
-import kotlin.JsFun
-import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
-import kotlin.coroutines.suspendCoroutine
-import kotlin.js.JsAny
-import kotlin.js.Promise
 import org.koin.dsl.module
 import pl.dawidszczesniak.blockchain_platform.config.AppConfig
 import pl.dawidszczesniak.blockchain_platform.config.AppConfigProvider
-import pl.dawidszczesniak.blockchain_platform.data.BackendDashboardRepository
-import pl.dawidszczesniak.blockchain_platform.data.BackendProblemRepository
-import pl.dawidszczesniak.blockchain_platform.data.DashboardRepository
-import pl.dawidszczesniak.blockchain_platform.domain.repository.ProblemRepository
-import pl.dawidszczesniak.blockchain_platform.domain.usecase.GetCreatedProblemsUseCase
-import pl.dawidszczesniak.blockchain_platform.domain.usecase.GetParticipationProblemsUseCase
-import pl.dawidszczesniak.blockchain_platform.domain.usecase.GetProblemListUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.dashboard.datasource.DashboardRemoteDataSource
+import pl.dawidszczesniak.blockchain_platform.feature.dashboard.datasource.DashboardRemoteDataSourceImpl
+import pl.dawidszczesniak.blockchain_platform.feature.problems.datasource.ProblemRemoteDataSource
+import pl.dawidszczesniak.blockchain_platform.feature.problems.datasource.ProblemRemoteDataSourceImpl
+import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.ProblemRepositoryImpl
+import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.ProblemRepository
+import pl.dawidszczesniak.blockchain_platform.feature.dashboard.repository.DashboardRepositoryImpl
+import pl.dawidszczesniak.blockchain_platform.feature.dashboard.repository.DashboardRepository
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetCreatedProblemsUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetCreatedProblemsUseCaseImpl
+import pl.dawidszczesniak.blockchain_platform.feature.dashboard.usecase.GetDashboardMetricsHistoryUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.dashboard.usecase.GetDashboardMetricsHistoryUseCaseImpl
+import pl.dawidszczesniak.blockchain_platform.feature.dashboard.usecase.GetDashboardUpdatesUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.dashboard.usecase.GetDashboardUpdatesUseCaseImpl
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetParticipationProblemsUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetParticipationProblemsUseCaseImpl
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetProblemListUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetProblemListUseCaseImpl
 import pl.dawidszczesniak.blockchain_platform.app.AppViewModel
 import pl.dawidszczesniak.blockchain_platform.feature.create.CreateProblemViewModel
 import pl.dawidszczesniak.blockchain_platform.feature.home.DashboardConfig
@@ -29,27 +32,38 @@ import pl.dawidszczesniak.blockchain_platform.feature.myparticipation.MyParticip
 import pl.dawidszczesniak.blockchain_platform.feature.myproblems.MyProblemsViewModel
 import pl.dawidszczesniak.blockchain_platform.feature.problems.ProblemsListViewModel
 import pl.dawidszczesniak.blockchain_platform.feature.settings.SettingsViewModel
+import pl.dawidszczesniak.blockchain_platform.network.BrowserHttpTextClient
+import pl.dawidszczesniak.blockchain_platform.network.HttpTextClient
 
 fun appModules() = module {
     single { AppConfigProvider.config }
-    single<ProblemRepository> {
-        BackendProblemRepository(
+    single<HttpTextClient> { BrowserHttpTextClient() }
+    single<ProblemRemoteDataSource> {
+        ProblemRemoteDataSourceImpl(
             apiBaseUrl = get<AppConfig>().apiBaseUrl,
-            fetchText = ::fetchBackendText,
+            httpTextClient = get(),
+        )
+    }
+    single<ProblemRepository> {
+        ProblemRepositoryImpl(remoteDataSource = get())
+    }
+    single<DashboardRemoteDataSource> {
+        DashboardRemoteDataSourceImpl(
+            apiBaseUrl = get<AppConfig>().apiBaseUrl,
+            httpTextClient = get(),
         )
     }
     single<DashboardRepository> {
-        BackendDashboardRepository(
-            apiBaseUrl = get<AppConfig>().apiBaseUrl,
-            fetchText = ::fetchBackendText,
-        )
+        DashboardRepositoryImpl(remoteDataSource = get())
     }
     single { DashboardConfig() }
-    factory { GetProblemListUseCase(get()) }
-    factory { GetCreatedProblemsUseCase(get()) }
-    factory { GetParticipationProblemsUseCase(get()) }
+    factory<GetProblemListUseCase> { GetProblemListUseCaseImpl(get()) }
+    factory<GetCreatedProblemsUseCase> { GetCreatedProblemsUseCaseImpl(get()) }
+    factory<GetParticipationProblemsUseCase> { GetParticipationProblemsUseCaseImpl(get()) }
+    factory<GetDashboardMetricsHistoryUseCase> { GetDashboardMetricsHistoryUseCaseImpl(get()) }
+    factory<GetDashboardUpdatesUseCase> { GetDashboardUpdatesUseCaseImpl(get()) }
     factory { AppViewModel() }
-    factory { HomeViewModel(get(), get()) }
+    factory { HomeViewModel(get(), get(), get()) }
     factory { LoginViewModel() }
     factory { SettingsViewModel() }
     factory { BackendHealthViewModel(get()) }
@@ -59,26 +73,3 @@ fun appModules() = module {
     factory { MyProblemsViewModel(get()) }
     factory { MyParticipationViewModel(get()) }
 }
-
-private suspend fun fetchBackendText(url: String): String {
-    return suspendCoroutine { continuation ->
-        fetchText(url).then(
-            onFulfilled = { body ->
-                continuation.resume(jsAnyToString(body))
-                body
-            },
-            onRejected = { error ->
-                continuation.resumeWithException(
-                    IllegalStateException("Failed to fetch '$url'.")
-                )
-                error
-            }
-        )
-    }
-}
-
-@JsFun("(url) => fetch(url, { method: 'GET', cache: 'no-store' }).then(r => { if (!r.ok) { throw new Error('HTTP ' + r.status); } return r.text(); })")
-private external fun fetchText(url: String): Promise<JsAny?>
-
-@JsFun("(value) => String(value)")
-private external fun jsAnyToString(value: JsAny?): String

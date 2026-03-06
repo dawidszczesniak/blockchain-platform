@@ -10,8 +10,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlin.math.max
-import pl.dawidszczesniak.blockchain_platform.domain.model.ProblemSummary
-import pl.dawidszczesniak.blockchain_platform.domain.usecase.GetProblemListUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.ProblemSummary
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetProblemListUseCase
 
 enum class ProblemsSortOption {
     Newest,

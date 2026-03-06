@@ -51,8 +51,8 @@ import blockchain_platform.composeapp.generated.resources.my_problems_waiting
 import blockchain_platform.composeapp.generated.resources.my_problem_registration_ends
 import blockchain_platform.composeapp.generated.resources.loading_more
 import org.jetbrains.compose.resources.stringResource
-import pl.dawidszczesniak.blockchain_platform.domain.model.CreatedProblem
-import pl.dawidszczesniak.blockchain_platform.domain.model.CreatedProblemStatus
+import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.CreatedProblem
+import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.CreatedProblemStatus
 import pl.dawidszczesniak.blockchain_platform.di.LocalKoin
 import pl.dawidszczesniak.blockchain_platform.ui.AppSurface
 

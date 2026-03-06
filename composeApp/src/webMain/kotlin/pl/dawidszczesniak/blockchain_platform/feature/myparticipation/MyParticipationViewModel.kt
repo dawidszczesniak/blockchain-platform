@@ -10,9 +10,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlin.math.max
-import pl.dawidszczesniak.blockchain_platform.domain.model.ParticipationProblem
-import pl.dawidszczesniak.blockchain_platform.domain.model.ParticipationStatus
-import pl.dawidszczesniak.blockchain_platform.domain.usecase.GetParticipationProblemsUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.ParticipationProblem
+import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.ParticipationStatus
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetParticipationProblemsUseCase
 
 enum class MyParticipationFilter {
     All,

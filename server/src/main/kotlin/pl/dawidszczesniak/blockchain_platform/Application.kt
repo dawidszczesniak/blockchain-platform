@@ -9,8 +9,31 @@ import io.ktor.server.plugins.cors.routing.CORS
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import io.ktor.serialization.kotlinx.json.json
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import pl.dawidszczesniak.blockchain_platform.db.DashboardMetricsRefresher
+import pl.dawidszczesniak.blockchain_platform.db.DatabaseFactory
+import pl.dawidszczesniak.blockchain_platform.db.DbSchemaRunner
+import pl.dawidszczesniak.blockchain_platform.db.DbSeeder
+import pl.dawidszczesniak.blockchain_platform.db.PostgresConfig
+import pl.dawidszczesniak.blockchain_platform.feature.dashboard.controller.DashboardController
+import pl.dawidszczesniak.blockchain_platform.feature.dashboard.dao.DashboardDaoImpl
+import pl.dawidszczesniak.blockchain_platform.feature.dashboard.dbservice.DashboardDbServiceImpl
+import pl.dawidszczesniak.blockchain_platform.feature.dashboard.endpoint.dashboardRoutes
+import pl.dawidszczesniak.blockchain_platform.feature.dashboard.repository.DashboardReadRepositoryImpl
+import pl.dawidszczesniak.blockchain_platform.feature.dashboard.usecase.GetDashboardMetricsHistoryUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.dashboard.usecase.GetDashboardMetricsHistoryUseCaseImpl
+import pl.dawidszczesniak.blockchain_platform.feature.dashboard.usecase.GetDashboardUpdatesUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.dashboard.usecase.GetDashboardUpdatesUseCaseImpl
+import pl.dawidszczesniak.blockchain_platform.feature.problems.controller.ProblemController
+import pl.dawidszczesniak.blockchain_platform.feature.problems.dao.ProblemDaoImpl
+import pl.dawidszczesniak.blockchain_platform.feature.problems.dbservice.ProblemDbServiceImpl
+import pl.dawidszczesniak.blockchain_platform.feature.problems.endpoint.problemRoutes
+import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.ProblemReadRepositoryImpl
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetCreatedProblemsUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetCreatedProblemsUseCaseImpl
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetParticipationProblemsUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetParticipationProblemsUseCaseImpl
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetProblemSummariesUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetProblemSummariesUseCaseImpl
 
 fun main() {
     embeddedServer(Netty, port = SERVER_PORT, host = LOCAL_HOST, module = Application::module)
@@ -21,8 +44,40 @@ fun Application.module() {
     val envId = System.getenv("APP_ENV") ?: AppEnvironment.Local.id
     val appEnv = parseAppEnvironment(AppEnvironment.fromId(envId))
     val allowedHosts = resolveAllowedCorsHosts(appEnv)
-    val problemStore = PostgresProblemStore()
-    problemStore.initialize()
+    val postgresConfig = PostgresConfig.fromEnvironment()
+    val database = DatabaseFactory.connect(postgresConfig)
+    DbSchemaRunner(postgresConfig).applySchema()
+    DbSeeder(database).seedIfEmpty()
+    val dashboardMetricsRefresher = DashboardMetricsRefresher(database)
+    dashboardMetricsRefresher.refreshTodayMetrics()
+
+    val problemDao = ProblemDaoImpl(database)
+    val problemDbService = ProblemDbServiceImpl(problemDao)
+    val problemRepository = ProblemReadRepositoryImpl(problemDbService)
+    val getProblemSummariesUseCase: GetProblemSummariesUseCase = GetProblemSummariesUseCaseImpl(problemRepository)
+    val getCreatedProblemsUseCase: GetCreatedProblemsUseCase = GetCreatedProblemsUseCaseImpl(problemRepository)
+    val getParticipationProblemsUseCase: GetParticipationProblemsUseCase =
+        GetParticipationProblemsUseCaseImpl(problemRepository)
+    val problemController = ProblemController(
+        getProblemSummariesUseCase = getProblemSummariesUseCase,
+        getCreatedProblemsUseCase = getCreatedProblemsUseCase,
+        getParticipationProblemsUseCase = getParticipationProblemsUseCase,
+    )
+
+    val dashboardDao = DashboardDaoImpl(
+        database = database,
+        metricsRefresher = dashboardMetricsRefresher,
+    )
+    val dashboardDbService = DashboardDbServiceImpl(dashboardDao)
+    val dashboardRepository = DashboardReadRepositoryImpl(dashboardDbService)
+    val getDashboardMetricsHistoryUseCase: GetDashboardMetricsHistoryUseCase =
+        GetDashboardMetricsHistoryUseCaseImpl(dashboardRepository)
+    val getDashboardUpdatesUseCase: GetDashboardUpdatesUseCase =
+        GetDashboardUpdatesUseCaseImpl(dashboardRepository)
+    val dashboardController = DashboardController(
+        getDashboardMetricsHistoryUseCase = getDashboardMetricsHistoryUseCase,
+        getDashboardUpdatesUseCase = getDashboardUpdatesUseCase,
+    )
 
     install(CORS) {
         allowMethod(HttpMethod.Get)
@@ -42,38 +97,8 @@ fun Application.module() {
         get("/health") {
             call.respondText("OK")
         }
-        get("/problems") {
-            val problems = withContext(Dispatchers.IO) {
-                problemStore.fetchProblemSummaries()
-            }
-            call.respond(problems.map { it.toPayload() })
-        }
-        get("/problems/created") {
-            val problems = withContext(Dispatchers.IO) {
-                problemStore.fetchCreatedProblemsForDefaultUser()
-            }
-            call.respond(problems.map { it.toPayload() })
-        }
-        get("/problems/participation") {
-            val problems = withContext(Dispatchers.IO) {
-                problemStore.fetchParticipationProblemsForDefaultUser()
-            }
-            call.respond(problems.map { it.toPayload() })
-        }
-        get("/dashboard/metrics") {
-            val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 30
-            val metrics = withContext(Dispatchers.IO) {
-                problemStore.fetchDashboardMetricsHistory(limit = limit)
-            }
-            call.respond(metrics.map { it.toPayload() })
-        }
-        get("/dashboard/updates") {
-            val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 3
-            val updates = withContext(Dispatchers.IO) {
-                problemStore.fetchLatestProblemUpdates(limit = limit)
-            }
-            call.respond(updates.map { it.toPayload() })
-        }
+        problemRoutes(problemController)
+        dashboardRoutes(dashboardController)
     }
 }
 
