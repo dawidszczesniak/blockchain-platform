@@ -39,7 +39,6 @@ internal class PostgresProblemStore(
     fun initialize() {
         applySchema()
         seedProblemsIfEmpty()
-        seedWebsiteUpdatesIfEmpty()
         refreshTodayDashboardMetrics()
     }
 
@@ -191,22 +190,25 @@ internal class PostgresProblemStore(
         }
     }
 
-    fun fetchLatestWebsiteUpdates(limit: Int): List<WebsiteUpdate> {
+    fun fetchLatestProblemUpdates(limit: Int): List<RecentProblemUpdate> {
         val safeLimit = limit.coerceIn(1, 20)
         return transaction(database) {
-            WebsiteUpdatesTable
+            ProblemsTable
                 .selectAll()
                 .orderBy(
-                    WebsiteUpdatesTable.createdAt to SortOrder.DESC,
-                    WebsiteUpdatesTable.updateId to SortOrder.DESC,
+                    ProblemsTable.createdAt to SortOrder.DESC,
+                    ProblemsTable.problemId to SortOrder.DESC,
                 )
                 .limit(safeLimit)
                 .map { row ->
-                    WebsiteUpdate(
-                        id = row[WebsiteUpdatesTable.updateId],
-                        title = row[WebsiteUpdatesTable.title],
-                        body = row[WebsiteUpdatesTable.body],
-                        createdAt = row[WebsiteUpdatesTable.createdAt].toString(),
+                    RecentProblemUpdate(
+                        id = row[ProblemsTable.problemId],
+                        title = row[ProblemsTable.title],
+                        body = problemUpdateBody(
+                            description = row[ProblemsTable.description],
+                            prizeAmount = row[ProblemsTable.prizeAmount],
+                        ),
+                        createdAt = row[ProblemsTable.createdAt].toString(),
                     )
                 }
         }
@@ -316,28 +318,6 @@ internal class PostgresProblemStore(
                 problemId = secondProblemId,
                 winnerUserId = userIds[4],
                 payoutAmount = 40L,
-            )
-        }
-    }
-
-    private fun seedWebsiteUpdatesIfEmpty() {
-        transaction(database) {
-            val existingCount = WebsiteUpdatesTable.selectAll().count()
-            if (existingCount > 0L) {
-                return@transaction
-            }
-
-            insertWebsiteUpdate(
-                title = "Dashboard metrics enabled",
-                body = "Daily active challenges, prize pool, and submissions are now persisted."
-            )
-            insertWebsiteUpdate(
-                title = "Backend health polling shipped",
-                body = "Frontend now reacts to backend availability and shows maintenance mode."
-            )
-            insertWebsiteUpdate(
-                title = "Challenge lifecycle updated",
-                body = "Problem listing now distinguishes open and closed challenges from PostgreSQL."
             )
         }
     }
@@ -530,16 +510,6 @@ internal class PostgresProblemStore(
         }
     }
 
-    private fun insertWebsiteUpdate(
-        title: String,
-        body: String,
-    ) {
-        WebsiteUpdatesTable.insert {
-            it[WebsiteUpdatesTable.title] = title
-            it[WebsiteUpdatesTable.body] = body
-        }
-    }
-
     private fun calculateDashboardMetrics(metricDate: LocalDate): DashboardDailyMetric {
         val activeChallenges = ProblemsTable
             .selectAll()
@@ -570,6 +540,10 @@ internal class PostgresProblemStore(
         return "0x${index.toString(16).padStart(40, '0')}"
     }
 
+    private fun problemUpdateBody(description: String, prizeAmount: Long): String {
+        return "$description Prize: $prizeAmount USDC."
+    }
+
     private fun daysBetween(fromDate: LocalDate, toDate: LocalDate): Int {
         return ChronoUnit.DAYS.between(fromDate, toDate).toInt()
     }
@@ -587,7 +561,7 @@ internal data class DashboardDailyMetric(
     val submissionsCount: Int,
 )
 
-internal data class WebsiteUpdate(
+internal data class RecentProblemUpdate(
     val id: Long,
     val title: String,
     val body: String,
@@ -694,15 +668,6 @@ private object DashboardDailyMetricsTable : Table("dashboard_daily_metrics") {
     val submissionsCount = integer("submissions_count")
 
     override val primaryKey = PrimaryKey(metricDate)
-}
-
-private object WebsiteUpdatesTable : Table("website_updates") {
-    val updateId = long("update_id").autoIncrement()
-    val title = text("title")
-    val body = text("body")
-    val createdAt = datetime("created_at")
-
-    override val primaryKey = PrimaryKey(updateId)
 }
 
 private const val SCHEMA_RESOURCE_PATH = "db/schema.sql"

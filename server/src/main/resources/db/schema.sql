@@ -66,13 +66,6 @@ CREATE TABLE IF NOT EXISTS dashboard_daily_metrics (
     submissions_count INTEGER NOT NULL CHECK (submissions_count >= 0)
 );
 
-CREATE TABLE IF NOT EXISTS website_updates (
-    update_id BIGSERIAL PRIMARY KEY,
-    title TEXT NOT NULL,
-    body TEXT NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
 ALTER TABLE problems
     ALTER COLUMN prize_amount TYPE BIGINT USING prize_amount::BIGINT;
 
@@ -105,10 +98,7 @@ ALTER TABLE problem_submissions
 ALTER TABLE dashboard_daily_metrics
     DROP COLUMN IF EXISTS created_at;
 
-DROP INDEX IF EXISTS idx_website_updates_published_created_at;
-
-ALTER TABLE website_updates
-    DROP COLUMN IF EXISTS is_published;
+DROP TABLE IF EXISTS website_updates;
 
 DROP INDEX IF EXISTS idx_problem_participants_problem_id;
 
@@ -132,6 +122,3 @@ CREATE INDEX IF NOT EXISTS idx_problem_winners_winner_user_id
 
 CREATE INDEX IF NOT EXISTS idx_dashboard_daily_metrics_metric_date
     ON dashboard_daily_metrics(metric_date DESC);
-
-CREATE INDEX IF NOT EXISTS idx_website_updates_created_at
-    ON website_updates(created_at DESC);

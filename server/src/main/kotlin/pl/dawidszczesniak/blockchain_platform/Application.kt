@@ -70,7 +70,7 @@ fun Application.module() {
         get("/dashboard/updates") {
             val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 3
             val updates = withContext(Dispatchers.IO) {
-                problemStore.fetchLatestWebsiteUpdates(limit = limit)
+                problemStore.fetchLatestProblemUpdates(limit = limit)
             }
             call.respond(updates.map { it.toPayload() })
         }

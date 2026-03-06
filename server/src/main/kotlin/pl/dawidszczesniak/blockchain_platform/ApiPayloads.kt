@@ -54,7 +54,7 @@ internal data class DashboardDailyMetricPayload(
 )
 
 @Serializable
-internal data class WebsiteUpdatePayload(
+internal data class DashboardUpdatePayload(
     val id: Long,
     val title: String,
     val body: String,
@@ -113,8 +113,8 @@ internal fun DashboardDailyMetric.toPayload(): DashboardDailyMetricPayload {
     )
 }
 
-internal fun WebsiteUpdate.toPayload(): WebsiteUpdatePayload {
-    return WebsiteUpdatePayload(
+internal fun RecentProblemUpdate.toPayload(): DashboardUpdatePayload {
+    return DashboardUpdatePayload(
         id = id,
         title = title,
         body = body,

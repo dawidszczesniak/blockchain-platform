@@ -94,7 +94,7 @@
     <string name="home_stat_block_value">312</string>
     <string name="home_stat_block_note">+9% vs yesterday</string>
 
-    <string name="home_updates_title">Latest updates</string>
+    <string name="home_updates_title">Latest challenges</string>
     <string name="home_update_title_1">New challenge: ZK Proof Aggregation</string>
     <string name="home_update_body_1">Prize 25,000 USDC • 20 participants • 14 days left.</string>
     <string name="home_update_title_2">Validator v1.4 released</string>
