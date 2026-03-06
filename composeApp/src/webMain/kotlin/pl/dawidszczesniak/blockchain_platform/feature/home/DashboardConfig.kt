@@ -1,6 +1,11 @@
 package pl.dawidszczesniak.blockchain_platform.feature.home
 
-object DashboardConfig {
+class DashboardConfig(
     // Set to false to render only a centered "dashboard" label.
-    const val showFullDashboardContent: Boolean = true
-}
+    val showFullDashboardContent: Boolean = true,
+    // Section visibility toggles for Home dashboard.
+    val showHeroSection: Boolean = true,
+    val showStatsSection: Boolean = true,
+    val showLatestChallengesSection: Boolean = true,
+    val showJoinBuildersSection: Boolean = true,
+)

@@ -13,7 +13,11 @@ import kotlinx.coroutines.launch
 import pl.dawidszczesniak.blockchain_platform.data.DashboardRepository
 
 data class HomeState(
-    val showFullDashboardContent: Boolean = DashboardConfig.showFullDashboardContent,
+    val showFullDashboardContent: Boolean = true,
+    val showHeroSection: Boolean = true,
+    val showStatsSection: Boolean = true,
+    val showLatestChallengesSection: Boolean = true,
+    val showJoinBuildersSection: Boolean = true,
     val activeChallenges: Int? = null,
     val prizePoolAmount: Long? = null,
     val submissionsToday: Int? = null,
@@ -35,11 +39,12 @@ sealed interface HomeIntent {
 
 class HomeViewModel(
     private val dashboardRepository: DashboardRepository,
+    private val dashboardConfig: DashboardConfig,
     private val metricsLimit: Int = 30,
     private val updatesLimit: Int = 3,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    private val _state = MutableStateFlow(HomeState())
+    private val _state = MutableStateFlow(initialState())
     val state: StateFlow<HomeState> = _state.asStateFlow()
 
     init {
@@ -71,7 +76,11 @@ class HomeViewModel(
                 val previousMetric = orderedMetrics.getOrNull(1)
 
                 HomeState(
-                    showFullDashboardContent = DashboardConfig.showFullDashboardContent,
+                    showFullDashboardContent = dashboardConfig.showFullDashboardContent,
+                    showHeroSection = dashboardConfig.showHeroSection,
+                    showStatsSection = dashboardConfig.showStatsSection,
+                    showLatestChallengesSection = dashboardConfig.showLatestChallengesSection,
+                    showJoinBuildersSection = dashboardConfig.showJoinBuildersSection,
                     activeChallenges = latestMetric?.activeChallenges,
                     prizePoolAmount = latestMetric?.prizePoolAmount,
                     submissionsToday = latestMetric?.submissionsCount,
@@ -100,6 +109,17 @@ class HomeViewModel(
                 }
             }
         }
+    }
+
+    private fun initialState(): HomeState {
+        return HomeState(
+            showFullDashboardContent = dashboardConfig.showFullDashboardContent,
+            showHeroSection = dashboardConfig.showHeroSection,
+            showStatsSection = dashboardConfig.showStatsSection,
+            showLatestChallengesSection = dashboardConfig.showLatestChallengesSection,
+            showJoinBuildersSection = dashboardConfig.showJoinBuildersSection,
+            isLoading = true,
+        )
     }
 }
 

@@ -20,6 +20,7 @@ import pl.dawidszczesniak.blockchain_platform.domain.usecase.GetParticipationPro
 import pl.dawidszczesniak.blockchain_platform.domain.usecase.GetProblemListUseCase
 import pl.dawidszczesniak.blockchain_platform.app.AppViewModel
 import pl.dawidszczesniak.blockchain_platform.feature.create.CreateProblemViewModel
+import pl.dawidszczesniak.blockchain_platform.feature.home.DashboardConfig
 import pl.dawidszczesniak.blockchain_platform.feature.home.HomeViewModel
 import pl.dawidszczesniak.blockchain_platform.feature.login.LoginViewModel
 import pl.dawidszczesniak.blockchain_platform.feature.maintenance.BackendHealthViewModel
@@ -43,11 +44,12 @@ fun appModules() = module {
             fetchText = ::fetchBackendText,
         )
     }
+    single { DashboardConfig() }
     factory { GetProblemListUseCase(get()) }
     factory { GetCreatedProblemsUseCase(get()) }
     factory { GetParticipationProblemsUseCase(get()) }
     factory { AppViewModel() }
-    factory { HomeViewModel(get()) }
+    factory { HomeViewModel(get(), get()) }
     factory { LoginViewModel() }
     factory { SettingsViewModel() }
     factory { BackendHealthViewModel(get()) }

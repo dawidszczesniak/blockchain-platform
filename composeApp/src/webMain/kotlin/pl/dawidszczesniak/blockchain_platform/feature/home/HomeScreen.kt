@@ -85,9 +85,19 @@ fun HomeScreen(onNavigateToProblems: () -> Unit) {
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(24.dp)
     ) {
-        HeroSection(onNavigateToProblems = onNavigateToProblems)
-        StatsSection(state = state)
-        UpdatesSection(state = state)
+        if (state.showHeroSection) {
+            HeroSection(onNavigateToProblems = onNavigateToProblems)
+        }
+        if (state.showStatsSection) {
+            StatsSection(state = state)
+        }
+        if (state.showLatestChallengesSection || state.showJoinBuildersSection) {
+            UpdatesSection(
+                state = state,
+                showLatestChallenges = state.showLatestChallengesSection,
+                showJoinBuilders = state.showJoinBuildersSection,
+            )
+        }
     }
 }
 
@@ -268,53 +278,75 @@ private fun StatCard(
 }
 
 @Composable
-private fun UpdatesSection(state: HomeState) {
+private fun UpdatesSection(
+    state: HomeState,
+    showLatestChallenges: Boolean,
+    showJoinBuilders: Boolean,
+) {
+    if (!showLatestChallenges && !showJoinBuilders) {
+        return
+    }
+
     BoxWithConstraints {
         val stacked = maxWidth < 900.dp
         if (stacked) {
             Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
-                UpdatesList(state = state)
-                CommunityCard()
+                if (showLatestChallenges) {
+                    UpdatesList(state = state)
+                }
+                if (showJoinBuilders) {
+                    CommunityCard()
+                }
             }
         } else {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(
-                    text = stringResource(Res.string.home_updates_title),
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Box(modifier = Modifier.fillMaxWidth()) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(IntrinsicSize.Min),
-                        horizontalArrangement = Arrangement.spacedBy(18.dp),
-                        verticalAlignment = Alignment.Top
-                    ) {
-                        Box(
-                            modifier = Modifier.weight(1.2f),
-                            contentAlignment = Alignment.TopStart
-                        ) {
-                            UpdatesList(
-                                modifier = Modifier.fillMaxWidth(),
-                                showHeader = false,
-                                state = state,
-                            )
-                        }
-                        Box(
+            if (showLatestChallenges && showJoinBuilders) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        text = stringResource(Res.string.home_updates_title),
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        Row(
                             modifier = Modifier
-                                .weight(0.8f)
-                                .fillMaxHeight(),
-                            contentAlignment = Alignment.TopStart
+                                .fillMaxWidth()
+                                .height(IntrinsicSize.Min),
+                            horizontalArrangement = Arrangement.spacedBy(18.dp),
+                            verticalAlignment = Alignment.Top
                         ) {
-                            CommunityCard(
+                            Box(
+                                modifier = Modifier.weight(1.2f),
+                                contentAlignment = Alignment.TopStart
+                            ) {
+                                UpdatesList(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    showHeader = false,
+                                    state = state,
+                                )
+                            }
+                            Box(
                                 modifier = Modifier
-                                    .fillMaxWidth()
-                                    .fillMaxHeight()
-                            )
+                                    .weight(0.8f)
+                                    .fillMaxHeight(),
+                                contentAlignment = Alignment.TopStart
+                            ) {
+                                CommunityCard(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .fillMaxHeight()
+                                )
+                            }
                         }
                     }
                 }
+            } else if (showLatestChallenges) {
+                UpdatesList(
+                    modifier = Modifier.fillMaxWidth(),
+                    showHeader = true,
+                    state = state,
+                )
+            } else if (showJoinBuilders) {
+                CommunityCard(modifier = Modifier.fillMaxWidth())
             }
         }
     }
