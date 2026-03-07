@@ -1,13 +1,11 @@
 package pl.dawidszczesniak.blockchain_platform.feature.problems.dao
 
-import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.ResultRow
 import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.count
 import org.jetbrains.exposed.sql.innerJoin
 import org.jetbrains.exposed.sql.select
 import org.jetbrains.exposed.sql.selectAll
-import org.jetbrains.exposed.sql.transactions.transaction
 import pl.dawidszczesniak.blockchain_platform.db.ProblemLifecycleStatus
 import pl.dawidszczesniak.blockchain_platform.db.tables.ProblemParticipantsTable
 import pl.dawidszczesniak.blockchain_platform.db.tables.ProblemSubmissionsTable
@@ -32,103 +30,85 @@ internal interface ProblemDao {
     fun fetchDefaultUserId(): Long?
 }
 
-internal class ProblemDaoImpl(
-    private val database: Database,
-) : ProblemDao {
+internal class ProblemDaoImpl : ProblemDao {
     override fun fetchOpenProblemRows(): List<ResultRow> {
-        return transaction(database) {
-            ProblemsTable
-                .selectAll()
-                .where { ProblemsTable.problemStatus eq ProblemLifecycleStatus.Open.dbValue }
-                .orderBy(
-                    ProblemsTable.createdAt to SortOrder.DESC,
-                    ProblemsTable.problemId to SortOrder.DESC,
-                )
-                .toList()
-        }
+        return ProblemsTable
+            .selectAll()
+            .where { ProblemsTable.problemStatus eq ProblemLifecycleStatus.Open.dbValue }
+            .orderBy(
+                ProblemsTable.createdAt to SortOrder.DESC,
+                ProblemsTable.problemId to SortOrder.DESC,
+            )
+            .toList()
     }
 
     override fun fetchCreatedProblemRowsForDefaultUser(): List<ResultRow> {
-        return transaction(database) {
-            val userId = resolveDefaultUserId() ?: return@transaction emptyList()
-            ProblemsTable
-                .selectAll()
-                .where { ProblemsTable.createdByUserId eq userId }
-                .orderBy(
-                    ProblemsTable.createdAt to SortOrder.DESC,
-                    ProblemsTable.problemId to SortOrder.DESC,
-                )
-                .toList()
-        }
+        val userId = resolveDefaultUserId() ?: return emptyList()
+        return ProblemsTable
+            .selectAll()
+            .where { ProblemsTable.createdByUserId eq userId }
+            .orderBy(
+                ProblemsTable.createdAt to SortOrder.DESC,
+                ProblemsTable.problemId to SortOrder.DESC,
+            )
+            .toList()
     }
 
     override fun fetchParticipationProblemRowsForDefaultUser(): List<ResultRow> {
-        return transaction(database) {
-            val userId = resolveDefaultUserId() ?: return@transaction emptyList()
-            (ProblemParticipantsTable innerJoin ProblemsTable)
-                .selectAll()
-                .where { ProblemParticipantsTable.userId eq userId }
-                .orderBy(
-                    ProblemsTable.createdAt to SortOrder.DESC,
-                    ProblemsTable.problemId to SortOrder.DESC,
-                )
-                .toList()
-        }
+        val userId = resolveDefaultUserId() ?: return emptyList()
+        return (ProblemParticipantsTable innerJoin ProblemsTable)
+            .selectAll()
+            .where { ProblemParticipantsTable.userId eq userId }
+            .orderBy(
+                ProblemsTable.createdAt to SortOrder.DESC,
+                ProblemsTable.problemId to SortOrder.DESC,
+            )
+            .toList()
     }
 
     override fun fetchParticipantCountRows(): List<ResultRow> {
-        return transaction(database) {
-            ProblemParticipantsTable
-                .select(ProblemParticipantsTable.problemId, ProblemRowColumns.participantCount)
-                .groupBy(ProblemParticipantsTable.problemId)
-                .toList()
-        }
+        return ProblemParticipantsTable
+            .select(ProblemParticipantsTable.problemId, ProblemRowColumns.participantCount)
+            .groupBy(ProblemParticipantsTable.problemId)
+            .toList()
     }
 
     override fun fetchSubmissionCountRows(): List<ResultRow> {
-        return transaction(database) {
-            ProblemSubmissionsTable
-                .select(ProblemSubmissionsTable.problemId, ProblemRowColumns.submissionCount)
-                .groupBy(ProblemSubmissionsTable.problemId)
-                .toList()
-        }
+        return ProblemSubmissionsTable
+            .select(ProblemSubmissionsTable.problemId, ProblemRowColumns.submissionCount)
+            .groupBy(ProblemSubmissionsTable.problemId)
+            .toList()
     }
 
     override fun fetchSubmissionAttemptRows(): List<ResultRow> {
-        return transaction(database) {
-            ProblemSubmissionsTable
-                .select(
-                    ProblemSubmissionsTable.problemId,
-                    ProblemSubmissionsTable.userId,
-                    ProblemRowColumns.attemptCount,
-                )
-                .groupBy(ProblemSubmissionsTable.problemId, ProblemSubmissionsTable.userId)
-                .toList()
-        }
+        return ProblemSubmissionsTable
+            .select(
+                ProblemSubmissionsTable.problemId,
+                ProblemSubmissionsTable.userId,
+                ProblemRowColumns.attemptCount,
+            )
+            .groupBy(ProblemSubmissionsTable.problemId, ProblemSubmissionsTable.userId)
+            .toList()
     }
 
     override fun fetchWinnerRows(): List<ResultRow> {
-        return transaction(database) {
-            ProblemWinnersTable
-                .innerJoin(
-                    UsersTable,
-                    { ProblemWinnersTable.winnerUserId },
-                    { UsersTable.userId },
-                )
-                .selectAll()
-                .orderBy(
-                    ProblemWinnersTable.problemId to SortOrder.ASC,
-                    ProblemWinnersTable.wonAt to SortOrder.DESC,
-                    ProblemWinnersTable.winnerUserId to SortOrder.DESC,
-                )
-                .toList()
-        }
+        return ProblemWinnersTable
+            .innerJoin(
+                UsersTable,
+                { ProblemWinnersTable.winnerUserId },
+                { UsersTable.userId },
+            )
+            .selectAll()
+            .orderBy(
+                ProblemWinnersTable.problemId to SortOrder.ASC,
+                ProblemWinnersTable.wonAt to SortOrder.DESC,
+                ProblemWinnersTable.winnerUserId to SortOrder.DESC,
+            )
+            .toList()
     }
 
     override fun fetchDefaultUserId(): Long? {
-        return transaction(database) {
-            resolveDefaultUserId()
-        }
+        return resolveDefaultUserId()
     }
 
     private fun resolveDefaultUserId(): Long? {

@@ -7,6 +7,8 @@ import pl.dawidszczesniak.blockchain_platform.db.DatabaseBootstrapper
 import pl.dawidszczesniak.blockchain_platform.db.DatabaseFactory
 import pl.dawidszczesniak.blockchain_platform.db.DbSchemaRunner
 import pl.dawidszczesniak.blockchain_platform.db.DbSeeder
+import pl.dawidszczesniak.blockchain_platform.db.DbTransactionRunner
+import pl.dawidszczesniak.blockchain_platform.db.ExposedDbTransactionRunner
 import pl.dawidszczesniak.blockchain_platform.db.PostgresConfig
 import pl.dawidszczesniak.blockchain_platform.feature.dashboard.controller.DashboardController
 import pl.dawidszczesniak.blockchain_platform.feature.dashboard.dao.DashboardDao
@@ -32,20 +34,22 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetProble
 internal fun serverModules() = module {
     single { PostgresConfig.fromEnvironment() }
     single<Database> { DatabaseFactory.connect(get()) }
-    single { DbSchemaRunner(get()) }
-    single { DbSeeder(get()) }
-    single { DashboardMetricsRefresher(get()) }
-    single { DatabaseBootstrapper(get(), get(), get()) }
+    single<DbTransactionRunner> { ExposedDbTransactionRunner(get()) }
 
-    single<ProblemDao> { ProblemDaoImpl(get()) }
-    single<ProblemReadRepository> { ProblemReadRepositoryImpl(get()) }
+    single { DbSchemaRunner(get()) }
+    single { DbSeeder() }
+    single { DashboardMetricsRefresher() }
+    single { DatabaseBootstrapper(get(), get(), get(), get()) }
+
+    single<ProblemDao> { ProblemDaoImpl() }
+    single<ProblemReadRepository> { ProblemReadRepositoryImpl(get(), get()) }
     factory<GetProblemSummariesUseCase> { GetProblemSummariesUseCaseImpl(get()) }
     factory<GetCreatedProblemsUseCase> { GetCreatedProblemsUseCaseImpl(get()) }
     factory<GetParticipationProblemsUseCase> { GetParticipationProblemsUseCaseImpl(get()) }
     factory { ProblemController(get(), get(), get()) }
 
-    single<DashboardDao> { DashboardDaoImpl(get(), get()) }
-    single<DashboardReadRepository> { DashboardReadRepositoryImpl(get()) }
+    single<DashboardDao> { DashboardDaoImpl(get()) }
+    single<DashboardReadRepository> { DashboardReadRepositoryImpl(get(), get()) }
     factory<GetDashboardMetricsHistoryUseCase> { GetDashboardMetricsHistoryUseCaseImpl(get()) }
     factory<GetDashboardUpdatesUseCase> { GetDashboardUpdatesUseCaseImpl(get()) }
     factory { DashboardController(get(), get()) }

@@ -1,5 +1,6 @@
 package pl.dawidszczesniak.blockchain_platform.feature.dashboard.repository
 
+import pl.dawidszczesniak.blockchain_platform.db.DbTransactionRunner
 import pl.dawidszczesniak.blockchain_platform.db.tables.DashboardDailyMetricsTable
 import pl.dawidszczesniak.blockchain_platform.db.tables.ProblemsTable
 import pl.dawidszczesniak.blockchain_platform.feature.dashboard.dao.DashboardDao
@@ -13,31 +14,36 @@ internal interface DashboardReadRepository {
 
 internal class DashboardReadRepositoryImpl(
     private val dashboardDao: DashboardDao,
+    private val transactionRunner: DbTransactionRunner,
 ) : DashboardReadRepository {
     override fun fetchMetricsHistory(limit: Int): List<DashboardMetric> {
-        dashboardDao.refreshTodayMetrics()
+        return transactionRunner.inTransaction {
+            dashboardDao.refreshTodayMetrics()
 
-        return dashboardDao.fetchMetricsRows(limit = limit).map { row ->
-            DashboardMetric(
-                metricDate = row[DashboardDailyMetricsTable.metricDate].toString(),
-                activeChallenges = row[DashboardDailyMetricsTable.activeChallenges],
-                prizePoolAmount = row[DashboardDailyMetricsTable.prizePoolAmount],
-                submissionsCount = row[DashboardDailyMetricsTable.submissionsCount],
-            )
+            dashboardDao.fetchMetricsRows(limit = limit).map { row ->
+                DashboardMetric(
+                    metricDate = row[DashboardDailyMetricsTable.metricDate].toString(),
+                    activeChallenges = row[DashboardDailyMetricsTable.activeChallenges],
+                    prizePoolAmount = row[DashboardDailyMetricsTable.prizePoolAmount],
+                    submissionsCount = row[DashboardDailyMetricsTable.submissionsCount],
+                )
+            }
         }
     }
 
     override fun fetchLatestUpdates(limit: Int): List<DashboardUpdate> {
-        return dashboardDao.fetchLatestUpdateRows(limit = limit).map { row ->
-            DashboardUpdate(
-                id = row[ProblemsTable.problemId],
-                title = row[ProblemsTable.title],
-                body = problemUpdateBody(
-                    description = row[ProblemsTable.description],
-                    prizeAmount = row[ProblemsTable.prizeAmount],
-                ),
-                createdAt = row[ProblemsTable.createdAt].toString(),
-            )
+        return transactionRunner.inTransaction {
+            dashboardDao.fetchLatestUpdateRows(limit = limit).map { row ->
+                DashboardUpdate(
+                    id = row[ProblemsTable.problemId],
+                    title = row[ProblemsTable.title],
+                    body = problemUpdateBody(
+                        description = row[ProblemsTable.description],
+                        prizeAmount = row[ProblemsTable.prizeAmount],
+                    ),
+                    createdAt = row[ProblemsTable.createdAt].toString(),
+                )
+            }
         }
     }
 

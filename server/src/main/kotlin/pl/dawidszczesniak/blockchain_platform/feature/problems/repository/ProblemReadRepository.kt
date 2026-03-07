@@ -3,6 +3,7 @@ package pl.dawidszczesniak.blockchain_platform.feature.problems.repository
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 import kotlin.math.max
+import pl.dawidszczesniak.blockchain_platform.db.DbTransactionRunner
 import pl.dawidszczesniak.blockchain_platform.db.ProblemLifecycleStatus
 import pl.dawidszczesniak.blockchain_platform.db.tables.ProblemParticipantsTable
 import pl.dawidszczesniak.blockchain_platform.db.tables.ProblemSubmissionsTable
@@ -25,107 +26,114 @@ internal interface ProblemReadRepository {
 
 internal class ProblemReadRepositoryImpl(
     private val problemDao: ProblemDao,
+    private val transactionRunner: DbTransactionRunner,
 ) : ProblemReadRepository {
     override fun fetchProblemSummaries(): List<ProblemSummary> {
-        val participantCounts = participantCountsByProblem()
-        val today = LocalDate.now()
+        return transactionRunner.inTransaction {
+            val participantCounts = participantCountsByProblem()
+            val today = LocalDate.now()
 
-        return problemDao.fetchOpenProblemRows().map { row ->
-            val problemId = row[ProblemsTable.problemId]
-            val daysToJoinEnd = daysBetween(today, row[ProblemsTable.joinUntilDate]).coerceAtLeast(0)
-            ProblemSummary(
-                id = problemId.toInt(),
-                title = row[ProblemsTable.title],
-                description = row[ProblemsTable.description],
-                prizeAmount = row[ProblemsTable.prizeAmount],
-                entryFeeAmount = row[ProblemsTable.entryFeeAmount],
-                requiredParticipants = row[ProblemsTable.requiredParticipants],
-                registeredParticipants = participantCounts[problemId] ?: 0,
-                daysToStart = daysToJoinEnd,
-                daysToJoinEnd = daysToJoinEnd,
-                joinUntilLabel = row[ProblemsTable.joinUntilDate].toString(),
-                submitUntilLabel = row[ProblemsTable.submitUntilDate].toString(),
-            )
+            problemDao.fetchOpenProblemRows().map { row ->
+                val problemId = row[ProblemsTable.problemId]
+                val daysToJoinEnd = daysBetween(today, row[ProblemsTable.joinUntilDate]).coerceAtLeast(0)
+                ProblemSummary(
+                    id = problemId.toInt(),
+                    title = row[ProblemsTable.title],
+                    description = row[ProblemsTable.description],
+                    prizeAmount = row[ProblemsTable.prizeAmount],
+                    entryFeeAmount = row[ProblemsTable.entryFeeAmount],
+                    requiredParticipants = row[ProblemsTable.requiredParticipants],
+                    registeredParticipants = participantCounts[problemId] ?: 0,
+                    daysToStart = daysToJoinEnd,
+                    daysToJoinEnd = daysToJoinEnd,
+                    joinUntilLabel = row[ProblemsTable.joinUntilDate].toString(),
+                    submitUntilLabel = row[ProblemsTable.submitUntilDate].toString(),
+                )
+            }
         }
     }
 
     override fun fetchCreatedProblemsForDefaultUser(): List<CreatedProblem> {
-        val participantCounts = participantCountsByProblem()
-        val submissionCounts = submissionCountsByProblem()
-        val winnerByProblem = winnerInfoByProblem()
-        val today = LocalDate.now()
+        return transactionRunner.inTransaction {
+            val participantCounts = participantCountsByProblem()
+            val submissionCounts = submissionCountsByProblem()
+            val winnerByProblem = winnerInfoByProblem()
+            val today = LocalDate.now()
 
-        return problemDao.fetchCreatedProblemRowsForDefaultUser().map { row ->
-            val problemId = row[ProblemsTable.problemId]
-            val daysToJoinEnd = daysBetween(today, row[ProblemsTable.joinUntilDate])
-            val daysToSubmitEnd = daysBetween(today, row[ProblemsTable.submitUntilDate])
-            val winnerInfo = winnerByProblem[problemId]
-            val status = createdProblemStatus(
-                problemStatus = row[ProblemsTable.problemStatus],
-                daysToJoinEnd = daysToJoinEnd,
-                daysToSubmitEnd = daysToSubmitEnd,
-                winnerWallet = winnerInfo?.walletAddress,
-            )
+            problemDao.fetchCreatedProblemRowsForDefaultUser().map { row ->
+                val problemId = row[ProblemsTable.problemId]
+                val daysToJoinEnd = daysBetween(today, row[ProblemsTable.joinUntilDate])
+                val daysToSubmitEnd = daysBetween(today, row[ProblemsTable.submitUntilDate])
+                val winnerInfo = winnerByProblem[problemId]
+                val status = createdProblemStatus(
+                    problemStatus = row[ProblemsTable.problemStatus],
+                    daysToJoinEnd = daysToJoinEnd,
+                    daysToSubmitEnd = daysToSubmitEnd,
+                    winnerWallet = winnerInfo?.walletAddress,
+                )
 
-            CreatedProblem(
-                id = problemId.toInt(),
-                title = row[ProblemsTable.title],
-                status = status,
-                requiredParticipants = row[ProblemsTable.requiredParticipants],
-                registeredParticipants = participantCounts[problemId] ?: 0,
-                submissions = submissionCounts[problemId] ?: 0,
-                startedOn = if (status == CreatedProblemStatus.Started) {
-                    row[ProblemsTable.joinUntilDate].toString()
-                } else {
-                    null
-                },
-                finishedOn = if (status == CreatedProblemStatus.Completed) {
-                    winnerInfo?.wonAtLabel ?: row[ProblemsTable.submitUntilDate].toString()
-                } else {
-                    null
-                },
-                registrationEnds = if (status == CreatedProblemStatus.Waiting) {
-                    row[ProblemsTable.joinUntilDate].toString()
-                } else {
-                    null
-                },
-                timeElapsed = if (status == CreatedProblemStatus.Expired) {
-                    row[ProblemsTable.submitUntilDate].toString()
-                } else {
-                    null
-                },
-                winner = if (status == CreatedProblemStatus.Completed) {
-                    winnerInfo?.walletAddress
-                } else {
-                    null
-                },
-            )
+                CreatedProblem(
+                    id = problemId.toInt(),
+                    title = row[ProblemsTable.title],
+                    status = status,
+                    requiredParticipants = row[ProblemsTable.requiredParticipants],
+                    registeredParticipants = participantCounts[problemId] ?: 0,
+                    submissions = submissionCounts[problemId] ?: 0,
+                    startedOn = if (status == CreatedProblemStatus.Started) {
+                        row[ProblemsTable.joinUntilDate].toString()
+                    } else {
+                        null
+                    },
+                    finishedOn = if (status == CreatedProblemStatus.Completed) {
+                        winnerInfo?.wonAtLabel ?: row[ProblemsTable.submitUntilDate].toString()
+                    } else {
+                        null
+                    },
+                    registrationEnds = if (status == CreatedProblemStatus.Waiting) {
+                        row[ProblemsTable.joinUntilDate].toString()
+                    } else {
+                        null
+                    },
+                    timeElapsed = if (status == CreatedProblemStatus.Expired) {
+                        row[ProblemsTable.submitUntilDate].toString()
+                    } else {
+                        null
+                    },
+                    winner = if (status == CreatedProblemStatus.Completed) {
+                        winnerInfo?.walletAddress
+                    } else {
+                        null
+                    },
+                )
+            }
         }
     }
 
     override fun fetchParticipationProblemsForDefaultUser(): List<ParticipationProblem> {
-        val userId = problemDao.fetchDefaultUserId() ?: return emptyList()
-        val participantCounts = participantCountsByProblem()
-        val attemptCounts = submissionAttemptsByProblemAndUser()
-        val today = LocalDate.now()
+        return transactionRunner.inTransaction {
+            val userId = problemDao.fetchDefaultUserId() ?: return@inTransaction emptyList()
+            val participantCounts = participantCountsByProblem()
+            val attemptCounts = submissionAttemptsByProblemAndUser()
+            val today = LocalDate.now()
 
-        return problemDao.fetchParticipationProblemRowsForDefaultUser().map { row ->
-            val problemId = row[ProblemsTable.problemId]
-            val attempts = attemptCounts[problemId to userId] ?: 0
-            val daysToSubmitEnd = daysBetween(today, row[ProblemsTable.submitUntilDate])
+            problemDao.fetchParticipationProblemRowsForDefaultUser().map { row ->
+                val problemId = row[ProblemsTable.problemId]
+                val attempts = attemptCounts[problemId to userId] ?: 0
+                val daysToSubmitEnd = daysBetween(today, row[ProblemsTable.submitUntilDate])
 
-            ParticipationProblem(
-                id = problemId.toInt(),
-                title = row[ProblemsTable.title],
-                status = if (attempts > 0) {
-                    ParticipationStatus.Submitted
-                } else {
-                    ParticipationStatus.NotSubmitted
-                },
-                timeLeftLabel = "${max(0, daysToSubmitEnd)}d",
-                participants = participantCounts[problemId] ?: 0,
-                attemptsCount = attempts,
-            )
+                ParticipationProblem(
+                    id = problemId.toInt(),
+                    title = row[ProblemsTable.title],
+                    status = if (attempts > 0) {
+                        ParticipationStatus.Submitted
+                    } else {
+                        ParticipationStatus.NotSubmitted
+                    },
+                    timeLeftLabel = "${max(0, daysToSubmitEnd)}d",
+                    participants = participantCounts[problemId] ?: 0,
+                    attemptsCount = attempts,
+                )
+            }
         }
     }
 

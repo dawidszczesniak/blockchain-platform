@@ -4,10 +4,13 @@ internal class DatabaseBootstrapper(
     private val schemaRunner: DbSchemaRunner,
     private val seeder: DbSeeder,
     private val dashboardMetricsRefresher: DashboardMetricsRefresher,
+    private val transactionRunner: DbTransactionRunner,
 ) {
     fun bootstrap() {
         schemaRunner.applySchema()
-        seeder.seedIfEmpty()
-        dashboardMetricsRefresher.refreshTodayMetrics()
+        transactionRunner.inTransaction {
+            seeder.seedIfEmpty()
+            dashboardMetricsRefresher.refreshTodayMetrics()
+        }
     }
 }

@@ -1,10 +1,8 @@
 package pl.dawidszczesniak.blockchain_platform.feature.dashboard.dao
 
-import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.ResultRow
 import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.selectAll
-import org.jetbrains.exposed.sql.transactions.transaction
 import pl.dawidszczesniak.blockchain_platform.db.DashboardMetricsRefresher
 import pl.dawidszczesniak.blockchain_platform.db.tables.DashboardDailyMetricsTable
 import pl.dawidszczesniak.blockchain_platform.db.tables.ProblemsTable
@@ -16,7 +14,6 @@ internal interface DashboardDao {
 }
 
 internal class DashboardDaoImpl(
-    private val database: Database,
     private val metricsRefresher: DashboardMetricsRefresher,
 ) : DashboardDao {
     override fun refreshTodayMetrics() {
@@ -26,27 +23,23 @@ internal class DashboardDaoImpl(
     override fun fetchMetricsRows(limit: Int): List<ResultRow> {
         val safeLimit = limit.coerceIn(1, 365)
 
-        return transaction(database) {
-            DashboardDailyMetricsTable
-                .selectAll()
-                .orderBy(DashboardDailyMetricsTable.metricDate to SortOrder.DESC)
-                .limit(safeLimit)
-                .toList()
-        }
+        return DashboardDailyMetricsTable
+            .selectAll()
+            .orderBy(DashboardDailyMetricsTable.metricDate to SortOrder.DESC)
+            .limit(safeLimit)
+            .toList()
     }
 
     override fun fetchLatestUpdateRows(limit: Int): List<ResultRow> {
         val safeLimit = limit.coerceIn(1, 20)
 
-        return transaction(database) {
-            ProblemsTable
-                .selectAll()
-                .orderBy(
-                    ProblemsTable.createdAt to SortOrder.DESC,
-                    ProblemsTable.problemId to SortOrder.DESC,
-                )
-                .limit(safeLimit)
-                .toList()
-        }
+        return ProblemsTable
+            .selectAll()
+            .orderBy(
+                ProblemsTable.createdAt to SortOrder.DESC,
+                ProblemsTable.problemId to SortOrder.DESC,
+            )
+            .limit(safeLimit)
+            .toList()
     }
 }
