@@ -1,26 +1,29 @@
 package pl.dawidszczesniak.blockchain_platform.feature.dashboard.dao
 
 import org.jetbrains.exposed.sql.Database
+import org.jetbrains.exposed.sql.ResultRow
 import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
-import pl.dawidszczesniak.blockchain_platform.feature.dashboard.domain.DashboardMetric
-import pl.dawidszczesniak.blockchain_platform.feature.dashboard.domain.DashboardUpdate
 import pl.dawidszczesniak.blockchain_platform.db.DashboardMetricsRefresher
 import pl.dawidszczesniak.blockchain_platform.db.tables.DashboardDailyMetricsTable
 import pl.dawidszczesniak.blockchain_platform.db.tables.ProblemsTable
 
 internal interface DashboardDao {
-    fun fetchMetricsHistory(limit: Int): List<DashboardMetric>
-    fun fetchLatestUpdates(limit: Int): List<DashboardUpdate>
+    fun refreshTodayMetrics()
+    fun fetchMetricsRows(limit: Int): List<ResultRow>
+    fun fetchLatestUpdateRows(limit: Int): List<ResultRow>
 }
 
 internal class DashboardDaoImpl(
     private val database: Database,
     private val metricsRefresher: DashboardMetricsRefresher,
 ) : DashboardDao {
-    override fun fetchMetricsHistory(limit: Int): List<DashboardMetric> {
+    override fun refreshTodayMetrics() {
         metricsRefresher.refreshTodayMetrics()
+    }
+
+    override fun fetchMetricsRows(limit: Int): List<ResultRow> {
         val safeLimit = limit.coerceIn(1, 365)
 
         return transaction(database) {
@@ -28,18 +31,11 @@ internal class DashboardDaoImpl(
                 .selectAll()
                 .orderBy(DashboardDailyMetricsTable.metricDate to SortOrder.DESC)
                 .limit(safeLimit)
-                .map { row ->
-                    DashboardMetric(
-                        metricDate = row[DashboardDailyMetricsTable.metricDate].toString(),
-                        activeChallenges = row[DashboardDailyMetricsTable.activeChallenges],
-                        prizePoolAmount = row[DashboardDailyMetricsTable.prizePoolAmount],
-                        submissionsCount = row[DashboardDailyMetricsTable.submissionsCount],
-                    )
-                }
+                .toList()
         }
     }
 
-    override fun fetchLatestUpdates(limit: Int): List<DashboardUpdate> {
+    override fun fetchLatestUpdateRows(limit: Int): List<ResultRow> {
         val safeLimit = limit.coerceIn(1, 20)
 
         return transaction(database) {
@@ -50,21 +46,7 @@ internal class DashboardDaoImpl(
                     ProblemsTable.problemId to SortOrder.DESC,
                 )
                 .limit(safeLimit)
-                .map { row ->
-                    DashboardUpdate(
-                        id = row[ProblemsTable.problemId],
-                        title = row[ProblemsTable.title],
-                        body = problemUpdateBody(
-                            description = row[ProblemsTable.description],
-                            prizeAmount = row[ProblemsTable.prizeAmount],
-                        ),
-                        createdAt = row[ProblemsTable.createdAt].toString(),
-                    )
-                }
+                .toList()
         }
-    }
-
-    private fun problemUpdateBody(description: String, prizeAmount: Long): String {
-        return "$description Prize: $prizeAmount USDC."
     }
 }

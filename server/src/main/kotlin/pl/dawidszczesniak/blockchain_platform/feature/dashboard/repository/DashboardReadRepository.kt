@@ -1,6 +1,8 @@
 package pl.dawidszczesniak.blockchain_platform.feature.dashboard.repository
 
-import pl.dawidszczesniak.blockchain_platform.feature.dashboard.dbservice.DashboardDbService
+import pl.dawidszczesniak.blockchain_platform.db.tables.DashboardDailyMetricsTable
+import pl.dawidszczesniak.blockchain_platform.db.tables.ProblemsTable
+import pl.dawidszczesniak.blockchain_platform.feature.dashboard.dao.DashboardDao
 import pl.dawidszczesniak.blockchain_platform.feature.dashboard.domain.DashboardMetric
 import pl.dawidszczesniak.blockchain_platform.feature.dashboard.domain.DashboardUpdate
 
@@ -10,13 +12,36 @@ internal interface DashboardReadRepository {
 }
 
 internal class DashboardReadRepositoryImpl(
-    private val dbService: DashboardDbService,
+    private val dashboardDao: DashboardDao,
 ) : DashboardReadRepository {
     override fun fetchMetricsHistory(limit: Int): List<DashboardMetric> {
-        return dbService.fetchMetricsHistory(limit = limit)
+        dashboardDao.refreshTodayMetrics()
+
+        return dashboardDao.fetchMetricsRows(limit = limit).map { row ->
+            DashboardMetric(
+                metricDate = row[DashboardDailyMetricsTable.metricDate].toString(),
+                activeChallenges = row[DashboardDailyMetricsTable.activeChallenges],
+                prizePoolAmount = row[DashboardDailyMetricsTable.prizePoolAmount],
+                submissionsCount = row[DashboardDailyMetricsTable.submissionsCount],
+            )
+        }
     }
 
     override fun fetchLatestUpdates(limit: Int): List<DashboardUpdate> {
-        return dbService.fetchLatestUpdates(limit = limit)
+        return dashboardDao.fetchLatestUpdateRows(limit = limit).map { row ->
+            DashboardUpdate(
+                id = row[ProblemsTable.problemId],
+                title = row[ProblemsTable.title],
+                body = problemUpdateBody(
+                    description = row[ProblemsTable.description],
+                    prizeAmount = row[ProblemsTable.prizeAmount],
+                ),
+                createdAt = row[ProblemsTable.createdAt].toString(),
+            )
+        }
+    }
+
+    private fun problemUpdateBody(description: String, prizeAmount: Long): String {
+        return "$description Prize: $prizeAmount USDC."
     }
 }
