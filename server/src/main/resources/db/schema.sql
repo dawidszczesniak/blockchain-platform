@@ -35,6 +35,14 @@ CREATE TABLE IF NOT EXISTS problem_participants (
     PRIMARY KEY (problem_id, user_id)
 );
 
+CREATE TABLE IF NOT EXISTS problem_tests (
+    problem_test_id BIGSERIAL PRIMARY KEY,
+    problem_id BIGINT NOT NULL REFERENCES problems(problem_id) ON DELETE CASCADE,
+    test_order INTEGER NOT NULL CHECK (test_order > 0),
+    validator_code TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS problem_submissions (
     submission_id BIGSERIAL PRIMARY KEY,
     problem_id BIGINT NOT NULL,
@@ -104,6 +112,9 @@ DROP INDEX IF EXISTS idx_problem_participants_problem_id;
 
 CREATE INDEX IF NOT EXISTS idx_problem_participants_user_id
     ON problem_participants(user_id);
+
+CREATE INDEX IF NOT EXISTS idx_problem_tests_problem_id
+    ON problem_tests(problem_id);
 
 CREATE INDEX IF NOT EXISTS idx_problem_submissions_user_id
     ON problem_submissions(user_id);

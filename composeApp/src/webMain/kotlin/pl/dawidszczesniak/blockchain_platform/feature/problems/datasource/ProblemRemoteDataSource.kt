@@ -8,7 +8,10 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
+import kotlinx.serialization.encodeToString
 import pl.dawidszczesniak.blockchain_platform.network.HttpTextClient
+import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.CreateProblemRequestDto
+import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.CreateProblemResponseDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.CreatedProblemDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ParticipationProblemDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ProblemSummaryDto
@@ -17,6 +20,7 @@ interface ProblemRemoteDataSource {
     suspend fun fetchProblems(): List<ProblemSummaryDto>
     suspend fun fetchCreatedProblems(): List<CreatedProblemDto>
     suspend fun fetchParticipationProblems(): List<ParticipationProblemDto>
+    suspend fun createProblem(request: CreateProblemRequestDto): CreateProblemResponseDto
 }
 
 class ProblemRemoteDataSourceImpl(
@@ -82,6 +86,16 @@ class ProblemRemoteDataSourceImpl(
                 attemptsCount = obj.requiredInt("attemptsCount"),
             )
         }
+    }
+
+    override suspend fun createProblem(request: CreateProblemRequestDto): CreateProblemResponseDto {
+        val json = Json { ignoreUnknownKeys = true }
+        val body = json.encodeToString(CreateProblemRequestDto.serializer(), request)
+        val payload = httpTextClient.postJson(endpoint(apiBaseUrl, "/problems"), body)
+        val obj = json.parseToJsonElement(payload).jsonObject
+        return CreateProblemResponseDto(
+            id = obj.requiredInt("id"),
+        )
     }
 }
 

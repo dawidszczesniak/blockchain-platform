@@ -1,4 +1,4 @@
-package pl.dawidszczesniak.blockchain_platform.feature.myproblems
+package pl.dawidszczesniak.blockchain_platform.feature.problems.created
 
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement

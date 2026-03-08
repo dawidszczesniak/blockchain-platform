@@ -37,6 +37,16 @@ internal object ProblemParticipantsTable : Table("problem_participants") {
     override val primaryKey = PrimaryKey(problemId, userId)
 }
 
+internal object ProblemTestsTable : Table("problem_tests") {
+    val problemTestId = long("problem_test_id").autoIncrement()
+    val problemId = long("problem_id")
+    val testOrder = integer("test_order")
+    val validatorCode = text("validator_code")
+    val createdAt = datetime("created_at")
+
+    override val primaryKey = PrimaryKey(problemTestId)
+}
+
 internal object ProblemSubmissionsTable : Table("problem_submissions") {
     val submissionId = long("submission_id").autoIncrement()
     val problemId = long("problem_id")

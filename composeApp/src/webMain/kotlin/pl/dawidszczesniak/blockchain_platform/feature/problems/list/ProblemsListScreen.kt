@@ -1,4 +1,4 @@
-package pl.dawidszczesniak.blockchain_platform.feature.problems
+package pl.dawidszczesniak.blockchain_platform.feature.problems.list
 
 import androidx.compose.foundation.VerticalScrollbar
 import androidx.compose.foundation.background

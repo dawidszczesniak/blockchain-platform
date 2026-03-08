@@ -1,4 +1,4 @@
-package pl.dawidszczesniak.blockchain_platform.feature.create
+package pl.dawidszczesniak.blockchain_platform.feature.problems.create
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -26,6 +26,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -39,7 +40,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.dp
 import blockchain_platform.composeapp.generated.resources.Res
-import blockchain_platform.composeapp.generated.resources.create_problem_action_placeholder
+import blockchain_platform.composeapp.generated.resources.create_problem_action_create
+import blockchain_platform.composeapp.generated.resources.create_problem_action_creating
 import blockchain_platform.composeapp.generated.resources.create_problem_add_test
 import blockchain_platform.composeapp.generated.resources.create_problem_date_picker_confirm
 import blockchain_platform.composeapp.generated.resources.create_problem_date_picker_dismiss
@@ -56,6 +58,8 @@ import blockchain_platform.composeapp.generated.resources.create_problem_profit_
 import blockchain_platform.composeapp.generated.resources.create_problem_profit_title
 import blockchain_platform.composeapp.generated.resources.create_problem_prize_label
 import blockchain_platform.composeapp.generated.resources.create_problem_submit_until_label
+import blockchain_platform.composeapp.generated.resources.create_problem_submit_failed
+import blockchain_platform.composeapp.generated.resources.create_problem_submit_success
 import blockchain_platform.composeapp.generated.resources.create_problem_test_code_label
 import blockchain_platform.composeapp.generated.resources.create_problem_test_collapse
 import blockchain_platform.composeapp.generated.resources.create_problem_test_expand
@@ -63,6 +67,12 @@ import blockchain_platform.composeapp.generated.resources.create_problem_test_la
 import blockchain_platform.composeapp.generated.resources.create_problem_test_remove
 import blockchain_platform.composeapp.generated.resources.create_problem_tests_title
 import blockchain_platform.composeapp.generated.resources.create_problem_title
+import blockchain_platform.composeapp.generated.resources.create_problem_validation_date_order
+import blockchain_platform.composeapp.generated.resources.create_problem_validation_invalid_date
+import blockchain_platform.composeapp.generated.resources.create_problem_validation_integer
+import blockchain_platform.composeapp.generated.resources.create_problem_validation_non_negative
+import blockchain_platform.composeapp.generated.resources.create_problem_validation_positive
+import blockchain_platform.composeapp.generated.resources.create_problem_validation_required
 import org.jetbrains.compose.resources.stringResource
 import pl.dawidszczesniak.blockchain_platform.di.LocalKoin
 
@@ -70,6 +80,9 @@ import pl.dawidszczesniak.blockchain_platform.di.LocalKoin
 fun CreateProblemScreen() {
     val koin = LocalKoin.current
     val viewModel = remember { koin.get<CreateProblemViewModel>() }
+    DisposableEffect(viewModel) {
+        onDispose { viewModel.close() }
+    }
     val state by viewModel.state.collectAsState()
 
     Column(
@@ -114,6 +127,9 @@ fun CreateProblemScreen() {
                         },
                         onSubmitUntilChange = {
                             viewModel.onIntent(CreateProblemIntent.SubmitUntilChanged(it))
+                        },
+                        onSubmit = {
+                            viewModel.onIntent(CreateProblemIntent.Submit)
                         }
                     )
                     ProfitPanel(state = state)
@@ -152,6 +168,9 @@ fun CreateProblemScreen() {
                         },
                         onSubmitUntilChange = {
                             viewModel.onIntent(CreateProblemIntent.SubmitUntilChanged(it))
+                        },
+                        onSubmit = {
+                            viewModel.onIntent(CreateProblemIntent.Submit)
                         }
                     )
                     ProfitPanel(
@@ -178,7 +197,34 @@ private fun CreateProblemForm(
     onTestCodeChange: (Int, String) -> Unit,
     onJoinUntilChange: (String) -> Unit,
     onSubmitUntilChange: (String) -> Unit,
+    onSubmit: () -> Unit,
 ) {
+    val validation = state.validation
+    val prizeError = validationMessage(
+        visible = state.submitAttempted,
+        error = validation.prize,
+    )
+    val participantsError = validationMessage(
+        visible = state.submitAttempted,
+        error = validation.participants,
+    )
+    val entryFeeError = validationMessage(
+        visible = state.submitAttempted,
+        error = validation.entryFee,
+    )
+    val descriptionError = validationMessage(
+        visible = state.submitAttempted,
+        error = validation.description,
+    )
+    val joinUntilError = validationMessage(
+        visible = state.submitAttempted,
+        error = validation.joinUntilDate,
+    )
+    val submitUntilError = validationMessage(
+        visible = state.submitAttempted,
+        error = validation.submitUntilDate,
+    )
+
     Column(modifier = modifier.fillMaxWidth()) {
         Text(
             text = stringResource(Res.string.create_problem_title),
@@ -190,7 +236,13 @@ private fun CreateProblemForm(
             value = state.prize,
             onValueChange = onPrizeChange,
             label = { Text(stringResource(Res.string.create_problem_prize_label)) },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            isError = prizeError != null,
+            supportingText = {
+                if (prizeError != null) {
+                    Text(prizeError)
+                }
+            },
         )
         Spacer(Modifier.height(10.dp))
 
@@ -198,7 +250,13 @@ private fun CreateProblemForm(
             value = state.participants,
             onValueChange = onParticipantsChange,
             label = { Text(stringResource(Res.string.create_problem_participants_label)) },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            isError = participantsError != null,
+            supportingText = {
+                if (participantsError != null) {
+                    Text(participantsError)
+                }
+            },
         )
         Spacer(Modifier.height(10.dp))
 
@@ -206,7 +264,13 @@ private fun CreateProblemForm(
             value = state.entryFee,
             onValueChange = onEntryFeeChange,
             label = { Text(stringResource(Res.string.create_problem_entry_fee_label)) },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            isError = entryFeeError != null,
+            supportingText = {
+                if (entryFeeError != null) {
+                    Text(entryFeeError)
+                }
+            },
         )
         Spacer(Modifier.height(10.dp))
 
@@ -216,7 +280,13 @@ private fun CreateProblemForm(
             label = { Text(stringResource(Res.string.create_problem_description_label)) },
             modifier = Modifier.fillMaxWidth(),
             minLines = 4,
-            maxLines = 8
+            maxLines = 8,
+            isError = descriptionError != null,
+            supportingText = {
+                if (descriptionError != null) {
+                    Text(descriptionError)
+                }
+            },
         )
         Spacer(Modifier.height(10.dp))
 
@@ -250,7 +320,12 @@ private fun CreateProblemForm(
                     onToggle = { onToggleTest(test.id) },
                     canRemove = state.tests.size > 1,
                     onRemove = { onRemoveTest(test.id) },
-                    onCodeChange = { value -> onTestCodeChange(test.id, value) }
+                    onCodeChange = { value -> onTestCodeChange(test.id, value) },
+                    validationError = if (state.submitAttempted) {
+                        validation.testsById[test.id]
+                    } else {
+                        null
+                    }
                 )
             }
             if (index < state.tests.lastIndex) {
@@ -262,24 +337,73 @@ private fun CreateProblemForm(
         DatePickerField(
             value = state.joinUntilDate,
             label = stringResource(Res.string.create_problem_join_until_label),
-            onValueChange = onJoinUntilChange
+            onValueChange = onJoinUntilChange,
+            errorText = joinUntilError,
         )
         Spacer(Modifier.height(10.dp))
 
         DatePickerField(
             value = state.submitUntilDate,
             label = stringResource(Res.string.create_problem_submit_until_label),
-            onValueChange = onSubmitUntilChange
+            onValueChange = onSubmitUntilChange,
+            errorText = submitUntilError,
         )
+        if (state.submitFailed) {
+            Spacer(Modifier.height(10.dp))
+            Text(
+                text = state.submitErrorMessage ?: stringResource(Res.string.create_problem_submit_failed),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
+        if (state.submitSuccessProblemId != null) {
+            Spacer(Modifier.height(10.dp))
+            Text(
+                text = stringResource(
+                    Res.string.create_problem_submit_success,
+                    state.submitSuccessProblemId,
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = Color(0xFF33C97A),
+            )
+        }
         Spacer(Modifier.height(16.dp))
 
         Button(
-            onClick = { /* TODO(backend): call create-problem API */ },
-            enabled = false
+            onClick = onSubmit,
+            enabled = !state.isSubmitting
         ) {
-            Text(stringResource(Res.string.create_problem_action_placeholder))
+            Text(
+                stringResource(
+                    if (state.isSubmitting) {
+                        Res.string.create_problem_action_creating
+                    } else {
+                        Res.string.create_problem_action_create
+                    }
+                )
+            )
         }
     }
+}
+
+@Composable
+private fun validationMessage(
+    visible: Boolean,
+    error: CreateProblemValidationError?,
+): String? {
+    if (!visible || error == null) {
+        return null
+    }
+    return stringResource(
+        when (error) {
+            CreateProblemValidationError.Required -> Res.string.create_problem_validation_required
+            CreateProblemValidationError.InvalidInteger -> Res.string.create_problem_validation_integer
+            CreateProblemValidationError.MustBePositive -> Res.string.create_problem_validation_positive
+            CreateProblemValidationError.MustBeNonNegative -> Res.string.create_problem_validation_non_negative
+            CreateProblemValidationError.InvalidDate -> Res.string.create_problem_validation_invalid_date
+            CreateProblemValidationError.SubmitBeforeJoin -> Res.string.create_problem_validation_date_order
+        }
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -288,6 +412,7 @@ private fun DatePickerField(
     value: String,
     label: String,
     onValueChange: (String) -> Unit,
+    errorText: String?,
 ) {
     var isDialogVisible by remember { mutableStateOf(false) }
     val focusManager = LocalFocusManager.current
@@ -297,6 +422,12 @@ private fun DatePickerField(
         onValueChange = {},
         label = { Text(text = label) },
         readOnly = true,
+        isError = errorText != null,
+        supportingText = {
+            if (errorText != null) {
+                Text(errorText)
+            }
+        },
         modifier = Modifier
             .fillMaxWidth()
             .onFocusChanged { state ->
@@ -525,7 +656,13 @@ private fun TestCaseCard(
     canRemove: Boolean,
     onRemove: () -> Unit,
     onCodeChange: (String) -> Unit,
+    validationError: CreateProblemValidationError?,
 ) {
+    val codeErrorMessage = validationMessage(
+        visible = true,
+        error = validationError,
+    )
+
     OutlinedCard(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -567,7 +704,13 @@ private fun TestCaseCard(
                     label = { Text(stringResource(Res.string.create_problem_test_code_label)) },
                     modifier = Modifier.fillMaxWidth(),
                     minLines = 4,
-                    maxLines = 10
+                    maxLines = 10,
+                    isError = codeErrorMessage != null,
+                    supportingText = {
+                        if (codeErrorMessage != null) {
+                            Text(codeErrorMessage)
+                        }
+                    },
                 )
             }
         }

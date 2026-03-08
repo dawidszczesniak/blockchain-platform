@@ -1,6 +1,7 @@
 package pl.dawidszczesniak.blockchain_platform
 
 import io.ktor.http.HttpMethod
+import io.ktor.http.HttpHeaders
 import io.ktor.server.application.*
 import io.ktor.server.engine.*
 import io.ktor.server.netty.*
@@ -33,7 +34,9 @@ fun Application.module() {
 
     install(CORS) {
         allowMethod(HttpMethod.Get)
+        allowMethod(HttpMethod.Post)
         allowMethod(HttpMethod.Options)
+        allowHeader(HttpHeaders.ContentType)
         allowedHosts.forEach { host ->
             allowHost(host)
         }

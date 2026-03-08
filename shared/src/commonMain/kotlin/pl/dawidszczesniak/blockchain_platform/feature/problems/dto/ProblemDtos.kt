@@ -41,3 +41,19 @@ data class ParticipationProblemDto(
     val participants: Int,
     val attemptsCount: Int,
 )
+
+@Serializable
+data class CreateProblemRequestDto(
+    val description: String,
+    val prizeAmount: Long,
+    val entryFeeAmount: Long,
+    val requiredParticipants: Int,
+    val joinUntilDate: String,
+    val submitUntilDate: String,
+    val tests: List<String>,
+)
+
+@Serializable
+data class CreateProblemResponseDto(
+    val id: Int,
+)

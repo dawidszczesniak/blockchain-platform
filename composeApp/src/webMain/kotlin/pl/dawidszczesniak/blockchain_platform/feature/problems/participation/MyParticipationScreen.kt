@@ -1,4 +1,4 @@
-package pl.dawidszczesniak.blockchain_platform.feature.myparticipation
+package pl.dawidszczesniak.blockchain_platform.feature.problems.participation
 
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*

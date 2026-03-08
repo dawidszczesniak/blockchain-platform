@@ -1,12 +1,17 @@
 package pl.dawidszczesniak.blockchain_platform.feature.problems.endpoint
 
+import io.ktor.http.HttpStatusCode
+import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
+import io.ktor.server.routing.post
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.koin.ktor.ext.inject
 import pl.dawidszczesniak.blockchain_platform.feature.problems.controller.ProblemController
+import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.CreateProblemRequestDto
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.CreateProblemValidationException
 
 internal fun Route.problemRoutes() {
     val controller by inject<ProblemController>()
@@ -28,5 +33,19 @@ internal fun Route.problemRoutes() {
             controller.getParticipationProblems()
         }
         call.respond(participationProblems)
+    }
+    post("/problems") {
+        val request = call.receive<CreateProblemRequestDto>()
+        try {
+            val created = withContext(Dispatchers.IO) {
+                controller.createProblem(request)
+            }
+            call.respond(HttpStatusCode.Created, created)
+        } catch (error: CreateProblemValidationException) {
+            call.respond(
+                HttpStatusCode.BadRequest,
+                mapOf("message" to (error.message ?: "Invalid create problem payload.")),
+            )
+        }
     }
 }

@@ -22,15 +22,17 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetPartic
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetProblemListUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetProblemListUseCaseImpl
 import pl.dawidszczesniak.blockchain_platform.app.AppViewModel
-import pl.dawidszczesniak.blockchain_platform.feature.create.CreateProblemViewModel
+import pl.dawidszczesniak.blockchain_platform.feature.problems.create.CreateProblemUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.problems.create.CreateProblemUseCaseImpl
+import pl.dawidszczesniak.blockchain_platform.feature.problems.create.CreateProblemViewModel
 import pl.dawidszczesniak.blockchain_platform.feature.home.DashboardConfig
 import pl.dawidszczesniak.blockchain_platform.feature.home.HomeViewModel
 import pl.dawidszczesniak.blockchain_platform.feature.login.LoginViewModel
 import pl.dawidszczesniak.blockchain_platform.feature.maintenance.BackendHealthViewModel
 import pl.dawidszczesniak.blockchain_platform.feature.maintenance.BackendMaintenanceViewModel
-import pl.dawidszczesniak.blockchain_platform.feature.myparticipation.MyParticipationViewModel
-import pl.dawidszczesniak.blockchain_platform.feature.myproblems.MyProblemsViewModel
-import pl.dawidszczesniak.blockchain_platform.feature.problems.ProblemsListViewModel
+import pl.dawidszczesniak.blockchain_platform.feature.problems.participation.MyParticipationViewModel
+import pl.dawidszczesniak.blockchain_platform.feature.problems.created.MyProblemsViewModel
+import pl.dawidszczesniak.blockchain_platform.feature.problems.list.ProblemsListViewModel
 import pl.dawidszczesniak.blockchain_platform.feature.settings.SettingsViewModel
 import pl.dawidszczesniak.blockchain_platform.network.BrowserHttpTextClient
 import pl.dawidszczesniak.blockchain_platform.network.HttpTextClient
@@ -60,6 +62,7 @@ fun appModules() = module {
     factory<GetProblemListUseCase> { GetProblemListUseCaseImpl(get()) }
     factory<GetCreatedProblemsUseCase> { GetCreatedProblemsUseCaseImpl(get()) }
     factory<GetParticipationProblemsUseCase> { GetParticipationProblemsUseCaseImpl(get()) }
+    factory<CreateProblemUseCase> { CreateProblemUseCaseImpl(get()) }
     factory<GetDashboardMetricsHistoryUseCase> { GetDashboardMetricsHistoryUseCaseImpl(get()) }
     factory<GetDashboardUpdatesUseCase> { GetDashboardUpdatesUseCaseImpl(get()) }
     factory { AppViewModel() }
@@ -68,7 +71,7 @@ fun appModules() = module {
     factory { SettingsViewModel() }
     factory { BackendHealthViewModel(get()) }
     factory { BackendMaintenanceViewModel() }
-    factory { CreateProblemViewModel() }
+    factory { CreateProblemViewModel(get()) }
     factory { ProblemsListViewModel(get()) }
     factory { MyProblemsViewModel(get()) }
     factory { MyParticipationViewModel(get()) }

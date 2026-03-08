@@ -1,5 +1,6 @@
 package pl.dawidszczesniak.blockchain_platform.feature.dashboard.dao
 
+import java.time.LocalDate
 import org.jetbrains.exposed.sql.ResultRow
 import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.selectAll
@@ -22,9 +23,11 @@ internal class DashboardDaoImpl(
 
     override fun fetchMetricsRows(limit: Int): List<ResultRow> {
         val safeLimit = limit.coerceIn(1, 365)
+        val today = LocalDate.now()
 
         return DashboardDailyMetricsTable
             .selectAll()
+            .where { DashboardDailyMetricsTable.metricDate lessEq today }
             .orderBy(DashboardDailyMetricsTable.metricDate to SortOrder.DESC)
             .limit(safeLimit)
             .toList()

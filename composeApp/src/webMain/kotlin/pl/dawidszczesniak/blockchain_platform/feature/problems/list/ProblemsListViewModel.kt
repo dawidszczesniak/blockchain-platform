@@ -1,4 +1,4 @@
-package pl.dawidszczesniak.blockchain_platform.feature.problems
+package pl.dawidszczesniak.blockchain_platform.feature.problems.list
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers

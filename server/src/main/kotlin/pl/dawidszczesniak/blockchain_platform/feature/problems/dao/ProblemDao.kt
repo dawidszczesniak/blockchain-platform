@@ -1,14 +1,17 @@
 package pl.dawidszczesniak.blockchain_platform.feature.problems.dao
 
+import java.time.LocalDate
 import org.jetbrains.exposed.sql.ResultRow
 import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.count
 import org.jetbrains.exposed.sql.innerJoin
+import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.select
 import org.jetbrains.exposed.sql.selectAll
 import pl.dawidszczesniak.blockchain_platform.db.ProblemLifecycleStatus
 import pl.dawidszczesniak.blockchain_platform.db.tables.ProblemParticipantsTable
 import pl.dawidszczesniak.blockchain_platform.db.tables.ProblemSubmissionsTable
+import pl.dawidszczesniak.blockchain_platform.db.tables.ProblemTestsTable
 import pl.dawidszczesniak.blockchain_platform.db.tables.ProblemWinnersTable
 import pl.dawidszczesniak.blockchain_platform.db.tables.ProblemsTable
 import pl.dawidszczesniak.blockchain_platform.db.tables.UsersTable
@@ -28,6 +31,18 @@ internal interface ProblemDao {
     fun fetchSubmissionAttemptRows(): List<ResultRow>
     fun fetchWinnerRows(): List<ResultRow>
     fun fetchDefaultUserId(): Long?
+    fun fetchOrCreateDefaultUserId(): Long
+    fun insertProblem(
+        createdByUserId: Long,
+        title: String,
+        description: String,
+        prizeAmount: Long,
+        entryFeeAmount: Long,
+        requiredParticipants: Int,
+        joinUntilDate: LocalDate,
+        submitUntilDate: LocalDate,
+    ): Long
+    fun insertProblemTest(problemId: Long, testOrder: Int, validatorCode: String)
 }
 
 internal class ProblemDaoImpl : ProblemDao {
@@ -111,6 +126,42 @@ internal class ProblemDaoImpl : ProblemDao {
         return resolveDefaultUserId()
     }
 
+    override fun fetchOrCreateDefaultUserId(): Long {
+        return resolveDefaultUserId() ?: createDefaultUser()
+    }
+
+    override fun insertProblem(
+        createdByUserId: Long,
+        title: String,
+        description: String,
+        prizeAmount: Long,
+        entryFeeAmount: Long,
+        requiredParticipants: Int,
+        joinUntilDate: LocalDate,
+        submitUntilDate: LocalDate,
+    ): Long {
+        val inserted = ProblemsTable.insert {
+            it[ProblemsTable.createdByUserId] = createdByUserId
+            it[ProblemsTable.problemStatus] = ProblemLifecycleStatus.Open.dbValue
+            it[ProblemsTable.title] = title
+            it[ProblemsTable.description] = description
+            it[ProblemsTable.prizeAmount] = prizeAmount
+            it[ProblemsTable.entryFeeAmount] = entryFeeAmount
+            it[ProblemsTable.requiredParticipants] = requiredParticipants
+            it[ProblemsTable.joinUntilDate] = joinUntilDate
+            it[ProblemsTable.submitUntilDate] = submitUntilDate
+        }
+        return inserted[ProblemsTable.problemId]
+    }
+
+    override fun insertProblemTest(problemId: Long, testOrder: Int, validatorCode: String) {
+        ProblemTestsTable.insert {
+            it[ProblemTestsTable.problemId] = problemId
+            it[ProblemTestsTable.testOrder] = testOrder
+            it[ProblemTestsTable.validatorCode] = validatorCode
+        }
+    }
+
     private fun resolveDefaultUserId(): Long? {
         return UsersTable
             .selectAll()
@@ -119,4 +170,13 @@ internal class ProblemDaoImpl : ProblemDao {
             .firstOrNull()
             ?.get(UsersTable.userId)
     }
+
+    private fun createDefaultUser(): Long {
+        val inserted = UsersTable.insert {
+            it[UsersTable.walletAddress] = DEFAULT_SYSTEM_WALLET
+        }
+        return inserted[UsersTable.userId]
+    }
 }
+
+private const val DEFAULT_SYSTEM_WALLET = "0x0000000000000000000000000000000000000001"

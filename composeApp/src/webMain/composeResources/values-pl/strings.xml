@@ -38,7 +38,16 @@
     <string name="create_problem_submit_until_label">Koniec zgłoszeń (YYYY-MM-DD)</string>
     <string name="create_problem_date_picker_confirm">OK</string>
     <string name="create_problem_date_picker_dismiss">Anuluj</string>
-    <string name="create_problem_action_placeholder">Utwórz (placeholder)</string>
+    <string name="create_problem_action_create">Utwórz problem</string>
+    <string name="create_problem_action_creating">Tworzenie...</string>
+    <string name="create_problem_validation_required">To pole jest wymagane.</string>
+    <string name="create_problem_validation_integer">Podaj liczbę całkowitą.</string>
+    <string name="create_problem_validation_positive">Wartość musi być większa od 0.</string>
+    <string name="create_problem_validation_non_negative">Wartość nie może być ujemna.</string>
+    <string name="create_problem_validation_invalid_date">Niepoprawny format daty (YYYY-MM-DD).</string>
+    <string name="create_problem_validation_date_order">Koniec zgłoszeń musi być później niż koniec rejestracji.</string>
+    <string name="create_problem_submit_success">Problem został utworzony (ID: %1$d).</string>
+    <string name="create_problem_submit_failed">Nie udało się utworzyć problemu.</string>
 
     <string name="login_title">Zaloguj się</string>
     <string name="login_subtitle">Na razie wydmuszka logowania portfelem.</string>

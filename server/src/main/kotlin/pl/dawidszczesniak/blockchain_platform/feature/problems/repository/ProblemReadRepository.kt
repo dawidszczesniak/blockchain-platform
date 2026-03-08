@@ -27,7 +27,7 @@ internal interface ProblemReadRepository {
 internal class ProblemReadRepositoryImpl(
     private val problemDao: ProblemDao,
     private val transactionRunner: DbTransactionRunner,
-) : ProblemReadRepository {
+) : ProblemReadRepository, ProblemWriteRepository {
     override fun fetchProblemSummaries(): List<ProblemSummary> {
         return transactionRunner.inTransaction {
             val participantCounts = participantCountsByProblem()
@@ -134,6 +134,31 @@ internal class ProblemReadRepositoryImpl(
                     attemptsCount = attempts,
                 )
             }
+        }
+    }
+
+    override fun createProblemForDefaultUser(draft: NewProblemDraft): Int {
+        return transactionRunner.inTransaction {
+            val createdByUserId = problemDao.fetchOrCreateDefaultUserId()
+            val problemId = problemDao.insertProblem(
+                createdByUserId = createdByUserId,
+                title = draft.title,
+                description = draft.description,
+                prizeAmount = draft.prizeAmount,
+                entryFeeAmount = draft.entryFeeAmount,
+                requiredParticipants = draft.requiredParticipants,
+                joinUntilDate = draft.joinUntilDate,
+                submitUntilDate = draft.submitUntilDate,
+            )
+
+            draft.tests.forEachIndexed { index, code ->
+                problemDao.insertProblemTest(
+                    problemId = problemId,
+                    testOrder = index + 1,
+                    validatorCode = code,
+                )
+            }
+            problemId.toInt()
         }
     }
 

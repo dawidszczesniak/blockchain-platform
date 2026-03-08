@@ -1,4 +1,4 @@
-package pl.dawidszczesniak.blockchain_platform.feature.myparticipation
+package pl.dawidszczesniak.blockchain_platform.feature.problems.participation
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers

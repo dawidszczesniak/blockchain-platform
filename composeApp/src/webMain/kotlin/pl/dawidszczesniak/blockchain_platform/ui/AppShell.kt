@@ -18,15 +18,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import pl.dawidszczesniak.blockchain_platform.navigation.Route
 import pl.dawidszczesniak.blockchain_platform.di.LocalKoin
-import pl.dawidszczesniak.blockchain_platform.feature.create.CreateProblemScreen
+import pl.dawidszczesniak.blockchain_platform.feature.problems.create.CreateProblemScreen
 import pl.dawidszczesniak.blockchain_platform.feature.home.HomeScreen
 import pl.dawidszczesniak.blockchain_platform.feature.login.LoginScreen
 import pl.dawidszczesniak.blockchain_platform.feature.maintenance.BackendHealthViewModel
 import pl.dawidszczesniak.blockchain_platform.feature.maintenance.BackendMaintenanceScreen
-import pl.dawidszczesniak.blockchain_platform.feature.myparticipation.MyParticipationScreen
-import pl.dawidszczesniak.blockchain_platform.feature.myproblems.MyProblemsScreen
-import pl.dawidszczesniak.blockchain_platform.feature.problems.ProblemsListScreen
-import pl.dawidszczesniak.blockchain_platform.feature.problems.ProblemsListViewModel
+import pl.dawidszczesniak.blockchain_platform.feature.problems.participation.MyParticipationScreen
+import pl.dawidszczesniak.blockchain_platform.feature.problems.created.MyProblemsScreen
+import pl.dawidszczesniak.blockchain_platform.feature.problems.list.ProblemsListScreen
+import pl.dawidszczesniak.blockchain_platform.feature.problems.list.ProblemsListViewModel
 import pl.dawidszczesniak.blockchain_platform.feature.settings.SettingsScreen
 
 @OptIn(ExperimentalMaterial3Api::class)

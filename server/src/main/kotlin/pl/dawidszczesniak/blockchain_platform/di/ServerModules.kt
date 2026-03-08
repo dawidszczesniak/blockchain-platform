@@ -6,7 +6,6 @@ import pl.dawidszczesniak.blockchain_platform.db.DashboardMetricsRefresher
 import pl.dawidszczesniak.blockchain_platform.db.DatabaseBootstrapper
 import pl.dawidszczesniak.blockchain_platform.db.DatabaseFactory
 import pl.dawidszczesniak.blockchain_platform.db.DbSchemaRunner
-import pl.dawidszczesniak.blockchain_platform.db.DbSeeder
 import pl.dawidszczesniak.blockchain_platform.db.DbTransactionRunner
 import pl.dawidszczesniak.blockchain_platform.db.ExposedDbTransactionRunner
 import pl.dawidszczesniak.blockchain_platform.db.PostgresConfig
@@ -24,6 +23,9 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.dao.ProblemDao
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dao.ProblemDaoImpl
 import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.ProblemReadRepository
 import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.ProblemReadRepositoryImpl
+import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.ProblemWriteRepository
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.CreateProblemUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.CreateProblemUseCaseImpl
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetCreatedProblemsUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetCreatedProblemsUseCaseImpl
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetParticipationProblemsUseCase
@@ -37,16 +39,18 @@ internal fun serverModules() = module {
     single<DbTransactionRunner> { ExposedDbTransactionRunner(get()) }
 
     single { DbSchemaRunner(get()) }
-    single { DbSeeder() }
     single { DashboardMetricsRefresher() }
-    single { DatabaseBootstrapper(get(), get(), get(), get()) }
+    single { DatabaseBootstrapper(get(), get(), get()) }
 
     single<ProblemDao> { ProblemDaoImpl() }
-    single<ProblemReadRepository> { ProblemReadRepositoryImpl(get(), get()) }
+    single { ProblemReadRepositoryImpl(get(), get()) }
+    single<ProblemReadRepository> { get<ProblemReadRepositoryImpl>() }
+    single<ProblemWriteRepository> { get<ProblemReadRepositoryImpl>() }
+    factory<CreateProblemUseCase> { CreateProblemUseCaseImpl(get(), get(), get()) }
     factory<GetProblemSummariesUseCase> { GetProblemSummariesUseCaseImpl(get()) }
     factory<GetCreatedProblemsUseCase> { GetCreatedProblemsUseCaseImpl(get()) }
     factory<GetParticipationProblemsUseCase> { GetParticipationProblemsUseCaseImpl(get()) }
-    factory { ProblemController(get(), get(), get()) }
+    factory { ProblemController(get(), get(), get(), get()) }
 
     single<DashboardDao> { DashboardDaoImpl(get()) }
     single<DashboardReadRepository> { DashboardReadRepositoryImpl(get(), get()) }
