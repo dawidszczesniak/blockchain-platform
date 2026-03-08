@@ -15,24 +15,34 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.dp
 import blockchain_platform.composeapp.generated.resources.Res
 import blockchain_platform.composeapp.generated.resources.create_problem_action_placeholder
 import blockchain_platform.composeapp.generated.resources.create_problem_add_test
+import blockchain_platform.composeapp.generated.resources.create_problem_date_picker_confirm
+import blockchain_platform.composeapp.generated.resources.create_problem_date_picker_dismiss
 import blockchain_platform.composeapp.generated.resources.create_problem_description_label
 import blockchain_platform.composeapp.generated.resources.create_problem_entry_fee_label
 import blockchain_platform.composeapp.generated.resources.create_problem_join_until_label
@@ -249,19 +259,17 @@ private fun CreateProblemForm(
         }
         Spacer(Modifier.height(10.dp))
 
-        OutlinedTextField(
+        DatePickerField(
             value = state.joinUntilDate,
-            onValueChange = onJoinUntilChange,
-            label = { Text(stringResource(Res.string.create_problem_join_until_label)) },
-            modifier = Modifier.fillMaxWidth()
+            label = stringResource(Res.string.create_problem_join_until_label),
+            onValueChange = onJoinUntilChange
         )
         Spacer(Modifier.height(10.dp))
 
-        OutlinedTextField(
+        DatePickerField(
             value = state.submitUntilDate,
-            onValueChange = onSubmitUntilChange,
-            label = { Text(stringResource(Res.string.create_problem_submit_until_label)) },
-            modifier = Modifier.fillMaxWidth()
+            label = stringResource(Res.string.create_problem_submit_until_label),
+            onValueChange = onSubmitUntilChange
         )
         Spacer(Modifier.height(16.dp))
 
@@ -272,6 +280,164 @@ private fun CreateProblemForm(
             Text(stringResource(Res.string.create_problem_action_placeholder))
         }
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DatePickerField(
+    value: String,
+    label: String,
+    onValueChange: (String) -> Unit,
+) {
+    var isDialogVisible by remember { mutableStateOf(false) }
+    val focusManager = LocalFocusManager.current
+
+    OutlinedTextField(
+        value = value,
+        onValueChange = {},
+        label = { Text(text = label) },
+        readOnly = true,
+        modifier = Modifier
+            .fillMaxWidth()
+            .onFocusChanged { state ->
+                if (state.isFocused) {
+                    isDialogVisible = true
+                    focusManager.clearFocus()
+                }
+            },
+    )
+
+    if (isDialogVisible) {
+        val pickerState = rememberDatePickerState(
+            initialSelectedDateMillis = isoDateToUtcMillis(value)
+        )
+        DatePickerDialog(
+            onDismissRequest = { isDialogVisible = false },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        pickerState.selectedDateMillis
+                            ?.let(::utcMillisToIsoDate)
+                            ?.let(onValueChange)
+                        isDialogVisible = false
+                    }
+                ) {
+                    Text(text = stringResource(Res.string.create_problem_date_picker_confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { isDialogVisible = false }) {
+                    Text(text = stringResource(Res.string.create_problem_date_picker_dismiss))
+                }
+            }
+        ) {
+            DatePicker(state = pickerState)
+        }
+    }
+}
+
+private const val MILLIS_PER_DAY = 86_400_000L
+private const val DAYS_0000_TO_1970 = 719_528L
+private const val DAYS_PER_CYCLE = 146_097L
+
+private fun isoDateToUtcMillis(value: String): Long? {
+    if (value.length != 10 || value[4] != '-' || value[7] != '-') {
+        return null
+    }
+
+    val year = value.substring(0, 4).toIntOrNull() ?: return null
+    val month = value.substring(5, 7).toIntOrNull() ?: return null
+    val day = value.substring(8, 10).toIntOrNull() ?: return null
+    if (month !in 1..12) {
+        return null
+    }
+
+    val maxDay = when (month) {
+        1, 3, 5, 7, 8, 10, 12 -> 31
+        4, 6, 9, 11 -> 30
+        2 -> if (isLeapYear(year)) 29 else 28
+        else -> return null
+    }
+    if (day !in 1..maxDay) {
+        return null
+    }
+
+    val epochDay = dateToEpochDay(year = year, month = month, day = day)
+    return epochDay * MILLIS_PER_DAY
+}
+
+private fun utcMillisToIsoDate(millis: Long): String {
+    val epochDay = floorDiv(millis, MILLIS_PER_DAY)
+    val (year, month, day) = epochDayToDate(epochDay)
+    val yearText = year.toString().padStart(4, '0')
+    val monthText = month.toString().padStart(2, '0')
+    val dayText = day.toString().padStart(2, '0')
+    return "$yearText-$monthText-$dayText"
+}
+
+private fun isLeapYear(year: Int): Boolean {
+    return year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)
+}
+
+private fun dateToEpochDay(year: Int, month: Int, day: Int): Long {
+    val yearLong = year.toLong()
+    val monthLong = month.toLong()
+
+    var total = 365L * yearLong
+    total += if (yearLong >= 0) {
+        (yearLong + 3) / 4 - (yearLong + 99) / 100 + (yearLong + 399) / 400
+    } else {
+        -(yearLong / -4 - yearLong / -100 + yearLong / -400)
+    }
+    total += (367 * monthLong - 362) / 12
+    total += day - 1L
+
+    if (monthLong > 2) {
+        total--
+        if (!isLeapYear(year)) {
+            total--
+        }
+    }
+
+    return total - DAYS_0000_TO_1970
+}
+
+private fun epochDayToDate(epochDay: Long): Triple<Int, Int, Int> {
+    var zeroDay = epochDay + DAYS_0000_TO_1970
+    zeroDay -= 60
+
+    var yearAdjustment = 0L
+    if (zeroDay < 0) {
+        val adjustCycles = floorDiv(zeroDay + 1, DAYS_PER_CYCLE) - 1
+        yearAdjustment = adjustCycles * 400
+        zeroDay -= adjustCycles * DAYS_PER_CYCLE
+    }
+
+    var estimatedYear = (400 * zeroDay + 591) / DAYS_PER_CYCLE
+    var estimatedDayOfYear =
+        zeroDay - (365 * estimatedYear + estimatedYear / 4 - estimatedYear / 100 + estimatedYear / 400)
+    if (estimatedDayOfYear < 0) {
+        estimatedYear--
+        estimatedDayOfYear =
+            zeroDay - (365 * estimatedYear + estimatedYear / 4 - estimatedYear / 100 + estimatedYear / 400)
+    }
+
+    estimatedYear += yearAdjustment
+    val marchDayOfYear = estimatedDayOfYear.toInt()
+    val marchMonth = (marchDayOfYear * 5 + 2) / 153
+    val month = (marchMonth + 2) % 12 + 1
+    val day = marchDayOfYear - (marchMonth * 306 + 5) / 10 + 1
+    val year = (estimatedYear + marchMonth / 10).toInt()
+
+    return Triple(year, month, day)
+}
+
+private fun floorDiv(dividend: Long, divisor: Long): Long {
+    var quotient = dividend / divisor
+    if ((dividend xor divisor) < 0 && quotient * divisor != dividend) {
+        quotient--
+    }
+    return quotient
 }
 
 @Composable

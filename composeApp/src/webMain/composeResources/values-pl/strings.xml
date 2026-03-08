@@ -36,6 +36,8 @@
     <string name="create_problem_profit_net">Zysk</string>
     <string name="create_problem_join_until_label">Koniec rejestracji (YYYY-MM-DD)</string>
     <string name="create_problem_submit_until_label">Koniec zgłoszeń (YYYY-MM-DD)</string>
+    <string name="create_problem_date_picker_confirm">OK</string>
+    <string name="create_problem_date_picker_dismiss">Anuluj</string>
     <string name="create_problem_action_placeholder">Utwórz (placeholder)</string>
 
     <string name="login_title">Zaloguj się</string>
