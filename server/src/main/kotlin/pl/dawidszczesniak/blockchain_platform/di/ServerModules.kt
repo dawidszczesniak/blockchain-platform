@@ -2,6 +2,7 @@ package pl.dawidszczesniak.blockchain_platform.di
 
 import org.jetbrains.exposed.sql.Database
 import org.koin.dsl.module
+import redis.clients.jedis.JedisPooled
 import pl.dawidszczesniak.blockchain_platform.db.DashboardMetricsRefresher
 import pl.dawidszczesniak.blockchain_platform.db.DatabaseBootstrapper
 import pl.dawidszczesniak.blockchain_platform.db.DatabaseFactory
@@ -15,8 +16,11 @@ import pl.dawidszczesniak.blockchain_platform.feature.auth.dao.UserDao
 import pl.dawidszczesniak.blockchain_platform.feature.auth.dao.UserDaoImpl
 import pl.dawidszczesniak.blockchain_platform.feature.auth.repository.AuthRepository
 import pl.dawidszczesniak.blockchain_platform.feature.auth.repository.AuthRepositoryImpl
+import pl.dawidszczesniak.blockchain_platform.feature.auth.service.AuthRateLimiter
 import pl.dawidszczesniak.blockchain_platform.feature.auth.service.EthereumSignatureVerifier
 import pl.dawidszczesniak.blockchain_platform.feature.auth.service.WalletChallengeService
+import pl.dawidszczesniak.blockchain_platform.feature.auth.store.RedisWalletChallengeStore
+import pl.dawidszczesniak.blockchain_platform.feature.auth.store.WalletChallengeStore
 import pl.dawidszczesniak.blockchain_platform.feature.auth.usecase.CreateWalletChallengeUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.auth.usecase.CreateWalletChallengeUseCaseImpl
 import pl.dawidszczesniak.blockchain_platform.feature.auth.usecase.GetAuthenticatedWalletUseCase
@@ -46,11 +50,15 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetPartic
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetParticipationProblemsUseCaseImpl
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetProblemSummariesUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetProblemSummariesUseCaseImpl
+import pl.dawidszczesniak.blockchain_platform.redis.RedisConfig
+import pl.dawidszczesniak.blockchain_platform.redis.RedisFactory
 
 internal fun serverModules() = module {
     single { PostgresConfig.fromEnvironment() }
+    single { RedisConfig.fromEnvironment() }
     single { AuthConfig.fromEnvironment() }
     single<Database> { DatabaseFactory.connect(get()) }
+    single<JedisPooled> { RedisFactory.connect(get()) }
     single<DbTransactionRunner> { ExposedDbTransactionRunner(get()) }
 
     single { DbSchemaRunner(get()) }
@@ -58,8 +66,10 @@ internal fun serverModules() = module {
     single { DatabaseBootstrapper(get(), get(), get()) }
 
     single<UserDao> { UserDaoImpl() }
+    single<WalletChallengeStore> { RedisWalletChallengeStore(get()) }
     single<AuthRepository> { AuthRepositoryImpl(get(), get()) }
-    single { WalletChallengeService(get()) }
+    single { WalletChallengeService(get(), get()) }
+    single { AuthRateLimiter(get(), get()) }
     single { EthereumSignatureVerifier() }
     factory<CreateWalletChallengeUseCase> { CreateWalletChallengeUseCaseImpl(get()) }
     factory<VerifyWalletChallengeUseCase> { VerifyWalletChallengeUseCaseImpl(get(), get(), get()) }

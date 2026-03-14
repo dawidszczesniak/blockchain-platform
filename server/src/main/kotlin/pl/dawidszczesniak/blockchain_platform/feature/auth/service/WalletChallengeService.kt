@@ -4,11 +4,14 @@ import java.security.SecureRandom
 import java.time.Clock
 import java.time.Instant
 import java.time.temporal.ChronoUnit
-import java.util.concurrent.ConcurrentHashMap
 import pl.dawidszczesniak.blockchain_platform.feature.auth.AuthConfig
 import pl.dawidszczesniak.blockchain_platform.feature.auth.AuthValidationException
 import pl.dawidszczesniak.blockchain_platform.feature.auth.AuthVerificationException
 import pl.dawidszczesniak.blockchain_platform.feature.auth.dto.AuthChallengeResponseDto
+import pl.dawidszczesniak.blockchain_platform.feature.auth.store.ChallengeConsumeResult
+import pl.dawidszczesniak.blockchain_platform.feature.auth.store.ChallengeInsertResult
+import pl.dawidszczesniak.blockchain_platform.feature.auth.store.StoredWalletChallenge
+import pl.dawidszczesniak.blockchain_platform.feature.auth.store.WalletChallengeStore
 
 internal data class PendingWalletChallenge(
     val nonce: String,
@@ -21,76 +24,106 @@ internal data class PendingWalletChallenge(
 
 internal class WalletChallengeService(
     private val authConfig: AuthConfig,
+    private val challengeStore: WalletChallengeStore,
     private val clock: Clock = Clock.systemUTC(),
     private val random: SecureRandom = SecureRandom(),
 ) {
-    private val challengesByNonce = ConcurrentHashMap<String, PendingWalletChallenge>()
-
     fun createChallenge(walletAddress: String, chainId: Long): AuthChallengeResponseDto {
         val normalizedAddress = normalizeWalletAddress(walletAddress)
         if (chainId <= 0L) {
             throw AuthValidationException("chainId must be greater than 0.")
         }
-        cleanupExpiredChallenges()
 
         val issuedAt = Instant.now(clock).truncatedTo(ChronoUnit.SECONDS)
         val expiresAt = issuedAt.plusSeconds(authConfig.challengeTtlSeconds)
-        val nonce = generateNonce()
-        val message = buildSiweMessage(
-            domain = authConfig.domain,
-            walletAddress = normalizedAddress,
-            uri = authConfig.uri,
-            chainId = chainId,
-            nonce = nonce,
-            issuedAt = issuedAt,
-            expiresAt = expiresAt,
-        )
+        repeat(MAX_NONCE_INSERT_RETRIES) {
+            val nonce = generateNonce()
+            val message = buildSiweMessage(
+                domain = authConfig.domain,
+                walletAddress = normalizedAddress,
+                uri = authConfig.uri,
+                chainId = chainId,
+                nonce = nonce,
+                issuedAt = issuedAt,
+                expiresAt = expiresAt,
+            )
 
-        challengesByNonce[nonce] = PendingWalletChallenge(
-            nonce = nonce,
-            message = message,
-            walletAddress = normalizedAddress,
-            chainId = chainId,
-            issuedAt = issuedAt,
-            expiresAt = expiresAt,
-        )
-
-        return AuthChallengeResponseDto(
-            nonce = nonce,
-            message = message,
-            issuedAt = issuedAt.toString(),
-            expiresAt = expiresAt.toString(),
-            walletAddress = normalizedAddress,
-            chainId = chainId,
-            domain = authConfig.domain,
-            uri = authConfig.uri,
-        )
+            val storedChallenge = StoredWalletChallenge(
+                nonce = nonce,
+                message = message,
+                walletAddress = normalizedAddress,
+                chainId = chainId,
+                issuedAt = issuedAt,
+                expiresAt = expiresAt,
+            )
+            when (
+                challengeStore.insertChallenge(
+                    challenge = storedChallenge,
+                    maxActiveChallengesPerWallet = authConfig.maxActiveChallengesPerWallet,
+                    now = issuedAt,
+                )
+            ) {
+                ChallengeInsertResult.Created -> {
+                    return AuthChallengeResponseDto(
+                        nonce = nonce,
+                        message = message,
+                        issuedAt = issuedAt.toString(),
+                        expiresAt = expiresAt.toString(),
+                        walletAddress = normalizedAddress,
+                        chainId = chainId,
+                        domain = authConfig.domain,
+                        uri = authConfig.uri,
+                    )
+                }
+                ChallengeInsertResult.TooManyActive -> {
+                    throw AuthValidationException("Too many active login challenges for this wallet.")
+                }
+                ChallengeInsertResult.AlreadyExists -> {
+                    // Retry with a fresh nonce if collision happens.
+                }
+            }
+        }
+        throw AuthVerificationException("Could not create wallet challenge. Please retry.")
     }
 
     fun consumeForVerification(nonce: String, message: String): PendingWalletChallenge {
-        cleanupExpiredChallenges()
         val normalizedNonce = nonce.trim()
-        val challenge = challengesByNonce.remove(normalizedNonce)
-            ?: throw AuthVerificationException("Challenge not found or already used.")
-
-        if (challenge.message != message) {
-            throw AuthVerificationException("Challenge message mismatch.")
+        if (normalizedNonce.isBlank()) {
+            throw AuthValidationException("nonce cannot be blank.")
         }
 
-        val now = Instant.now(clock)
-        if (now.isAfter(challenge.expiresAt)) {
-            throw AuthVerificationException("Challenge has expired.")
+        val now = Instant.now(clock).truncatedTo(ChronoUnit.SECONDS)
+        return when (
+            val consumed = challengeStore.consumeChallenge(
+                nonce = normalizedNonce,
+                expectedMessage = message,
+                now = now,
+            )
+        ) {
+            is ChallengeConsumeResult.Success -> {
+                val challenge = consumed.challenge
+                if (now.isAfter(challenge.expiresAt)) {
+                    throw AuthVerificationException("Challenge has expired.")
+                }
+                PendingWalletChallenge(
+                    nonce = challenge.nonce,
+                    message = challenge.message,
+                    walletAddress = challenge.walletAddress,
+                    chainId = challenge.chainId,
+                    issuedAt = challenge.issuedAt,
+                    expiresAt = challenge.expiresAt,
+                )
+            }
+            ChallengeConsumeResult.NotFound -> {
+                throw AuthVerificationException("Challenge not found or already used.")
+            }
+            ChallengeConsumeResult.MessageMismatch -> {
+                throw AuthVerificationException("Challenge message mismatch.")
+            }
         }
-
-        return challenge
     }
 
-    private fun cleanupExpiredChallenges() {
-        val now = Instant.now(clock)
-        challengesByNonce.entries.removeIf { now.isAfter(it.value.expiresAt) }
-    }
-
-    private fun generateNonce(length: Int = 18): String {
+    private fun generateNonce(length: Int = 32): String {
         val chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
         val builder = StringBuilder(length)
         repeat(length) {
@@ -131,5 +164,7 @@ internal class WalletChallengeService(
         }
     }
 }
+
+private const val MAX_NONCE_INSERT_RETRIES = 3
 
 private val WALLET_ADDRESS_REGEX = Regex("^0x[0-9a-f]{40}$")

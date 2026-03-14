@@ -15,11 +15,13 @@ application {
 }
 
 dependencies {
+    implementation(platform(libs.jackson.bom))
     implementation(projects.shared)
     implementation(libs.logback)
     implementation(libs.ktor.serverCore)
     implementation(libs.ktor.serverCors)
     implementation(libs.ktor.serverContentNegotiation)
+    implementation(libs.ktor.serverDefaultHeaders)
     implementation(libs.ktor.serverSessions)
     implementation(libs.ktor.serializationKotlinxJson)
     implementation(libs.ktor.serverNetty)
@@ -28,6 +30,7 @@ dependencies {
     implementation(libs.exposed.jdbc)
     implementation(libs.exposed.javaTime)
     implementation(libs.web3j.crypto)
+    implementation(libs.jedis)
     implementation(libs.koin.ktor)
     implementation(libs.kotlinx.serialization.json)
     testImplementation(libs.ktor.serverTestHost)

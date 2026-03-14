@@ -20,6 +20,11 @@ Rules:
 
 The web app reads environment config from a generated Kotlin file at build time.
 
+JDK requirement for Gradle:
+
+- use JDK `21` for all Gradle tasks (running with JDK `25.0.1` can fail during Gradle Kotlin DSL bootstrap)
+- example: `JAVA_HOME=$(/usr/libexec/java_home -v 21) ./gradlew :server:run -PappEnv=local`
+
 Run backend + frontend together (two terminals):
 
 - local (default) backend: `./gradlew :server:run -PappEnv=local`
@@ -48,6 +53,10 @@ Authentication endpoints:
 - `GET /auth/session` (returns current authenticated wallet)
 - `POST /auth/logout` (clears auth cookie)
 
+Auth challenge storage:
+
+- SIWE nonces/challenges are stored in Redis with TTL and one-time consume semantics.
+
 Database schema (3NF):
 
 - `problems`: core problem attributes (`title`, `description`, `problem_status` = `open|closed`, `prize_amount`, `entry_fee_amount`, dates, participant limits, `created_by_user_id`).
@@ -61,8 +70,12 @@ Database schema (3NF):
 
 Local startup:
 
-- start DB: `docker compose up -d postgres`
+- start DB + Redis: `docker compose up -d postgres redis`
 - start backend: `./gradlew :server:run -PappEnv=local`
+
+Backend auth startup requirement:
+
+- backend now requires reachable Redis on startup (no fallback challenge store).
 
 On startup, backend automatically:
 
@@ -77,14 +90,36 @@ Database environment variables:
 - `DB_USER` (default: `blockchain_user`)
 - `DB_PASSWORD` (default: `blockchain_pass`)
 
+Redis environment variables:
+
+- `REDIS_URL` (optional, e.g. `redis://:password@localhost:6379/0` or `rediss://...`)
+- `REDIS_HOST` (default: `localhost`, ignored when `REDIS_URL` is set)
+- `REDIS_PORT` (default: `6379`, ignored when `REDIS_URL` is set)
+- `REDIS_USERNAME` (optional)
+- `REDIS_PASSWORD` (optional)
+- `REDIS_DATABASE` (default: `0`)
+- `REDIS_SSL` (`true|false`, default: `false`; ignored when `REDIS_URL` is set)
+
 Auth environment variables:
 
 - `AUTH_DOMAIN` (default: `localhost:8081`)
 - `AUTH_URI` (default: `http://localhost:8081`)
 - `AUTH_CHALLENGE_TTL_SECONDS` (default: `300`)
+- `AUTH_MAX_ACTIVE_CHALLENGES_PER_WALLET` (default: `5`, range: `1..20`)
 - `AUTH_SESSION_COOKIE` (default: `bp_auth_session`)
 - `AUTH_SESSION_SIGN_KEY` (default: `local-dev-sign-key-change-me`; set strong value outside local)
 - `AUTH_SESSION_SECURE` (`true|false`, default: `false`)
+- `AUTH_SESSION_TTL_SECONDS` (default: `1209600` = 14 days)
+- `AUTH_SESSION_SAME_SITE` (`Lax|Strict|None`, default: `Lax`; `None` requires secure cookie)
+- `AUTH_TRUST_PROXY_HEADERS` (`true|false`, default: `false`; enable only behind trusted reverse proxy)
+- `AUTH_RATE_LIMIT_CHALLENGE_PER_MIN` (default: `40`)
+- `AUTH_RATE_LIMIT_VERIFY_PER_MIN` (default: `80`)
+- `AUTH_RATE_LIMIT_SESSION_PER_MIN` (default: `120`)
+
+CORS environment variables:
+
+- `CORS_ALLOWED_HOSTS` (comma-separated, e.g. `https://app.example.com,https://admin.example.com`)
+  - in `staging/prod`: required, and only `https://` origins are accepted
 
 ### Trunk-based workflow (recommended)
 

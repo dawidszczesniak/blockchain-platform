@@ -29,7 +29,7 @@ internal class AuthController(
         return session to response
     }
 
-    fun getSessionWallet(session: AuthSession?): AuthVerifyResponseDto {
+    fun getSessionWallet(session: AuthSession): AuthVerifyResponseDto {
         val wallet = getAuthenticatedWalletUseCase(session)
         return AuthVerifyResponseDto(walletAddress = wallet)
     }

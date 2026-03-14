@@ -9,6 +9,7 @@ import io.ktor.server.routing.post
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.koin.ktor.ext.inject
+import pl.dawidszczesniak.blockchain_platform.feature.auth.AuthConfig
 import pl.dawidszczesniak.blockchain_platform.feature.auth.AuthRequiredException
 import pl.dawidszczesniak.blockchain_platform.feature.auth.requireAuthSession
 import pl.dawidszczesniak.blockchain_platform.feature.problems.controller.ProblemController
@@ -17,6 +18,7 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.CreatePro
 
 internal fun Route.problemRoutes() {
     val controller by inject<ProblemController>()
+    val authConfig by inject<AuthConfig>()
 
     get("/problems") {
         val problems = withContext(Dispatchers.IO) {
@@ -26,7 +28,7 @@ internal fun Route.problemRoutes() {
     }
     get("/problems/created") {
         try {
-            val session = call.requireAuthSession()
+            val session = call.requireAuthSession(authConfig)
             val createdProblems = withContext(Dispatchers.IO) {
                 controller.getCreatedProblems(session.userId)
             }
@@ -40,7 +42,7 @@ internal fun Route.problemRoutes() {
     }
     get("/problems/participation") {
         try {
-            val session = call.requireAuthSession()
+            val session = call.requireAuthSession(authConfig)
             val participationProblems = withContext(Dispatchers.IO) {
                 controller.getParticipationProblems(session.userId)
             }
@@ -55,7 +57,7 @@ internal fun Route.problemRoutes() {
     post("/problems") {
         val request = call.receive<CreateProblemRequestDto>()
         try {
-            val session = call.requireAuthSession()
+            val session = call.requireAuthSession(authConfig)
             val created = withContext(Dispatchers.IO) {
                 controller.createProblem(session.userId, request)
             }
