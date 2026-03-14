@@ -26,4 +26,16 @@ class LoginRepositoryImpl(
             )
         )
     }
+
+    override suspend fun getSessionWallet(): String? {
+        return runCatching {
+            remoteDataSource.getSession().walletAddress.trim()
+        }.getOrNull()?.ifBlank { null }
+    }
+
+    override suspend fun logout() {
+        runCatching {
+            remoteDataSource.logout()
+        }
+    }
 }

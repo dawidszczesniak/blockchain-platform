@@ -2,6 +2,7 @@ package pl.dawidszczesniak.blockchain_platform.app
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import pl.dawidszczesniak.blockchain_platform.di.LocalKoin
@@ -12,6 +13,9 @@ import pl.dawidszczesniak.blockchain_platform.ui.AppTheme
 fun App() {
     val koin = LocalKoin.current
     val appViewModel = remember { koin.get<AppViewModel>() }
+    DisposableEffect(appViewModel) {
+        onDispose { appViewModel.close() }
+    }
     val state by appViewModel.state.collectAsState()
 
     AppTheme {

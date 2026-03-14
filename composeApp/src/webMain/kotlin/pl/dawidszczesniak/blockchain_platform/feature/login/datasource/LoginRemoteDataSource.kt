@@ -11,6 +11,8 @@ import pl.dawidszczesniak.blockchain_platform.network.HttpTextClient
 interface LoginRemoteDataSource {
     suspend fun requestChallenge(request: AuthChallengeRequestDto): AuthChallengeResponseDto
     suspend fun verifyChallenge(request: AuthVerifyRequestDto): AuthVerifyResponseDto
+    suspend fun getSession(): AuthVerifyResponseDto
+    suspend fun logout()
 }
 
 class LoginRemoteDataSourceImpl(
@@ -29,6 +31,15 @@ class LoginRemoteDataSourceImpl(
         val body = json.encodeToString(AuthVerifyRequestDto.serializer(), request)
         val payload = httpTextClient.postJson(endpoint(apiBaseUrl, "/auth/verify"), body)
         return json.decodeFromString(AuthVerifyResponseDto.serializer(), payload)
+    }
+
+    override suspend fun getSession(): AuthVerifyResponseDto {
+        val payload = httpTextClient.get(endpoint(apiBaseUrl, "/auth/session"))
+        return json.decodeFromString(AuthVerifyResponseDto.serializer(), payload)
+    }
+
+    override suspend fun logout() {
+        httpTextClient.postJson(endpoint(apiBaseUrl, "/auth/logout"), "{}")
     }
 }
 

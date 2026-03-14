@@ -19,7 +19,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import blockchain_platform.composeapp.generated.resources.Res
-import blockchain_platform.composeapp.generated.resources.loading_more
 import blockchain_platform.composeapp.generated.resources.participation_empty_action
 import blockchain_platform.composeapp.generated.resources.participation_empty_body
 import blockchain_platform.composeapp.generated.resources.participation_empty_title
@@ -33,7 +32,6 @@ import blockchain_platform.composeapp.generated.resources.participation_submissi
 import blockchain_platform.composeapp.generated.resources.participation_submission_pending
 import blockchain_platform.composeapp.generated.resources.participation_submission_sent
 import blockchain_platform.composeapp.generated.resources.participation_time_left
-import blockchain_platform.composeapp.generated.resources.participation_title
 import org.jetbrains.compose.resources.stringResource
 import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.ParticipationProblem
 import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.ParticipationStatus
@@ -54,16 +52,11 @@ fun MyParticipationScreen(onBrowseProblems: () -> Unit) {
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = stringResource(Res.string.participation_title),
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            if (!state.isEmpty) {
+        if (!state.isEmpty) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Spacer(Modifier.weight(1f))
                 MyParticipationFilterRow(
                     current = state.filter,
@@ -76,11 +69,15 @@ fun MyParticipationScreen(onBrowseProblems: () -> Unit) {
         Spacer(Modifier.height(12.dp))
 
         if (state.isLoading) {
-            Text(
-                text = stringResource(Res.string.loading_more),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Box(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    strokeWidth = 2.dp
+                )
+            }
         } else if (state.isEmpty) {
             EmptyMyParticipation(onBrowseProblems = onBrowseProblems)
             return@Column

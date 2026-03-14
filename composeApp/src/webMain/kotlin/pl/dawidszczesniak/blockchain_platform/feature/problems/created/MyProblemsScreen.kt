@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.rememberScrollState
@@ -15,6 +16,7 @@ import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
@@ -46,10 +48,8 @@ import blockchain_platform.composeapp.generated.resources.my_problems_expired
 import blockchain_platform.composeapp.generated.resources.my_problems_filter_all
 import blockchain_platform.composeapp.generated.resources.my_problems_filter_label
 import blockchain_platform.composeapp.generated.resources.my_problems_started
-import blockchain_platform.composeapp.generated.resources.my_problems_title
 import blockchain_platform.composeapp.generated.resources.my_problems_waiting
 import blockchain_platform.composeapp.generated.resources.my_problem_registration_ends
-import blockchain_platform.composeapp.generated.resources.loading_more
 import org.jetbrains.compose.resources.stringResource
 import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.CreatedProblem
 import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.CreatedProblemStatus
@@ -71,16 +71,11 @@ fun MyProblemsScreen(onCreateProblem: () -> Unit) {
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = stringResource(Res.string.my_problems_title),
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            if (!state.isEmpty) {
+        if (!state.isEmpty) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Spacer(Modifier.weight(1f))
                 TypeFilterRow(
                     current = state.filter,
@@ -90,14 +85,16 @@ fun MyProblemsScreen(onCreateProblem: () -> Unit) {
                 )
             }
         }
-        Spacer(Modifier.height(12.dp))
-
         if (state.isLoading) {
-            Text(
-                text = stringResource(Res.string.loading_more),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            androidx.compose.foundation.layout.Box(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    strokeWidth = 2.dp
+                )
+            }
         } else if (state.isEmpty) {
             EmptyMyProblems(onCreateProblem = onCreateProblem)
         } else {

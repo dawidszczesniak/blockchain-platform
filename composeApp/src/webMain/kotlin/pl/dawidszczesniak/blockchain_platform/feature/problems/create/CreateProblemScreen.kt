@@ -66,7 +66,6 @@ import blockchain_platform.composeapp.generated.resources.create_problem_test_ex
 import blockchain_platform.composeapp.generated.resources.create_problem_test_label
 import blockchain_platform.composeapp.generated.resources.create_problem_test_remove
 import blockchain_platform.composeapp.generated.resources.create_problem_tests_title
-import blockchain_platform.composeapp.generated.resources.create_problem_title
 import blockchain_platform.composeapp.generated.resources.create_problem_validation_date_order
 import blockchain_platform.composeapp.generated.resources.create_problem_validation_invalid_date
 import blockchain_platform.composeapp.generated.resources.create_problem_validation_integer
@@ -226,12 +225,6 @@ private fun CreateProblemForm(
     )
 
     Column(modifier = modifier.fillMaxWidth()) {
-        Text(
-            text = stringResource(Res.string.create_problem_title),
-            style = MaterialTheme.typography.titleLarge
-        )
-        Spacer(Modifier.height(12.dp))
-
         OutlinedTextField(
             value = state.prize,
             onValueChange = onPrizeChange,

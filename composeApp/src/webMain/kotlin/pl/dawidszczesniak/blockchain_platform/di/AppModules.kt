@@ -84,7 +84,7 @@ fun appModules() = module {
     factory<GetDashboardMetricsHistoryUseCase> { GetDashboardMetricsHistoryUseCaseImpl(get()) }
     factory<GetDashboardUpdatesUseCase> { GetDashboardUpdatesUseCaseImpl(get()) }
     factory<LoginUseCase> { LoginUseCaseImpl(get(), get()) }
-    factory { AppViewModel() }
+    factory { AppViewModel(get()) }
     factory { HomeViewModel(get(), get(), get()) }
     factory { LoginViewModel(get()) }
     factory { SettingsViewModel() }

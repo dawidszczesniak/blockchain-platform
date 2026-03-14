@@ -24,7 +24,6 @@ import blockchain_platform.composeapp.generated.resources.details_coming_soon
 import blockchain_platform.composeapp.generated.resources.info_entry_fee
 import blockchain_platform.composeapp.generated.resources.info_prize
 import blockchain_platform.composeapp.generated.resources.info_start
-import blockchain_platform.composeapp.generated.resources.loading_more
 import blockchain_platform.composeapp.generated.resources.participants_summary
 import blockchain_platform.composeapp.generated.resources.problems_empty_action
 import blockchain_platform.composeapp.generated.resources.problems_empty_body
@@ -86,20 +85,22 @@ fun ProblemsListScreen(
                 )
             }
         }
-        Spacer(Modifier.height(6.dp))
-        if (state.isLoading) {
-            Spacer(Modifier.height(12.dp))
-            Text(
-                text = stringResource(Res.string.loading_more),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        } else if (!state.isEmpty) {
-            Spacer(Modifier.height(12.dp))
-        } else {
-            Spacer(Modifier.height(12.dp))
-            EmptyProblemList(onCreateProblem = onCreateProblem)
-            return@Column
+        when {
+            state.isLoading -> {
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp
+                    )
+                }
+            }
+            state.isEmpty -> {
+                EmptyProblemList(onCreateProblem = onCreateProblem)
+                return@Column
+            }
         }
 
         Box(modifier = Modifier.fillMaxWidth().weight(1f)) {

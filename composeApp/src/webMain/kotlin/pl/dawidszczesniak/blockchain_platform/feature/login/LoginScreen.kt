@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
@@ -32,7 +33,6 @@ import blockchain_platform.composeapp.generated.resources.Res
 import blockchain_platform.composeapp.generated.resources.login_connect_wallet
 import blockchain_platform.composeapp.generated.resources.login_subtitle
 import blockchain_platform.composeapp.generated.resources.login_title
-import blockchain_platform.composeapp.generated.resources.login_wallet_detecting
 import blockchain_platform.composeapp.generated.resources.login_wallet_not_found
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
@@ -113,10 +113,9 @@ fun LoginScreen(onLogin: () -> Unit) {
 
                 if (state.isLoadingWallets) {
                     Spacer(Modifier.height(10.dp))
-                    Text(
-                        text = stringResource(Res.string.login_wallet_detecting),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp
                     )
                 }
                 if (!state.isLoadingWallets && state.wallets.isEmpty()) {
@@ -176,16 +175,8 @@ private fun loadWalletIconBitmap(iconDataUrl: String?): ImageBitmap? {
         walletIconBitmapCache[normalized] = null
         return null
     }
-    val decodedBytes = runCatching {
-        Base64.decode(base64Payload)
-    }.getOrNull()
-    if (decodedBytes == null || decodedBytes.isEmpty()) {
-        walletIconBitmapCache[normalized] = null
-        return null
-    }
-
     val bitmap = runCatching {
-        SkiaImage.makeFromEncoded(decodedBytes).toComposeImageBitmap()
+        SkiaImage.makeFromEncoded(Base64.decode(base64Payload)).toComposeImageBitmap()
     }.getOrNull()
     walletIconBitmapCache[normalized] = bitmap
     return bitmap
