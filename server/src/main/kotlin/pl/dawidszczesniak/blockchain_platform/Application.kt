@@ -2,6 +2,7 @@ package pl.dawidszczesniak.blockchain_platform
 
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.*
 import io.ktor.server.engine.*
 import io.ktor.server.netty.*
@@ -16,14 +17,18 @@ import io.ktor.server.sessions.cookie
 import io.ktor.serialization.kotlinx.json.json
 import java.net.URI
 import java.security.MessageDigest
+import java.time.Instant
+import kotlinx.serialization.Serializable
 import org.koin.ktor.ext.get
 import org.koin.ktor.plugin.Koin
 import redis.clients.jedis.JedisPooled
 import pl.dawidszczesniak.blockchain_platform.db.DatabaseBootstrapper
+import pl.dawidszczesniak.blockchain_platform.db.DbTransactionRunner
 import pl.dawidszczesniak.blockchain_platform.di.serverModules
 import pl.dawidszczesniak.blockchain_platform.feature.auth.AuthConfig
-import pl.dawidszczesniak.blockchain_platform.feature.auth.AuthSession
+import pl.dawidszczesniak.blockchain_platform.feature.auth.AuthSessionCookie
 import pl.dawidszczesniak.blockchain_platform.feature.auth.endpoint.authRoutes
+import pl.dawidszczesniak.blockchain_platform.feature.auth.service.Eip1271SignatureVerifier
 import pl.dawidszczesniak.blockchain_platform.feature.dashboard.endpoint.dashboardRoutes
 import pl.dawidszczesniak.blockchain_platform.feature.problems.endpoint.problemRoutes
 
@@ -44,9 +49,12 @@ fun Application.module() {
     val authConfig = get<AuthConfig>()
     validateSecurityConfiguration(appEnv, authConfig, allowedHosts)
     get<DatabaseBootstrapper>().bootstrap()
+    val transactionRunner = get<DbTransactionRunner>()
     val redisClient = get<JedisPooled>()
+    val eip1271Verifier = get<Eip1271SignatureVerifier>()
     monitor.subscribe(ApplicationStopped) {
         redisClient.close()
+        eip1271Verifier.close()
     }
 
     install(CORS) {
@@ -68,7 +76,7 @@ fun Application.module() {
         }
     }
     install(Sessions) {
-        cookie<AuthSession>(authConfig.sessionCookieName) {
+        cookie<AuthSessionCookie>(authConfig.sessionCookieName) {
             cookie.path = "/"
             cookie.httpOnly = true
             cookie.secure = authConfig.sessionSecureCookie
@@ -90,7 +98,26 @@ fun Application.module() {
             call.respondText("Ktor OK")
         }
         get("/health") {
-            call.respondText("OK")
+            val postgresHealthy = runCatching {
+                transactionRunner.inTransaction { 1 }
+            }.isSuccess
+            val redisHealthy = runCatching {
+                redisClient.ping().equals("PONG", ignoreCase = true)
+            }.getOrDefault(false)
+            val allHealthy = postgresHealthy && redisHealthy
+
+            val payload = HealthResponseDto(
+                status = if (allHealthy) "ok" else "degraded",
+                timestamp = Instant.now().toString(),
+                dependencies = HealthDependenciesDto(
+                    postgres = if (postgresHealthy) "up" else "down",
+                    redis = if (redisHealthy) "up" else "down",
+                ),
+            )
+            call.respond(
+                if (allHealthy) HttpStatusCode.OK else HttpStatusCode.ServiceUnavailable,
+                payload,
+            )
         }
         authRoutes()
         problemRoutes()
@@ -163,3 +190,16 @@ private fun validateSecurityConfiguration(
 private fun sha256(input: String): ByteArray {
     return MessageDigest.getInstance("SHA-256").digest(input.toByteArray())
 }
+
+@Serializable
+private data class HealthResponseDto(
+    val status: String,
+    val timestamp: String,
+    val dependencies: HealthDependenciesDto,
+)
+
+@Serializable
+private data class HealthDependenciesDto(
+    val postgres: String,
+    val redis: String,
+)

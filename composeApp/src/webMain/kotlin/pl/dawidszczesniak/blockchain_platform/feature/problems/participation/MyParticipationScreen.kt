@@ -66,7 +66,6 @@ fun MyParticipationScreen(onBrowseProblems: () -> Unit) {
                 )
             }
         }
-        Spacer(Modifier.height(12.dp))
 
         if (state.isLoading) {
             Box(

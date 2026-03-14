@@ -1,5 +1,7 @@
 package pl.dawidszczesniak.blockchain_platform.feature.auth
 
+import java.net.URI
+
 private const val DEFAULT_LOCAL_SIGN_KEY = "local-dev-sign-key-change-me"
 
 internal enum class SessionSameSite(val cookieValue: String) {
@@ -25,6 +27,7 @@ internal data class AuthConfig(
     val sessionTtlSeconds: Long,
     val sessionSameSite: SessionSameSite,
     val trustProxyHeaders: Boolean,
+    val trustedOrigins: Set<String>,
     val rateLimit: AuthRateLimitConfig,
 ) {
     companion object {
@@ -56,6 +59,17 @@ internal data class AuthConfig(
                     ?.trim()
                     ?.equals("true", ignoreCase = true)
                 ) == true
+            val trustedOrigins = env["AUTH_TRUSTED_ORIGINS"]
+                ?.split(',')
+                ?.mapNotNull { it.toNormalizedOriginOrNull() }
+                ?.toSet()
+                .orEmpty()
+                .ifEmpty {
+                    setOf(
+                        uri.toNormalizedOriginOrNull()
+                            ?: error("AUTH_URI must contain valid scheme/host origin.")
+                    )
+                }
             val rateLimit = AuthRateLimitConfig(
                 challengeRequestsPerMinute = env["AUTH_RATE_LIMIT_CHALLENGE_PER_MIN"]
                     ?.toIntOrNull()
@@ -87,6 +101,9 @@ internal data class AuthConfig(
                 if (!uri.startsWith("https://")) {
                     error("AUTH_URI must use https:// in staging/prod.")
                 }
+                if (trustedOrigins.any { !it.startsWith("https://") }) {
+                    error("AUTH_TRUSTED_ORIGINS must use https:// origins in staging/prod.")
+                }
             }
 
             return AuthConfig(
@@ -100,6 +117,7 @@ internal data class AuthConfig(
                 sessionTtlSeconds = sessionTtlSeconds,
                 sessionSameSite = sessionSameSite,
                 trustProxyHeaders = trustProxyHeaders,
+                trustedOrigins = trustedOrigins,
                 rateLimit = rateLimit,
             )
         }
@@ -111,5 +129,25 @@ internal data class AuthConfig(
                 else -> SessionSameSite.Lax
             }
         }
+    }
+}
+
+private fun String.toNormalizedOriginOrNull(): String? {
+    val parsed = runCatching { URI(this.trim()) }.getOrNull() ?: return null
+    val scheme = parsed.scheme?.trim()?.lowercase().orEmpty()
+    val host = parsed.host?.trim()?.lowercase().orEmpty()
+    if ((scheme != "http" && scheme != "https") || host.isBlank()) {
+        return null
+    }
+    val port = when {
+        parsed.port > 0 -> parsed.port
+        scheme == "https" -> 443
+        else -> 80
+    }
+    val includePort = !(scheme == "https" && port == 443) && !(scheme == "http" && port == 80)
+    return if (includePort) {
+        "$scheme://$host:$port"
+    } else {
+        "$scheme://$host"
     }
 }

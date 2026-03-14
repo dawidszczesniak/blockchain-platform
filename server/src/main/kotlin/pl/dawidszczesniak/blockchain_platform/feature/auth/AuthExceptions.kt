@@ -9,3 +9,5 @@ internal class AuthRequiredException(message: String) : IllegalStateException(me
 internal class AuthRateLimitException(message: String) : IllegalStateException(message)
 
 internal class AuthServiceUnavailableException(message: String) : IllegalStateException(message)
+
+internal class AuthCsrfException(message: String) : IllegalStateException(message)

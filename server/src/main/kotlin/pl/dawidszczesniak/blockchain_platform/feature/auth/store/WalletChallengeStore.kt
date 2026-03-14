@@ -1,6 +1,7 @@
 package pl.dawidszczesniak.blockchain_platform.feature.auth.store
 
 import java.time.Instant
+import pl.dawidszczesniak.blockchain_platform.feature.auth.AuthServiceUnavailableException
 import redis.clients.jedis.JedisPooled
 
 internal data class StoredWalletChallenge(
@@ -37,22 +38,26 @@ internal class RedisWalletChallengeStore(
         maxActiveChallengesPerWallet: Int,
         now: Instant,
     ): ChallengeInsertResult {
-        val ttlSeconds = (challenge.expiresAt.epochSecond - now.epochSecond).coerceAtLeast(1L)
-        val raw = redis.eval(
-            INSERT_CHALLENGE_SCRIPT,
-            listOf(walletChallengesKey(challenge.walletAddress), challengeKey(challenge.nonce)),
-            listOf(
-                now.epochSecond.toString(),
-                maxActiveChallengesPerWallet.toString(),
-                challenge.expiresAt.epochSecond.toString(),
-                ttlSeconds.toString(),
-                challenge.nonce,
-                challenge.message,
-                challenge.walletAddress,
-                challenge.chainId.toString(),
-                challenge.issuedAt.epochSecond.toString(),
-            ),
-        )
+        val raw = runCatching {
+            val ttlSeconds = (challenge.expiresAt.epochSecond - now.epochSecond).coerceAtLeast(1L)
+            redis.eval(
+                INSERT_CHALLENGE_SCRIPT,
+                listOf(walletChallengesKey(challenge.walletAddress), challengeKey(challenge.nonce)),
+                listOf(
+                    now.epochSecond.toString(),
+                    maxActiveChallengesPerWallet.toString(),
+                    challenge.expiresAt.epochSecond.toString(),
+                    ttlSeconds.toString(),
+                    challenge.nonce,
+                    challenge.message,
+                    challenge.walletAddress,
+                    challenge.chainId.toString(),
+                    challenge.issuedAt.epochSecond.toString(),
+                ),
+            )
+        }.getOrElse {
+            throw AuthServiceUnavailableException("Challenge store is temporarily unavailable.")
+        }
 
         return when (raw.toResultCode()) {
             1L -> ChallengeInsertResult.Created
@@ -63,11 +68,15 @@ internal class RedisWalletChallengeStore(
 
     override fun consumeChallenge(nonce: String, expectedMessage: String, now: Instant): ChallengeConsumeResult {
         val key = challengeKey(nonce)
-        val raw = redis.eval(
-            CONSUME_CHALLENGE_SCRIPT,
-            listOf(key),
-            listOf(expectedMessage),
-        )
+        val raw = runCatching {
+            redis.eval(
+                CONSUME_CHALLENGE_SCRIPT,
+                listOf(key),
+                listOf(expectedMessage),
+            )
+        }.getOrElse {
+            throw AuthServiceUnavailableException("Challenge store is temporarily unavailable.")
+        }
         val payload = raw as? List<*> ?: return ChallengeConsumeResult.NotFound
         val status = payload.getOrNull(0).toResultCode()
         if (status == 0L) {
@@ -86,8 +95,12 @@ internal class RedisWalletChallengeStore(
             expiresAt = Instant.ofEpochSecond(payload.getOrNull(6).toPayloadValue().toLong()),
         )
         val walletSetKey = walletChallengesKey(challenge.walletAddress)
-        redis.zrem(walletSetKey, challenge.nonce)
-        redis.zremrangeByScore(walletSetKey, Double.NEGATIVE_INFINITY, now.epochSecond.toDouble())
+        runCatching {
+            redis.zrem(walletSetKey, challenge.nonce)
+            redis.zremrangeByScore(walletSetKey, Double.NEGATIVE_INFINITY, now.epochSecond.toDouble())
+        }.getOrElse {
+            throw AuthServiceUnavailableException("Challenge store is temporarily unavailable.")
+        }
         return ChallengeConsumeResult.Success(challenge)
     }
 

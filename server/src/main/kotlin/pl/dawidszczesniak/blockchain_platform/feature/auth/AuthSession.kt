@@ -5,19 +5,39 @@ import io.ktor.server.sessions.clear
 import io.ktor.server.sessions.get
 import io.ktor.server.sessions.sessions
 import kotlinx.serialization.Serializable
+import pl.dawidszczesniak.blockchain_platform.feature.auth.store.AuthSessionStore
 
 @Serializable
+internal data class AuthSessionCookie(
+    val sessionId: String,
+)
+
 internal data class AuthSession(
     val userId: Long,
     val walletAddress: String,
     val issuedAtEpochSeconds: Long,
 )
 
-internal fun ApplicationCall.requireAuthSession(authConfig: AuthConfig): AuthSession {
-    val session = sessions.get<AuthSession>() ?: throw AuthRequiredException("Login required.")
+internal fun ApplicationCall.requireAuthSession(
+    authConfig: AuthConfig,
+    sessionStore: AuthSessionStore,
+): AuthSession {
+    val sessionCookie = sessions.get<AuthSessionCookie>() ?: throw AuthRequiredException("Login required.")
+    val sessionId = sessionCookie.sessionId.trim()
+    if (sessionId.isBlank()) {
+        sessions.clear<AuthSessionCookie>()
+        throw AuthRequiredException("Login required.")
+    }
+
     val nowEpochSeconds = System.currentTimeMillis() / 1000L
+    val session = sessionStore.fetchActiveSession(sessionId, nowEpochSeconds)
+    if (session == null) {
+        sessions.clear<AuthSessionCookie>()
+        throw AuthRequiredException("Session expired. Please login again.")
+    }
     if (nowEpochSeconds - session.issuedAtEpochSeconds > authConfig.sessionTtlSeconds) {
-        sessions.clear<AuthSession>()
+        sessionStore.deleteSession(sessionId)
+        sessions.clear<AuthSessionCookie>()
         throw AuthRequiredException("Session expired. Please login again.")
     }
     return session

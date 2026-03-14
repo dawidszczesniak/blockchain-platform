@@ -11,14 +11,18 @@ import pl.dawidszczesniak.blockchain_platform.db.DbTransactionRunner
 import pl.dawidszczesniak.blockchain_platform.db.ExposedDbTransactionRunner
 import pl.dawidszczesniak.blockchain_platform.db.PostgresConfig
 import pl.dawidszczesniak.blockchain_platform.feature.auth.AuthConfig
+import pl.dawidszczesniak.blockchain_platform.feature.auth.BlockchainConfig
 import pl.dawidszczesniak.blockchain_platform.feature.auth.controller.AuthController
 import pl.dawidszczesniak.blockchain_platform.feature.auth.dao.UserDao
 import pl.dawidszczesniak.blockchain_platform.feature.auth.dao.UserDaoImpl
 import pl.dawidszczesniak.blockchain_platform.feature.auth.repository.AuthRepository
 import pl.dawidszczesniak.blockchain_platform.feature.auth.repository.AuthRepositoryImpl
 import pl.dawidszczesniak.blockchain_platform.feature.auth.service.AuthRateLimiter
+import pl.dawidszczesniak.blockchain_platform.feature.auth.service.Eip1271SignatureVerifier
 import pl.dawidszczesniak.blockchain_platform.feature.auth.service.EthereumSignatureVerifier
 import pl.dawidszczesniak.blockchain_platform.feature.auth.service.WalletChallengeService
+import pl.dawidszczesniak.blockchain_platform.feature.auth.store.AuthSessionStore
+import pl.dawidszczesniak.blockchain_platform.feature.auth.store.RedisAuthSessionStore
 import pl.dawidszczesniak.blockchain_platform.feature.auth.store.RedisWalletChallengeStore
 import pl.dawidszczesniak.blockchain_platform.feature.auth.store.WalletChallengeStore
 import pl.dawidszczesniak.blockchain_platform.feature.auth.usecase.CreateWalletChallengeUseCase
@@ -57,6 +61,7 @@ internal fun serverModules() = module {
     single { PostgresConfig.fromEnvironment() }
     single { RedisConfig.fromEnvironment() }
     single { AuthConfig.fromEnvironment() }
+    single { BlockchainConfig.fromEnvironment() }
     single<Database> { DatabaseFactory.connect(get()) }
     single<JedisPooled> { RedisFactory.connect(get()) }
     single<DbTransactionRunner> { ExposedDbTransactionRunner(get()) }
@@ -66,13 +71,15 @@ internal fun serverModules() = module {
     single { DatabaseBootstrapper(get(), get(), get()) }
 
     single<UserDao> { UserDaoImpl() }
+    single<AuthSessionStore> { RedisAuthSessionStore(get()) }
     single<WalletChallengeStore> { RedisWalletChallengeStore(get()) }
     single<AuthRepository> { AuthRepositoryImpl(get(), get()) }
     single { WalletChallengeService(get(), get()) }
     single { AuthRateLimiter(get(), get()) }
     single { EthereumSignatureVerifier() }
+    single { Eip1271SignatureVerifier(get()) }
     factory<CreateWalletChallengeUseCase> { CreateWalletChallengeUseCaseImpl(get()) }
-    factory<VerifyWalletChallengeUseCase> { VerifyWalletChallengeUseCaseImpl(get(), get(), get()) }
+    factory<VerifyWalletChallengeUseCase> { VerifyWalletChallengeUseCaseImpl(get(), get(), get(), get()) }
     factory<GetAuthenticatedWalletUseCase> { GetAuthenticatedWalletUseCaseImpl(get()) }
     factory { AuthController(get(), get(), get()) }
 

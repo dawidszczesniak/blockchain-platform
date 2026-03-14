@@ -30,6 +30,7 @@ dependencies {
     implementation(libs.exposed.jdbc)
     implementation(libs.exposed.javaTime)
     implementation(libs.web3j.crypto)
+    implementation(libs.web3j.core)
     implementation(libs.jedis)
     implementation(libs.koin.ktor)
     implementation(libs.kotlinx.serialization.json)

@@ -52,10 +52,14 @@ Authentication endpoints:
 - `POST /auth/verify` (verify signed challenge and create auth session cookie)
 - `GET /auth/session` (returns current authenticated wallet)
 - `POST /auth/logout` (clears auth cookie)
+- `POST /auth/logout-all` (invalidates all active sessions for authenticated user)
 
-Auth challenge storage:
+Auth storage model:
 
 - SIWE nonces/challenges are stored in Redis with TTL and one-time consume semantics.
+- auth sessions are server-side in Redis (`session_id` cookie only).
+- `POST` auth/protected mutations enforce trusted request origin (`Origin` / `Referer`) to harden CSRF.
+- EIP-1271 smart-contract wallet signature verification is supported when `ETH_RPC_URL` is configured.
 
 Database schema (3NF):
 
@@ -99,6 +103,7 @@ Redis environment variables:
 - `REDIS_PASSWORD` (optional)
 - `REDIS_DATABASE` (default: `0`)
 - `REDIS_SSL` (`true|false`, default: `false`; ignored when `REDIS_URL` is set)
+- in `staging/prod`: Redis password is required
 
 Auth environment variables:
 
@@ -112,9 +117,14 @@ Auth environment variables:
 - `AUTH_SESSION_TTL_SECONDS` (default: `1209600` = 14 days)
 - `AUTH_SESSION_SAME_SITE` (`Lax|Strict|None`, default: `Lax`; `None` requires secure cookie)
 - `AUTH_TRUST_PROXY_HEADERS` (`true|false`, default: `false`; enable only behind trusted reverse proxy)
+- `AUTH_TRUSTED_ORIGINS` (optional comma-separated origin list, e.g. `https://app.example.com,https://admin.example.com`; defaults to origin from `AUTH_URI`)
 - `AUTH_RATE_LIMIT_CHALLENGE_PER_MIN` (default: `40`)
 - `AUTH_RATE_LIMIT_VERIFY_PER_MIN` (default: `80`)
 - `AUTH_RATE_LIMIT_SESSION_PER_MIN` (default: `120`)
+
+Blockchain environment variables:
+
+- `ETH_RPC_URL` (required in `staging/prod`; enables smart-contract wallet signature verification via EIP-1271)
 
 CORS environment variables:
 
