@@ -359,10 +359,7 @@ private fun CreateProblemForm(
         if (state.submitSuccessProblemId != null) {
             Spacer(Modifier.height(10.dp))
             Text(
-                text = stringResource(
-                    Res.string.create_problem_submit_success,
-                    state.submitSuccessProblemId,
-                ),
+                text = stringResource(Res.string.create_problem_submit_success),
                 style = MaterialTheme.typography.bodySmall,
                 color = Color(0xFF33C97A),
             )

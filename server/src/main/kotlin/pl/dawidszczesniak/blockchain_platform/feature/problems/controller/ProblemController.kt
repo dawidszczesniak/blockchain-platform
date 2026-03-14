@@ -10,12 +10,14 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.CreatePro
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetCreatedProblemsUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetParticipationProblemsUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetProblemSummariesUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.LoginDefaultUserUseCase
 
 internal class ProblemController(
     private val getProblemSummariesUseCase: GetProblemSummariesUseCase,
     private val getCreatedProblemsUseCase: GetCreatedProblemsUseCase,
     private val getParticipationProblemsUseCase: GetParticipationProblemsUseCase,
     private val createProblemUseCase: CreateProblemUseCase,
+    private val loginDefaultUserUseCase: LoginDefaultUserUseCase,
 ) {
     fun getProblemSummaries(): List<ProblemSummaryDto> {
         return getProblemSummariesUseCase().map { it.toDto() }
@@ -32,5 +34,9 @@ internal class ProblemController(
     fun createProblem(request: CreateProblemRequestDto): CreateProblemResponseDto {
         val createdId = createProblemUseCase(request)
         return CreateProblemResponseDto(id = createdId)
+    }
+
+    fun loginDefaultUser() {
+        loginDefaultUserUseCase()
     }
 }

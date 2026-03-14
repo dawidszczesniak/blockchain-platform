@@ -43,6 +43,16 @@ data class ParticipationProblemDto(
 )
 
 @Serializable
+data class CreateProblemTestCaseDto(
+    val inputData: String,
+    val expectedOutput: String,
+    val validatorCode: String = "",
+    val isHidden: Boolean = true,
+    val timeoutMs: Int = 1000,
+    val memoryLimitMb: Int = 256,
+)
+
+@Serializable
 data class CreateProblemRequestDto(
     val description: String,
     val prizeAmount: Long,
@@ -50,7 +60,8 @@ data class CreateProblemRequestDto(
     val requiredParticipants: Int,
     val joinUntilDate: String,
     val submitUntilDate: String,
-    val tests: List<String>,
+    val tests: List<String> = emptyList(),
+    val testCases: List<CreateProblemTestCaseDto> = emptyList(),
 )
 
 @Serializable

@@ -32,6 +32,8 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetPartic
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetParticipationProblemsUseCaseImpl
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetProblemSummariesUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetProblemSummariesUseCaseImpl
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.LoginDefaultUserUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.LoginDefaultUserUseCaseImpl
 
 internal fun serverModules() = module {
     single { PostgresConfig.fromEnvironment() }
@@ -50,7 +52,8 @@ internal fun serverModules() = module {
     factory<GetProblemSummariesUseCase> { GetProblemSummariesUseCaseImpl(get()) }
     factory<GetCreatedProblemsUseCase> { GetCreatedProblemsUseCaseImpl(get()) }
     factory<GetParticipationProblemsUseCase> { GetParticipationProblemsUseCaseImpl(get()) }
-    factory { ProblemController(get(), get(), get(), get()) }
+    factory<LoginDefaultUserUseCase> { LoginDefaultUserUseCaseImpl(get()) }
+    factory { ProblemController(get(), get(), get(), get(), get()) }
 
     single<DashboardDao> { DashboardDaoImpl(get()) }
     single<DashboardReadRepository> { DashboardReadRepositoryImpl(get(), get()) }

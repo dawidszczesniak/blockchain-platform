@@ -46,7 +46,9 @@ Database schema (3NF):
 - `problems`: core problem attributes (`title`, `description`, `problem_status` = `open|closed`, `prize_amount`, `entry_fee_amount`, dates, participant limits, `created_by_user_id`).
 - `users`: unique user identities (`registered_at`, `last_login_at`).
 - `problem_participants`: mapping of participants (users) assigned/registered to a specific problem.
+- `problem_tests`: ordered tests per problem (`input_data`, `expected_output`, `validator_code`, visibility flag, runtime limits).
 - `problem_submissions`: submission attempts history (multiple tries per user/problem).
+- `problem_submission_test_results`: verdict per test for each submission (`passed|failed|error|timeout` with runtime metrics).
 - `problem_winners`: winner history per problem and winner user (`winner_user_id`, `payout_amount`, `won_at`).
 - `dashboard_daily_metrics`: daily snapshot history (`metric_date`, `active_challenges`, `prize_pool_amount`, `submissions_count`).
 
@@ -57,8 +59,7 @@ Local startup:
 
 On startup, backend automatically:
 
-- creates schema from `server/src/main/resources/db/schema.sql`,
-- seeds sample problems if the database is empty.
+- creates schema from `server/src/main/resources/db/schema.sql`.
 
 Database environment variables:
 

@@ -1,11 +1,13 @@
 package pl.dawidszczesniak.blockchain_platform.feature.problems.dao
 
 import java.time.LocalDate
+import java.time.LocalDateTime
 import org.jetbrains.exposed.sql.ResultRow
 import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.count
 import org.jetbrains.exposed.sql.innerJoin
 import org.jetbrains.exposed.sql.insert
+import org.jetbrains.exposed.sql.update
 import org.jetbrains.exposed.sql.select
 import org.jetbrains.exposed.sql.selectAll
 import pl.dawidszczesniak.blockchain_platform.db.ProblemLifecycleStatus
@@ -32,6 +34,7 @@ internal interface ProblemDao {
     fun fetchWinnerRows(): List<ResultRow>
     fun fetchDefaultUserId(): Long?
     fun fetchOrCreateDefaultUserId(): Long
+    fun touchUserLogin(userId: Long)
     fun insertProblem(
         createdByUserId: Long,
         title: String,
@@ -42,7 +45,16 @@ internal interface ProblemDao {
         joinUntilDate: LocalDate,
         submitUntilDate: LocalDate,
     ): Long
-    fun insertProblemTest(problemId: Long, testOrder: Int, validatorCode: String)
+    fun insertProblemTest(
+        problemId: Long,
+        testOrder: Int,
+        inputData: String,
+        expectedOutput: String,
+        validatorCode: String,
+        isHidden: Boolean,
+        timeoutMs: Int,
+        memoryLimitMb: Int,
+    )
 }
 
 internal class ProblemDaoImpl : ProblemDao {
@@ -130,6 +142,12 @@ internal class ProblemDaoImpl : ProblemDao {
         return resolveDefaultUserId() ?: createDefaultUser()
     }
 
+    override fun touchUserLogin(userId: Long) {
+        UsersTable.update({ UsersTable.userId eq userId }) {
+            it[UsersTable.lastLoginAt] = LocalDateTime.now()
+        }
+    }
+
     override fun insertProblem(
         createdByUserId: Long,
         title: String,
@@ -154,11 +172,25 @@ internal class ProblemDaoImpl : ProblemDao {
         return inserted[ProblemsTable.problemId]
     }
 
-    override fun insertProblemTest(problemId: Long, testOrder: Int, validatorCode: String) {
+    override fun insertProblemTest(
+        problemId: Long,
+        testOrder: Int,
+        inputData: String,
+        expectedOutput: String,
+        validatorCode: String,
+        isHidden: Boolean,
+        timeoutMs: Int,
+        memoryLimitMb: Int,
+    ) {
         ProblemTestsTable.insert {
             it[ProblemTestsTable.problemId] = problemId
             it[ProblemTestsTable.testOrder] = testOrder
+            it[ProblemTestsTable.inputData] = inputData
+            it[ProblemTestsTable.expectedOutput] = expectedOutput
             it[ProblemTestsTable.validatorCode] = validatorCode
+            it[ProblemTestsTable.isHidden] = isHidden
+            it[ProblemTestsTable.timeoutMs] = timeoutMs
+            it[ProblemTestsTable.memoryLimitMb] = memoryLimitMb
         }
     }
 

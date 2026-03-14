@@ -41,7 +41,12 @@ internal object ProblemTestsTable : Table("problem_tests") {
     val problemTestId = long("problem_test_id").autoIncrement()
     val problemId = long("problem_id")
     val testOrder = integer("test_order")
+    val inputData = text("input_data")
+    val expectedOutput = text("expected_output")
     val validatorCode = text("validator_code")
+    val isHidden = bool("is_hidden")
+    val timeoutMs = integer("timeout_ms")
+    val memoryLimitMb = integer("memory_limit_mb")
     val createdAt = datetime("created_at")
 
     override val primaryKey = PrimaryKey(problemTestId)
@@ -57,6 +62,18 @@ internal object ProblemSubmissionsTable : Table("problem_submissions") {
     val submittedAt = datetime("submitted_at")
 
     override val primaryKey = PrimaryKey(submissionId)
+}
+
+internal object ProblemSubmissionTestResultsTable : Table("problem_submission_test_results") {
+    val submissionId = long("submission_id")
+    val problemTestId = long("problem_test_id")
+    val resultStatus = varchar("result_status", length = 16)
+    val executionTimeMs = integer("execution_time_ms")
+    val memoryUsedKb = integer("memory_used_kb").nullable()
+    val message = text("message").nullable()
+    val createdAt = datetime("created_at")
+
+    override val primaryKey = PrimaryKey(submissionId, problemTestId)
 }
 
 internal object ProblemWinnersTable : Table("problem_winners") {

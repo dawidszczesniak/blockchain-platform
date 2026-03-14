@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -21,6 +22,9 @@ import pl.dawidszczesniak.blockchain_platform.ui.AppSurface
 fun LoginScreen(onLogin: () -> Unit) {
     val koin = LocalKoin.current
     val viewModel = remember { koin.get<LoginViewModel>() }
+    DisposableEffect(viewModel) {
+        onDispose { viewModel.close() }
+    }
     val state by viewModel.state.collectAsState()
 
     Column(
@@ -44,14 +48,19 @@ fun LoginScreen(onLogin: () -> Unit) {
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                if (!state.errorMessage.isNullOrBlank()) {
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        text = state.errorMessage.orEmpty(),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
                 Spacer(Modifier.height(16.dp))
-                // TODO(backend): Replace mock wallet login with real auth flow.
                 Button(
                     enabled = !state.isConnectingWallet,
                     onClick = {
-                        viewModel.onIntent(LoginIntent.ConnectWalletClicked)
-                        onLogin()
-                        viewModel.onIntent(LoginIntent.Reset)
+                        viewModel.connectWallet(onSuccess = onLogin)
                     }
                 ) {
                     Text(stringResource(Res.string.login_connect_wallet))

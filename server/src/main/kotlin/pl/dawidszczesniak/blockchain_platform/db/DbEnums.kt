@@ -10,3 +10,10 @@ internal enum class SubmissionAttemptStatus(val dbValue: String) {
     Rejected("rejected"),
     Error("error"),
 }
+
+internal enum class SubmissionTestResultStatus(val dbValue: String) {
+    Passed("passed"),
+    Failed("failed"),
+    Error("error"),
+    Timeout("timeout"),
+}

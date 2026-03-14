@@ -17,6 +17,7 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.CreatedPro
 import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.ParticipationProblem
 import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.ParticipationStatus
 import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.ProblemSummary
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.ProblemAuthorizationException
 
 internal interface ProblemReadRepository {
     fun fetchProblemSummaries(): List<ProblemSummary>
@@ -28,6 +29,13 @@ internal class ProblemReadRepositoryImpl(
     private val problemDao: ProblemDao,
     private val transactionRunner: DbTransactionRunner,
 ) : ProblemReadRepository, ProblemWriteRepository {
+    override fun loginDefaultUser() {
+        transactionRunner.inTransaction {
+            val userId = problemDao.fetchOrCreateDefaultUserId()
+            problemDao.touchUserLogin(userId)
+        }
+    }
+
     override fun fetchProblemSummaries(): List<ProblemSummary> {
         return transactionRunner.inTransaction {
             val participantCounts = participantCountsByProblem()
@@ -139,7 +147,8 @@ internal class ProblemReadRepositoryImpl(
 
     override fun createProblemForDefaultUser(draft: NewProblemDraft): Int {
         return transactionRunner.inTransaction {
-            val createdByUserId = problemDao.fetchOrCreateDefaultUserId()
+            val createdByUserId = problemDao.fetchDefaultUserId()
+                ?: throw ProblemAuthorizationException("User is not logged in. Call /auth/login first.")
             val problemId = problemDao.insertProblem(
                 createdByUserId = createdByUserId,
                 title = draft.title,
@@ -151,11 +160,16 @@ internal class ProblemReadRepositoryImpl(
                 submitUntilDate = draft.submitUntilDate,
             )
 
-            draft.tests.forEachIndexed { index, code ->
+            draft.tests.forEachIndexed { index, test ->
                 problemDao.insertProblemTest(
                     problemId = problemId,
                     testOrder = index + 1,
-                    validatorCode = code,
+                    inputData = test.inputData,
+                    expectedOutput = test.expectedOutput,
+                    validatorCode = test.validatorCode,
+                    isHidden = test.isHidden,
+                    timeoutMs = test.timeoutMs,
+                    memoryLimitMb = test.memoryLimitMb,
                 )
             }
             problemId.toInt()

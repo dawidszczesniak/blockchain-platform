@@ -46,7 +46,7 @@
     <string name="create_problem_validation_non_negative">Wartość nie może być ujemna.</string>
     <string name="create_problem_validation_invalid_date">Niepoprawny format daty (YYYY-MM-DD).</string>
     <string name="create_problem_validation_date_order">Koniec zgłoszeń musi być później niż koniec rejestracji.</string>
-    <string name="create_problem_submit_success">Problem został utworzony (ID: %1$d).</string>
+    <string name="create_problem_submit_success">Problem został utworzony.</string>
     <string name="create_problem_submit_failed">Nie udało się utworzyć problemu.</string>
 
     <string name="login_title">Zaloguj się</string>

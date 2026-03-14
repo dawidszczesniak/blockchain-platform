@@ -12,6 +12,7 @@ import org.koin.ktor.ext.inject
 import pl.dawidszczesniak.blockchain_platform.feature.problems.controller.ProblemController
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.CreateProblemRequestDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.CreateProblemValidationException
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.ProblemAuthorizationException
 
 internal fun Route.problemRoutes() {
     val controller by inject<ProblemController>()
@@ -34,6 +35,12 @@ internal fun Route.problemRoutes() {
         }
         call.respond(participationProblems)
     }
+    post("/auth/login") {
+        withContext(Dispatchers.IO) {
+            controller.loginDefaultUser()
+        }
+        call.respond(HttpStatusCode.NoContent)
+    }
     post("/problems") {
         val request = call.receive<CreateProblemRequestDto>()
         try {
@@ -45,6 +52,11 @@ internal fun Route.problemRoutes() {
             call.respond(
                 HttpStatusCode.BadRequest,
                 mapOf("message" to (error.message ?: "Invalid create problem payload.")),
+            )
+        } catch (error: ProblemAuthorizationException) {
+            call.respond(
+                HttpStatusCode.Unauthorized,
+                mapOf("message" to (error.message ?: "Login required.")),
             )
         }
     }

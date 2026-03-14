@@ -28,6 +28,8 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.create.CreateProb
 import pl.dawidszczesniak.blockchain_platform.feature.home.DashboardConfig
 import pl.dawidszczesniak.blockchain_platform.feature.home.HomeViewModel
 import pl.dawidszczesniak.blockchain_platform.feature.login.LoginViewModel
+import pl.dawidszczesniak.blockchain_platform.feature.login.LoginUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.login.LoginUseCaseImpl
 import pl.dawidszczesniak.blockchain_platform.feature.maintenance.BackendHealthViewModel
 import pl.dawidszczesniak.blockchain_platform.feature.maintenance.BackendMaintenanceViewModel
 import pl.dawidszczesniak.blockchain_platform.feature.problems.participation.MyParticipationViewModel
@@ -65,9 +67,10 @@ fun appModules() = module {
     factory<CreateProblemUseCase> { CreateProblemUseCaseImpl(get()) }
     factory<GetDashboardMetricsHistoryUseCase> { GetDashboardMetricsHistoryUseCaseImpl(get()) }
     factory<GetDashboardUpdatesUseCase> { GetDashboardUpdatesUseCaseImpl(get()) }
+    factory<LoginUseCase> { LoginUseCaseImpl(get()) }
     factory { AppViewModel() }
     factory { HomeViewModel(get(), get(), get()) }
-    factory { LoginViewModel() }
+    factory { LoginViewModel(get()) }
     factory { SettingsViewModel() }
     factory { BackendHealthViewModel(get()) }
     factory { BackendMaintenanceViewModel() }

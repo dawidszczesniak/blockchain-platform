@@ -2,6 +2,15 @@ package pl.dawidszczesniak.blockchain_platform.feature.problems.repository
 
 import java.time.LocalDate
 
+internal data class NewProblemTestDraft(
+    val inputData: String,
+    val expectedOutput: String,
+    val validatorCode: String,
+    val isHidden: Boolean,
+    val timeoutMs: Int,
+    val memoryLimitMb: Int,
+)
+
 internal data class NewProblemDraft(
     val title: String,
     val description: String,
@@ -10,9 +19,10 @@ internal data class NewProblemDraft(
     val requiredParticipants: Int,
     val joinUntilDate: LocalDate,
     val submitUntilDate: LocalDate,
-    val tests: List<String>,
+    val tests: List<NewProblemTestDraft>,
 )
 
 internal interface ProblemWriteRepository {
+    fun loginDefaultUser()
     fun createProblemForDefaultUser(draft: NewProblemDraft): Int
 }

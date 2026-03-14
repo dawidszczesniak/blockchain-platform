@@ -10,6 +10,10 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.mapper.toDomain
 class ProblemRepositoryImpl(
     private val remoteDataSource: ProblemRemoteDataSource,
 ) : ProblemRepository {
+    override suspend fun login() {
+        remoteDataSource.login()
+    }
+
     override suspend fun fetchProblems(): List<ProblemSummary> {
         return remoteDataSource.fetchProblems().map { it.toDomain() }
     }
