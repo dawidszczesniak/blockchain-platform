@@ -41,6 +41,13 @@ Additional read-only endpoints:
 - `/dashboard/metrics?limit=30`
 - `/dashboard/updates?limit=3` (latest problems from `problems`, ordered by `created_at DESC`)
 
+Authentication endpoints:
+
+- `POST /auth/challenge` (create SIWE challenge for wallet address + chain id)
+- `POST /auth/verify` (verify signed challenge and create auth session cookie)
+- `GET /auth/session` (returns current authenticated wallet)
+- `POST /auth/logout` (clears auth cookie)
+
 Database schema (3NF):
 
 - `problems`: core problem attributes (`title`, `description`, `problem_status` = `open|closed`, `prize_amount`, `entry_fee_amount`, dates, participant limits, `created_by_user_id`).
@@ -69,6 +76,15 @@ Database environment variables:
 - `DB_NAME` (default: `blockchain_platform`)
 - `DB_USER` (default: `blockchain_user`)
 - `DB_PASSWORD` (default: `blockchain_pass`)
+
+Auth environment variables:
+
+- `AUTH_DOMAIN` (default: `localhost:8081`)
+- `AUTH_URI` (default: `http://localhost:8081`)
+- `AUTH_CHALLENGE_TTL_SECONDS` (default: `300`)
+- `AUTH_SESSION_COOKIE` (default: `bp_auth_session`)
+- `AUTH_SESSION_SIGN_KEY` (default: `local-dev-sign-key-change-me`; set strong value outside local)
+- `AUTH_SESSION_SECURE` (`true|false`, default: `false`)
 
 ### Trunk-based workflow (recommended)
 

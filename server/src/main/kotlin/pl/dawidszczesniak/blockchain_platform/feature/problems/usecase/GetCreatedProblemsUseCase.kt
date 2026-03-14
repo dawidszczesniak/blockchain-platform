@@ -4,13 +4,13 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.CreatedPro
 import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.ProblemReadRepository
 
 internal interface GetCreatedProblemsUseCase {
-    operator fun invoke(): List<CreatedProblem>
+    operator fun invoke(userId: Long): List<CreatedProblem>
 }
 
 internal class GetCreatedProblemsUseCaseImpl(
     private val repository: ProblemReadRepository,
 ) : GetCreatedProblemsUseCase {
-    override operator fun invoke(): List<CreatedProblem> {
-        return repository.fetchCreatedProblemsForDefaultUser()
+    override operator fun invoke(userId: Long): List<CreatedProblem> {
+        return repository.fetchCreatedProblemsForUser(userId)
     }
 }

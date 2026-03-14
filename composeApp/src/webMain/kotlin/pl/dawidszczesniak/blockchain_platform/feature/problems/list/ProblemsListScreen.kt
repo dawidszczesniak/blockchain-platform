@@ -29,7 +29,6 @@ import blockchain_platform.composeapp.generated.resources.participants_summary
 import blockchain_platform.composeapp.generated.resources.problems_empty_action
 import blockchain_platform.composeapp.generated.resources.problems_empty_body
 import blockchain_platform.composeapp.generated.resources.problems_empty_title
-import blockchain_platform.composeapp.generated.resources.problems_title
 import blockchain_platform.composeapp.generated.resources.registration_and_submission
 import blockchain_platform.composeapp.generated.resources.sort_label
 import blockchain_platform.composeapp.generated.resources.sort_option_entry_fee_highest
@@ -73,16 +72,11 @@ fun ProblemsListScreen(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = stringResource(Res.string.problems_title),
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            if (!state.isEmpty) {
+        if (!state.isEmpty) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Spacer(Modifier.weight(1f))
                 SortRow(
                     sortOption = state.sortOption,

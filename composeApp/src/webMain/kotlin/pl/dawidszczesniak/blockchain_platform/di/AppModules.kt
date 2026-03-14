@@ -7,8 +7,12 @@ import pl.dawidszczesniak.blockchain_platform.feature.dashboard.datasource.Dashb
 import pl.dawidszczesniak.blockchain_platform.feature.dashboard.datasource.DashboardRemoteDataSourceImpl
 import pl.dawidszczesniak.blockchain_platform.feature.problems.datasource.ProblemRemoteDataSource
 import pl.dawidszczesniak.blockchain_platform.feature.problems.datasource.ProblemRemoteDataSourceImpl
+import pl.dawidszczesniak.blockchain_platform.feature.login.datasource.LoginRemoteDataSource
+import pl.dawidszczesniak.blockchain_platform.feature.login.datasource.LoginRemoteDataSourceImpl
 import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.ProblemRepositoryImpl
 import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.ProblemRepository
+import pl.dawidszczesniak.blockchain_platform.feature.login.repository.LoginRepository
+import pl.dawidszczesniak.blockchain_platform.feature.login.repository.LoginRepositoryImpl
 import pl.dawidszczesniak.blockchain_platform.feature.dashboard.repository.DashboardRepositoryImpl
 import pl.dawidszczesniak.blockchain_platform.feature.dashboard.repository.DashboardRepository
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetCreatedProblemsUseCase
@@ -27,9 +31,11 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.create.CreateProb
 import pl.dawidszczesniak.blockchain_platform.feature.problems.create.CreateProblemViewModel
 import pl.dawidszczesniak.blockchain_platform.feature.home.DashboardConfig
 import pl.dawidszczesniak.blockchain_platform.feature.home.HomeViewModel
+import pl.dawidszczesniak.blockchain_platform.feature.login.InjectedWalletProvider
 import pl.dawidszczesniak.blockchain_platform.feature.login.LoginViewModel
 import pl.dawidszczesniak.blockchain_platform.feature.login.LoginUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.login.LoginUseCaseImpl
+import pl.dawidszczesniak.blockchain_platform.feature.login.WalletProvider
 import pl.dawidszczesniak.blockchain_platform.feature.maintenance.BackendHealthViewModel
 import pl.dawidszczesniak.blockchain_platform.feature.maintenance.BackendMaintenanceViewModel
 import pl.dawidszczesniak.blockchain_platform.feature.problems.participation.MyParticipationViewModel
@@ -51,6 +57,16 @@ fun appModules() = module {
     single<ProblemRepository> {
         ProblemRepositoryImpl(remoteDataSource = get())
     }
+    single<LoginRemoteDataSource> {
+        LoginRemoteDataSourceImpl(
+            apiBaseUrl = get<AppConfig>().apiBaseUrl,
+            httpTextClient = get(),
+        )
+    }
+    single<LoginRepository> {
+        LoginRepositoryImpl(remoteDataSource = get())
+    }
+    single<WalletProvider> { InjectedWalletProvider() }
     single<DashboardRemoteDataSource> {
         DashboardRemoteDataSourceImpl(
             apiBaseUrl = get<AppConfig>().apiBaseUrl,
@@ -67,7 +83,7 @@ fun appModules() = module {
     factory<CreateProblemUseCase> { CreateProblemUseCaseImpl(get()) }
     factory<GetDashboardMetricsHistoryUseCase> { GetDashboardMetricsHistoryUseCaseImpl(get()) }
     factory<GetDashboardUpdatesUseCase> { GetDashboardUpdatesUseCaseImpl(get()) }
-    factory<LoginUseCase> { LoginUseCaseImpl(get()) }
+    factory<LoginUseCase> { LoginUseCaseImpl(get(), get()) }
     factory { AppViewModel() }
     factory { HomeViewModel(get(), get(), get()) }
     factory { LoginViewModel(get()) }

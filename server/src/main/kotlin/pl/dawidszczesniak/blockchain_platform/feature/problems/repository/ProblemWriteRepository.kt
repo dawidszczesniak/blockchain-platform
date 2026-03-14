@@ -23,6 +23,5 @@ internal data class NewProblemDraft(
 )
 
 internal interface ProblemWriteRepository {
-    fun loginDefaultUser()
-    fun createProblemForDefaultUser(draft: NewProblemDraft): Int
+    fun createProblemForUser(userId: Long, draft: NewProblemDraft): Int
 }

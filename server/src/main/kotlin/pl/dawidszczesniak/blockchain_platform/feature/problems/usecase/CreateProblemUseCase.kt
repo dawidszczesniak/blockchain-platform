@@ -15,7 +15,7 @@ internal class CreateProblemValidationException(
 ) : IllegalArgumentException(message)
 
 internal interface CreateProblemUseCase {
-    operator fun invoke(request: CreateProblemRequestDto): Int
+    operator fun invoke(userId: Long, request: CreateProblemRequestDto): Int
 }
 
 internal class CreateProblemUseCaseImpl(
@@ -23,7 +23,7 @@ internal class CreateProblemUseCaseImpl(
     private val dashboardMetricsRefresher: DashboardMetricsRefresher,
     private val transactionRunner: DbTransactionRunner,
 ) : CreateProblemUseCase {
-    override fun invoke(request: CreateProblemRequestDto): Int {
+    override fun invoke(userId: Long, request: CreateProblemRequestDto): Int {
         val description = request.description.trim()
         if (description.isBlank()) {
             throw CreateProblemValidationException("Description is required.")
@@ -47,8 +47,9 @@ internal class CreateProblemUseCaseImpl(
         val tests = parseTests(request)
 
         val title = deriveTitle(description)
-        val createdProblemId = repository.createProblemForDefaultUser(
-            NewProblemDraft(
+        val createdProblemId = repository.createProblemForUser(
+            userId = userId,
+            draft = NewProblemDraft(
                 title = title,
                 description = description,
                 prizeAmount = request.prizeAmount,

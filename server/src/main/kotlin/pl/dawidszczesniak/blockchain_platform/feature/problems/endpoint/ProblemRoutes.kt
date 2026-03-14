@@ -9,10 +9,11 @@ import io.ktor.server.routing.post
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.koin.ktor.ext.inject
+import pl.dawidszczesniak.blockchain_platform.feature.auth.AuthRequiredException
+import pl.dawidszczesniak.blockchain_platform.feature.auth.requireAuthSession
 import pl.dawidszczesniak.blockchain_platform.feature.problems.controller.ProblemController
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.CreateProblemRequestDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.CreateProblemValidationException
-import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.ProblemAuthorizationException
 
 internal fun Route.problemRoutes() {
     val controller by inject<ProblemController>()
@@ -24,28 +25,39 @@ internal fun Route.problemRoutes() {
         call.respond(problems)
     }
     get("/problems/created") {
-        val createdProblems = withContext(Dispatchers.IO) {
-            controller.getCreatedProblems()
+        try {
+            val session = call.requireAuthSession()
+            val createdProblems = withContext(Dispatchers.IO) {
+                controller.getCreatedProblems(session.userId)
+            }
+            call.respond(createdProblems)
+        } catch (error: AuthRequiredException) {
+            call.respond(
+                HttpStatusCode.Unauthorized,
+                mapOf("message" to (error.message ?: "Login required.")),
+            )
         }
-        call.respond(createdProblems)
     }
     get("/problems/participation") {
-        val participationProblems = withContext(Dispatchers.IO) {
-            controller.getParticipationProblems()
+        try {
+            val session = call.requireAuthSession()
+            val participationProblems = withContext(Dispatchers.IO) {
+                controller.getParticipationProblems(session.userId)
+            }
+            call.respond(participationProblems)
+        } catch (error: AuthRequiredException) {
+            call.respond(
+                HttpStatusCode.Unauthorized,
+                mapOf("message" to (error.message ?: "Login required.")),
+            )
         }
-        call.respond(participationProblems)
-    }
-    post("/auth/login") {
-        withContext(Dispatchers.IO) {
-            controller.loginDefaultUser()
-        }
-        call.respond(HttpStatusCode.NoContent)
     }
     post("/problems") {
         val request = call.receive<CreateProblemRequestDto>()
         try {
+            val session = call.requireAuthSession()
             val created = withContext(Dispatchers.IO) {
-                controller.createProblem(request)
+                controller.createProblem(session.userId, request)
             }
             call.respond(HttpStatusCode.Created, created)
         } catch (error: CreateProblemValidationException) {
@@ -53,7 +65,7 @@ internal fun Route.problemRoutes() {
                 HttpStatusCode.BadRequest,
                 mapOf("message" to (error.message ?: "Invalid create problem payload.")),
             )
-        } catch (error: ProblemAuthorizationException) {
+        } catch (error: AuthRequiredException) {
             call.respond(
                 HttpStatusCode.Unauthorized,
                 mapOf("message" to (error.message ?: "Login required.")),

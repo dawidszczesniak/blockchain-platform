@@ -17,25 +17,17 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.CreatedPro
 import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.ParticipationProblem
 import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.ParticipationStatus
 import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.ProblemSummary
-import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.ProblemAuthorizationException
 
 internal interface ProblemReadRepository {
     fun fetchProblemSummaries(): List<ProblemSummary>
-    fun fetchCreatedProblemsForDefaultUser(): List<CreatedProblem>
-    fun fetchParticipationProblemsForDefaultUser(): List<ParticipationProblem>
+    fun fetchCreatedProblemsForUser(userId: Long): List<CreatedProblem>
+    fun fetchParticipationProblemsForUser(userId: Long): List<ParticipationProblem>
 }
 
 internal class ProblemReadRepositoryImpl(
     private val problemDao: ProblemDao,
     private val transactionRunner: DbTransactionRunner,
 ) : ProblemReadRepository, ProblemWriteRepository {
-    override fun loginDefaultUser() {
-        transactionRunner.inTransaction {
-            val userId = problemDao.fetchOrCreateDefaultUserId()
-            problemDao.touchUserLogin(userId)
-        }
-    }
-
     override fun fetchProblemSummaries(): List<ProblemSummary> {
         return transactionRunner.inTransaction {
             val participantCounts = participantCountsByProblem()
@@ -61,14 +53,14 @@ internal class ProblemReadRepositoryImpl(
         }
     }
 
-    override fun fetchCreatedProblemsForDefaultUser(): List<CreatedProblem> {
+    override fun fetchCreatedProblemsForUser(userId: Long): List<CreatedProblem> {
         return transactionRunner.inTransaction {
             val participantCounts = participantCountsByProblem()
             val submissionCounts = submissionCountsByProblem()
             val winnerByProblem = winnerInfoByProblem()
             val today = LocalDate.now()
 
-            problemDao.fetchCreatedProblemRowsForDefaultUser().map { row ->
+            problemDao.fetchCreatedProblemRowsForUser(userId).map { row ->
                 val problemId = row[ProblemsTable.problemId]
                 val daysToJoinEnd = daysBetween(today, row[ProblemsTable.joinUntilDate])
                 val daysToSubmitEnd = daysBetween(today, row[ProblemsTable.submitUntilDate])
@@ -117,14 +109,13 @@ internal class ProblemReadRepositoryImpl(
         }
     }
 
-    override fun fetchParticipationProblemsForDefaultUser(): List<ParticipationProblem> {
+    override fun fetchParticipationProblemsForUser(userId: Long): List<ParticipationProblem> {
         return transactionRunner.inTransaction {
-            val userId = problemDao.fetchDefaultUserId() ?: return@inTransaction emptyList()
             val participantCounts = participantCountsByProblem()
             val attemptCounts = submissionAttemptsByProblemAndUser()
             val today = LocalDate.now()
 
-            problemDao.fetchParticipationProblemRowsForDefaultUser().map { row ->
+            problemDao.fetchParticipationProblemRowsForUser(userId).map { row ->
                 val problemId = row[ProblemsTable.problemId]
                 val attempts = attemptCounts[problemId to userId] ?: 0
                 val daysToSubmitEnd = daysBetween(today, row[ProblemsTable.submitUntilDate])
@@ -145,12 +136,10 @@ internal class ProblemReadRepositoryImpl(
         }
     }
 
-    override fun createProblemForDefaultUser(draft: NewProblemDraft): Int {
+    override fun createProblemForUser(userId: Long, draft: NewProblemDraft): Int {
         return transactionRunner.inTransaction {
-            val createdByUserId = problemDao.fetchDefaultUserId()
-                ?: throw ProblemAuthorizationException("User is not logged in. Call /auth/login first.")
             val problemId = problemDao.insertProblem(
-                createdByUserId = createdByUserId,
+                createdByUserId = userId,
                 title = draft.title,
                 description = draft.description,
                 prizeAmount = draft.prizeAmount,

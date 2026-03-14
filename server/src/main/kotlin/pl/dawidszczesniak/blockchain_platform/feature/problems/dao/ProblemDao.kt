@@ -1,13 +1,11 @@
 package pl.dawidszczesniak.blockchain_platform.feature.problems.dao
 
 import java.time.LocalDate
-import java.time.LocalDateTime
 import org.jetbrains.exposed.sql.ResultRow
 import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.count
 import org.jetbrains.exposed.sql.innerJoin
 import org.jetbrains.exposed.sql.insert
-import org.jetbrains.exposed.sql.update
 import org.jetbrains.exposed.sql.select
 import org.jetbrains.exposed.sql.selectAll
 import pl.dawidszczesniak.blockchain_platform.db.ProblemLifecycleStatus
@@ -26,15 +24,12 @@ internal object ProblemRowColumns {
 
 internal interface ProblemDao {
     fun fetchOpenProblemRows(): List<ResultRow>
-    fun fetchCreatedProblemRowsForDefaultUser(): List<ResultRow>
-    fun fetchParticipationProblemRowsForDefaultUser(): List<ResultRow>
+    fun fetchCreatedProblemRowsForUser(userId: Long): List<ResultRow>
+    fun fetchParticipationProblemRowsForUser(userId: Long): List<ResultRow>
     fun fetchParticipantCountRows(): List<ResultRow>
     fun fetchSubmissionCountRows(): List<ResultRow>
     fun fetchSubmissionAttemptRows(): List<ResultRow>
     fun fetchWinnerRows(): List<ResultRow>
-    fun fetchDefaultUserId(): Long?
-    fun fetchOrCreateDefaultUserId(): Long
-    fun touchUserLogin(userId: Long)
     fun insertProblem(
         createdByUserId: Long,
         title: String,
@@ -69,8 +64,7 @@ internal class ProblemDaoImpl : ProblemDao {
             .toList()
     }
 
-    override fun fetchCreatedProblemRowsForDefaultUser(): List<ResultRow> {
-        val userId = resolveDefaultUserId() ?: return emptyList()
+    override fun fetchCreatedProblemRowsForUser(userId: Long): List<ResultRow> {
         return ProblemsTable
             .selectAll()
             .where { ProblemsTable.createdByUserId eq userId }
@@ -81,8 +75,7 @@ internal class ProblemDaoImpl : ProblemDao {
             .toList()
     }
 
-    override fun fetchParticipationProblemRowsForDefaultUser(): List<ResultRow> {
-        val userId = resolveDefaultUserId() ?: return emptyList()
+    override fun fetchParticipationProblemRowsForUser(userId: Long): List<ResultRow> {
         return (ProblemParticipantsTable innerJoin ProblemsTable)
             .selectAll()
             .where { ProblemParticipantsTable.userId eq userId }
@@ -134,20 +127,6 @@ internal class ProblemDaoImpl : ProblemDao {
             .toList()
     }
 
-    override fun fetchDefaultUserId(): Long? {
-        return resolveDefaultUserId()
-    }
-
-    override fun fetchOrCreateDefaultUserId(): Long {
-        return resolveDefaultUserId() ?: createDefaultUser()
-    }
-
-    override fun touchUserLogin(userId: Long) {
-        UsersTable.update({ UsersTable.userId eq userId }) {
-            it[UsersTable.lastLoginAt] = LocalDateTime.now()
-        }
-    }
-
     override fun insertProblem(
         createdByUserId: Long,
         title: String,
@@ -193,22 +172,4 @@ internal class ProblemDaoImpl : ProblemDao {
             it[ProblemTestsTable.memoryLimitMb] = memoryLimitMb
         }
     }
-
-    private fun resolveDefaultUserId(): Long? {
-        return UsersTable
-            .selectAll()
-            .orderBy(UsersTable.userId to SortOrder.ASC)
-            .limit(1)
-            .firstOrNull()
-            ?.get(UsersTable.userId)
-    }
-
-    private fun createDefaultUser(): Long {
-        val inserted = UsersTable.insert {
-            it[UsersTable.walletAddress] = DEFAULT_SYSTEM_WALLET
-        }
-        return inserted[UsersTable.userId]
-    }
 }
-
-private const val DEFAULT_SYSTEM_WALLET = "0x0000000000000000000000000000000000000001"

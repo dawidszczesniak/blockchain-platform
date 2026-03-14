@@ -4,13 +4,13 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.Participat
 import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.ProblemReadRepository
 
 internal interface GetParticipationProblemsUseCase {
-    operator fun invoke(): List<ParticipationProblem>
+    operator fun invoke(userId: Long): List<ParticipationProblem>
 }
 
 internal class GetParticipationProblemsUseCaseImpl(
     private val repository: ProblemReadRepository,
 ) : GetParticipationProblemsUseCase {
-    override operator fun invoke(): List<ParticipationProblem> {
-        return repository.fetchParticipationProblemsForDefaultUser()
+    override operator fun invoke(userId: Long): List<ParticipationProblem> {
+        return repository.fetchParticipationProblemsForUser(userId)
     }
 }

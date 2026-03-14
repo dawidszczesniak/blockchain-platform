@@ -10,33 +10,27 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.CreatePro
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetCreatedProblemsUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetParticipationProblemsUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetProblemSummariesUseCase
-import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.LoginDefaultUserUseCase
 
 internal class ProblemController(
     private val getProblemSummariesUseCase: GetProblemSummariesUseCase,
     private val getCreatedProblemsUseCase: GetCreatedProblemsUseCase,
     private val getParticipationProblemsUseCase: GetParticipationProblemsUseCase,
     private val createProblemUseCase: CreateProblemUseCase,
-    private val loginDefaultUserUseCase: LoginDefaultUserUseCase,
 ) {
     fun getProblemSummaries(): List<ProblemSummaryDto> {
         return getProblemSummariesUseCase().map { it.toDto() }
     }
 
-    fun getCreatedProblems(): List<CreatedProblemDto> {
-        return getCreatedProblemsUseCase().map { it.toDto() }
+    fun getCreatedProblems(userId: Long): List<CreatedProblemDto> {
+        return getCreatedProblemsUseCase(userId).map { it.toDto() }
     }
 
-    fun getParticipationProblems(): List<ParticipationProblemDto> {
-        return getParticipationProblemsUseCase().map { it.toDto() }
+    fun getParticipationProblems(userId: Long): List<ParticipationProblemDto> {
+        return getParticipationProblemsUseCase(userId).map { it.toDto() }
     }
 
-    fun createProblem(request: CreateProblemRequestDto): CreateProblemResponseDto {
-        val createdId = createProblemUseCase(request)
+    fun createProblem(userId: Long, request: CreateProblemRequestDto): CreateProblemResponseDto {
+        val createdId = createProblemUseCase(userId, request)
         return CreateProblemResponseDto(id = createdId)
-    }
-
-    fun loginDefaultUser() {
-        loginDefaultUserUseCase()
     }
 }

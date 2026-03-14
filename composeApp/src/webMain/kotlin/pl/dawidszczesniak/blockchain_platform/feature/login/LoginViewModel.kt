@@ -9,8 +9,14 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 data class LoginState(
+    val isLoadingWallets: Boolean = false,
+    val wallets: List<LoginWalletOption> = emptyList(),
     val isConnectingWallet: Boolean = false,
     val errorMessage: String? = null,
 )
@@ -22,8 +28,50 @@ class LoginViewModel(
     private val _state = MutableStateFlow(LoginState())
     val state: StateFlow<LoginState> = _state.asStateFlow()
 
-    fun connectWallet(onSuccess: () -> Unit) {
-        if (state.value.isConnectingWallet) {
+    init {
+        refreshWallets()
+    }
+
+    fun refreshWallets() {
+        if (state.value.isLoadingWallets || state.value.isConnectingWallet) {
+            return
+        }
+        _state.update { current ->
+            current.copy(
+                isLoadingWallets = true,
+                errorMessage = null,
+            )
+        }
+        scope.launch {
+            runCatching {
+                loginUseCase.fetchWallets()
+            }.onSuccess { wallets ->
+                _state.update { current ->
+                    current.copy(
+                        isLoadingWallets = false,
+                        wallets = wallets,
+                        errorMessage = null,
+                    )
+                }
+            }.onFailure { error ->
+                _state.update { current ->
+                    current.copy(
+                        isLoadingWallets = false,
+                        errorMessage = extractReadableErrorMessage(error),
+                    )
+                }
+            }
+        }
+    }
+
+    fun connectWallet(walletId: String, onSuccess: () -> Unit) {
+        if (state.value.wallets.none { it.id == walletId }) {
+            _state.update { current ->
+                current.copy(errorMessage = "Selected wallet is not available. Refresh wallets.")
+            }
+            return
+        }
+        if (state.value.isConnectingWallet || state.value.isLoadingWallets) {
             return
         }
         _state.update { current ->
@@ -34,9 +82,14 @@ class LoginViewModel(
         }
         scope.launch {
             runCatching {
-                loginUseCase()
+                loginUseCase.login(walletId)
             }.onSuccess {
-                _state.update { LoginState() }
+                _state.update { current ->
+                    current.copy(
+                        isConnectingWallet = false,
+                        errorMessage = null,
+                    )
+                }
                 onSuccess()
             }.onFailure { error ->
                 _state.update { current ->
@@ -55,7 +108,35 @@ class LoginViewModel(
 }
 
 private fun extractReadableErrorMessage(error: Throwable): String {
-    return error.message?.trim().orEmpty().ifBlank {
-        "Login failed."
+    val raw = error.message?.trim().orEmpty()
+    if (raw.isEmpty()) {
+        return "Login failed."
     }
+    if (raw == "[object Object]") {
+        return ""
+    }
+    val lowered = raw.lowercase()
+    if ("user rejected" in lowered || "user denied" in lowered || "\"code\":4001" in lowered || "eip-1193 user rejected" in lowered) {
+        return ""
+    }
+    val start = raw.indexOf('{')
+    val end = raw.lastIndexOf('}')
+    if (start >= 0 && end > start) {
+        val jsonPart = raw.substring(start, end + 1)
+        val parsedMessage = runCatching {
+            Json.parseToJsonElement(jsonPart)
+                .jsonObject["message"]
+                ?.jsonPrimitive
+                ?.contentOrNull
+                ?.trim()
+        }.getOrNull()
+        if (!parsedMessage.isNullOrBlank()) {
+            val parsedLowered = parsedMessage.lowercase()
+            if ("user rejected" in parsedLowered || "user denied" in parsedLowered) {
+                return ""
+            }
+            return parsedMessage
+        }
+    }
+    return raw
 }

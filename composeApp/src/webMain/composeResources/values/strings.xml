@@ -50,8 +50,10 @@
     <string name="create_problem_submit_failed">Failed to create problem.</string>
 
     <string name="login_title">Log in</string>
-    <string name="login_subtitle">Wallet login placeholder for now.</string>
-    <string name="login_connect_wallet">Connect wallet (mock)</string>
+    <string name="login_subtitle">Sign in with your wallet to access protected actions.</string>
+    <string name="login_connect_wallet">Connect wallet</string>
+    <string name="login_wallet_detecting">Detecting available wallets…</string>
+    <string name="login_wallet_not_found">No compatible wallet detected in this browser.</string>
 
     <string name="settings_title">Settings</string>
     <string name="settings_placeholder">Settings placeholder.</string>

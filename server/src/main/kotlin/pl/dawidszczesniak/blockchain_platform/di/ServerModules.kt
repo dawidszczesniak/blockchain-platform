@@ -9,6 +9,20 @@ import pl.dawidszczesniak.blockchain_platform.db.DbSchemaRunner
 import pl.dawidszczesniak.blockchain_platform.db.DbTransactionRunner
 import pl.dawidszczesniak.blockchain_platform.db.ExposedDbTransactionRunner
 import pl.dawidszczesniak.blockchain_platform.db.PostgresConfig
+import pl.dawidszczesniak.blockchain_platform.feature.auth.AuthConfig
+import pl.dawidszczesniak.blockchain_platform.feature.auth.controller.AuthController
+import pl.dawidszczesniak.blockchain_platform.feature.auth.dao.UserDao
+import pl.dawidszczesniak.blockchain_platform.feature.auth.dao.UserDaoImpl
+import pl.dawidszczesniak.blockchain_platform.feature.auth.repository.AuthRepository
+import pl.dawidszczesniak.blockchain_platform.feature.auth.repository.AuthRepositoryImpl
+import pl.dawidszczesniak.blockchain_platform.feature.auth.service.EthereumSignatureVerifier
+import pl.dawidszczesniak.blockchain_platform.feature.auth.service.WalletChallengeService
+import pl.dawidszczesniak.blockchain_platform.feature.auth.usecase.CreateWalletChallengeUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.auth.usecase.CreateWalletChallengeUseCaseImpl
+import pl.dawidszczesniak.blockchain_platform.feature.auth.usecase.GetAuthenticatedWalletUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.auth.usecase.GetAuthenticatedWalletUseCaseImpl
+import pl.dawidszczesniak.blockchain_platform.feature.auth.usecase.VerifyWalletChallengeUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.auth.usecase.VerifyWalletChallengeUseCaseImpl
 import pl.dawidszczesniak.blockchain_platform.feature.dashboard.controller.DashboardController
 import pl.dawidszczesniak.blockchain_platform.feature.dashboard.dao.DashboardDao
 import pl.dawidszczesniak.blockchain_platform.feature.dashboard.dao.DashboardDaoImpl
@@ -32,17 +46,25 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetPartic
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetParticipationProblemsUseCaseImpl
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetProblemSummariesUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetProblemSummariesUseCaseImpl
-import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.LoginDefaultUserUseCase
-import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.LoginDefaultUserUseCaseImpl
 
 internal fun serverModules() = module {
     single { PostgresConfig.fromEnvironment() }
+    single { AuthConfig.fromEnvironment() }
     single<Database> { DatabaseFactory.connect(get()) }
     single<DbTransactionRunner> { ExposedDbTransactionRunner(get()) }
 
     single { DbSchemaRunner(get()) }
     single { DashboardMetricsRefresher() }
     single { DatabaseBootstrapper(get(), get(), get()) }
+
+    single<UserDao> { UserDaoImpl() }
+    single<AuthRepository> { AuthRepositoryImpl(get(), get()) }
+    single { WalletChallengeService(get()) }
+    single { EthereumSignatureVerifier() }
+    factory<CreateWalletChallengeUseCase> { CreateWalletChallengeUseCaseImpl(get()) }
+    factory<VerifyWalletChallengeUseCase> { VerifyWalletChallengeUseCaseImpl(get(), get(), get()) }
+    factory<GetAuthenticatedWalletUseCase> { GetAuthenticatedWalletUseCaseImpl(get()) }
+    factory { AuthController(get(), get(), get()) }
 
     single<ProblemDao> { ProblemDaoImpl() }
     single { ProblemReadRepositoryImpl(get(), get()) }
@@ -52,8 +74,7 @@ internal fun serverModules() = module {
     factory<GetProblemSummariesUseCase> { GetProblemSummariesUseCaseImpl(get()) }
     factory<GetCreatedProblemsUseCase> { GetCreatedProblemsUseCaseImpl(get()) }
     factory<GetParticipationProblemsUseCase> { GetParticipationProblemsUseCaseImpl(get()) }
-    factory<LoginDefaultUserUseCase> { LoginDefaultUserUseCaseImpl(get()) }
-    factory { ProblemController(get(), get(), get(), get(), get()) }
+    factory { ProblemController(get(), get(), get(), get()) }
 
     single<DashboardDao> { DashboardDaoImpl(get()) }
     single<DashboardReadRepository> { DashboardReadRepositoryImpl(get(), get()) }

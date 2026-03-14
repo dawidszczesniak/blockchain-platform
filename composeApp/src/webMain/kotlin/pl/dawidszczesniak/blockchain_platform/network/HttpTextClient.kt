@@ -60,11 +60,11 @@ class BrowserHttpTextClient : HttpTextClient {
     }
 }
 
-@JsFun("(url) => fetch(url, { method: 'GET', cache: 'no-store' }).then(r => { if (!r.ok) { throw new Error('HTTP ' + r.status); } return r.text(); })")
+@JsFun("(url) => fetch(url, { method: 'GET', cache: 'no-store', credentials: 'include' }).then(r => { if (!r.ok) { throw new Error('HTTP ' + r.status); } return r.text(); })")
 private external fun fetchText(url: String): Promise<JsAny?>
 
 @JsFun(
-    "(url, body) => fetch(url, { method: 'POST', cache: 'no-store', headers: { 'Content-Type': 'application/json' }, body }).then(async r => { const text = await r.text(); if (!r.ok) { throw new Error(text || ('HTTP ' + r.status)); } return text; })"
+    "(url, body) => fetch(url, { method: 'POST', cache: 'no-store', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body }).then(async r => { const text = await r.text(); if (!r.ok) { throw new Error(text || ('HTTP ' + r.status)); } return text; })"
 )
 private external fun postJsonText(url: String, body: String): Promise<JsAny?>
 

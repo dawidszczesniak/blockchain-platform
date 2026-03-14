@@ -50,8 +50,10 @@
     <string name="create_problem_submit_failed">Nie udało się utworzyć problemu.</string>
 
     <string name="login_title">Zaloguj się</string>
-    <string name="login_subtitle">Na razie wydmuszka logowania portfelem.</string>
-    <string name="login_connect_wallet">Połącz portfel (mock)</string>
+    <string name="login_subtitle">Zaloguj się portfelem, aby używać chronionych akcji.</string>
+    <string name="login_connect_wallet">Połącz portfel</string>
+    <string name="login_wallet_detecting">Wykrywanie dostępnych portfeli…</string>
+    <string name="login_wallet_not_found">Nie wykryto kompatybilnego portfela w tej przeglądarce.</string>
 
     <string name="settings_title">Ustawienia</string>
     <string name="settings_placeholder">Placeholder ustawień.</string>

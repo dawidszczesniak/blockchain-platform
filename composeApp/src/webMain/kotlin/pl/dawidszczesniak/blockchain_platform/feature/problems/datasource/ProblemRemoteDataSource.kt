@@ -17,7 +17,6 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.Participation
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ProblemSummaryDto
 
 interface ProblemRemoteDataSource {
-    suspend fun login()
     suspend fun fetchProblems(): List<ProblemSummaryDto>
     suspend fun fetchCreatedProblems(): List<CreatedProblemDto>
     suspend fun fetchParticipationProblems(): List<ParticipationProblemDto>
@@ -28,10 +27,6 @@ class ProblemRemoteDataSourceImpl(
     private val apiBaseUrl: String,
     private val httpTextClient: HttpTextClient,
 ) : ProblemRemoteDataSource {
-    override suspend fun login() {
-        httpTextClient.postJson(endpoint(apiBaseUrl, "/auth/login"), "{}")
-    }
-
     override suspend fun fetchProblems(): List<ProblemSummaryDto> {
         val payload = httpTextClient.get(endpoint(apiBaseUrl, "/problems"))
         val json = Json { ignoreUnknownKeys = true }

@@ -6,7 +6,6 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.Participat
 import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.ProblemSummary
 
 interface ProblemRepository {
-    suspend fun login()
     suspend fun fetchProblems(): List<ProblemSummary>
     suspend fun fetchCreatedProblems(): List<CreatedProblem>
     suspend fun fetchParticipationProblems(): List<ParticipationProblem>
