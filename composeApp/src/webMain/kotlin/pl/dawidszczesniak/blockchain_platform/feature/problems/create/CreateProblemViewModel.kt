@@ -14,15 +14,32 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.CreateProblemRequestDto
+import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ProblemExampleDto
 import kotlin.math.abs
 import kotlin.math.round
 
 const val MAX_CREATE_PROBLEM_TESTS = 10
+const val MIN_CREATE_PROBLEM_EXAMPLES = 3
+const val MAX_CREATE_PROBLEM_EXAMPLES = 10
 
 data class CreateProblemTest(
     val id: Int,
     val code: String,
     val expanded: Boolean,
+)
+
+data class CreateProblemExample(
+    val id: Int,
+    val input: String,
+    val output: String,
+    val explanation: String,
+    val expanded: Boolean,
+)
+
+data class CreateProblemExampleValidation(
+    val input: CreateProblemValidationError? = null,
+    val output: CreateProblemValidationError? = null,
+    val explanation: CreateProblemValidationError? = null,
 )
 
 enum class CreateProblemValidationError {
@@ -42,6 +59,7 @@ data class CreateProblemValidation(
     val joinUntilDate: CreateProblemValidationError? = null,
     val submitUntilDate: CreateProblemValidationError? = null,
     val testsById: Map<Int, CreateProblemValidationError> = emptyMap(),
+    val examplesById: Map<Int, CreateProblemExampleValidation> = emptyMap(),
 ) {
     val hasErrors: Boolean
         get() = prize != null ||
@@ -50,7 +68,8 @@ data class CreateProblemValidation(
             description != null ||
             joinUntilDate != null ||
             submitUntilDate != null ||
-            testsById.isNotEmpty()
+            testsById.isNotEmpty() ||
+            examplesById.isNotEmpty()
 }
 
 data class CreateProblemState(
@@ -58,12 +77,15 @@ data class CreateProblemState(
     val participants: String = "",
     val entryFee: String = "",
     val description: String = "",
+    val constraints: String = "",
     val joinUntilDate: String = "",
     val submitUntilDate: String = "",
     val tests: List<CreateProblemTest> = listOf(
         CreateProblemTest(id = 1, code = "", expanded = true)
     ),
+    val examples: List<CreateProblemExample> = defaultExamples(),
     val nextTestId: Int = 2,
+    val nextExampleId: Int = MIN_CREATE_PROBLEM_EXAMPLES + 1,
     val submitAttempted: Boolean = false,
     val isSubmitting: Boolean = false,
     val submitFailed: Boolean = false,
@@ -91,6 +113,9 @@ data class CreateProblemState(
     val canAddTest: Boolean
         get() = tests.size < MAX_CREATE_PROBLEM_TESTS
 
+    val canAddExample: Boolean
+        get() = examples.size < MAX_CREATE_PROBLEM_EXAMPLES
+
     val validation: CreateProblemValidation
         get() = validateCreateProblem(this)
 }
@@ -100,12 +125,19 @@ sealed interface CreateProblemIntent {
     data class ParticipantsChanged(val value: String) : CreateProblemIntent
     data class EntryFeeChanged(val value: String) : CreateProblemIntent
     data class DescriptionChanged(val value: String) : CreateProblemIntent
+    data class ConstraintsChanged(val value: String) : CreateProblemIntent
     data class JoinUntilChanged(val value: String) : CreateProblemIntent
     data class SubmitUntilChanged(val value: String) : CreateProblemIntent
     data object AddTest : CreateProblemIntent
     data class ToggleTest(val id: Int) : CreateProblemIntent
     data class RemoveTest(val id: Int) : CreateProblemIntent
     data class TestCodeChanged(val id: Int, val value: String) : CreateProblemIntent
+    data object AddExample : CreateProblemIntent
+    data class ToggleExample(val id: Int) : CreateProblemIntent
+    data class RemoveExample(val id: Int) : CreateProblemIntent
+    data class ExampleInputChanged(val id: Int, val value: String) : CreateProblemIntent
+    data class ExampleOutputChanged(val id: Int, val value: String) : CreateProblemIntent
+    data class ExampleExplanationChanged(val id: Int, val value: String) : CreateProblemIntent
     data object Submit : CreateProblemIntent
 }
 
@@ -142,6 +174,12 @@ class CreateProblemViewModel(
             is CreateProblemIntent.DescriptionChanged -> {
                 _state.update { current ->
                     current.copy(description = intent.value).clearSubmissionFeedback()
+                }
+            }
+
+            is CreateProblemIntent.ConstraintsChanged -> {
+                _state.update { current ->
+                    current.copy(constraints = intent.value).clearSubmissionFeedback()
                 }
             }
 
@@ -208,6 +246,93 @@ class CreateProblemViewModel(
                                 test.copy(code = intent.value)
                             } else {
                                 test
+                            }
+                        }
+                    ).clearSubmissionFeedback()
+                }
+            }
+
+            CreateProblemIntent.AddExample -> {
+                _state.update { current ->
+                    if (!current.canAddExample) {
+                        current
+                    } else {
+                        current.copy(
+                            examples = current.examples + CreateProblemExample(
+                                id = current.nextExampleId,
+                                input = "",
+                                output = "",
+                                explanation = "",
+                                expanded = true,
+                            ),
+                            nextExampleId = current.nextExampleId + 1,
+                        ).clearSubmissionFeedback()
+                    }
+                }
+            }
+
+            is CreateProblemIntent.ToggleExample -> {
+                _state.update { current ->
+                    current.copy(
+                        examples = current.examples.map { example ->
+                            if (example.id == intent.id) {
+                                example.copy(expanded = !example.expanded)
+                            } else {
+                                example
+                            }
+                        }
+                    )
+                }
+            }
+
+            is CreateProblemIntent.RemoveExample -> {
+                _state.update { current ->
+                    if (current.examples.size <= MIN_CREATE_PROBLEM_EXAMPLES) {
+                        current
+                    } else {
+                        current.copy(
+                            examples = current.examples.filterNot { it.id == intent.id }
+                        ).clearSubmissionFeedback()
+                    }
+                }
+            }
+
+            is CreateProblemIntent.ExampleInputChanged -> {
+                _state.update { current ->
+                    current.copy(
+                        examples = current.examples.map { example ->
+                            if (example.id == intent.id) {
+                                example.copy(input = intent.value)
+                            } else {
+                                example
+                            }
+                        }
+                    ).clearSubmissionFeedback()
+                }
+            }
+
+            is CreateProblemIntent.ExampleOutputChanged -> {
+                _state.update { current ->
+                    current.copy(
+                        examples = current.examples.map { example ->
+                            if (example.id == intent.id) {
+                                example.copy(output = intent.value)
+                            } else {
+                                example
+                            }
+                        }
+                    ).clearSubmissionFeedback()
+                }
+            }
+
+            is CreateProblemIntent.ExampleExplanationChanged -> {
+                _state.update { current ->
+                    current.copy(
+                        examples = current.examples.map { example ->
+                            if (example.id == intent.id) {
+                                example.copy(explanation = intent.value)
+                            } else {
+                                example
                             }
                         }
                     ).clearSubmissionFeedback()
@@ -340,6 +465,36 @@ private fun validateCreateProblem(state: CreateProblemState): CreateProblemValid
         }
     }
 
+    val exampleErrors = buildMap<Int, CreateProblemExampleValidation> {
+        state.examples.forEach { example ->
+            val inputError = if (example.input.trim().isEmpty()) {
+                CreateProblemValidationError.Required
+            } else {
+                null
+            }
+            val outputError = if (example.output.trim().isEmpty()) {
+                CreateProblemValidationError.Required
+            } else {
+                null
+            }
+            val explanationError = if (example.explanation.trim().isEmpty()) {
+                CreateProblemValidationError.Required
+            } else {
+                null
+            }
+            if (inputError != null || outputError != null || explanationError != null) {
+                put(
+                    example.id,
+                    CreateProblemExampleValidation(
+                        input = inputError,
+                        output = outputError,
+                        explanation = explanationError,
+                    )
+                )
+            }
+        }
+    }
+
     return CreateProblemValidation(
         prize = prizeError,
         participants = participantsError,
@@ -348,6 +503,7 @@ private fun validateCreateProblem(state: CreateProblemState): CreateProblemValid
         joinUntilDate = joinError,
         submitUntilDate = submitError,
         testsById = testErrors,
+        examplesById = exampleErrors,
     )
 }
 
@@ -355,8 +511,17 @@ private fun CreateProblemState.toCreateProblemRequest(): CreateProblemRequestDto
     require(!validation.hasErrors) {
         "CreateProblemRequestDto can be built only from valid state."
     }
+    val statementExamples = examples.map { example ->
+        ProblemExampleDto(
+            input = example.input,
+            output = example.output,
+            explanation = example.explanation,
+        )
+    }
     return CreateProblemRequestDto(
         description = description.trim(),
+        constraints = constraints.trim(),
+        examples = statementExamples,
         prizeAmount = prize.trim().toLong(),
         entryFeeAmount = entryFee.trim().toLong(),
         requiredParticipants = participants.trim().toInt(),
@@ -433,5 +598,17 @@ fun formatAmount(value: Double): String {
         asLong.toLong().toString()
     } else {
         rounded.toString()
+    }
+}
+
+private fun defaultExamples(): List<CreateProblemExample> {
+    return List(MIN_CREATE_PROBLEM_EXAMPLES) { index ->
+        CreateProblemExample(
+            id = index + 1,
+            input = "",
+            output = "",
+            explanation = "",
+            expanded = true,
+        )
     }
 }

@@ -4,9 +4,11 @@ import java.time.LocalDate
 import java.time.format.DateTimeParseException
 import pl.dawidszczesniak.blockchain_platform.db.DashboardMetricsRefresher
 import pl.dawidszczesniak.blockchain_platform.db.DbTransactionRunner
+import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ProblemExampleDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.CreateProblemRequestDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.CreateProblemTestCaseDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.NewProblemDraft
+import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.NewProblemExampleDraft
 import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.NewProblemTestDraft
 import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.ProblemWriteRepository
 
@@ -45,6 +47,8 @@ internal class CreateProblemUseCaseImpl(
         }
 
         val tests = parseTests(request)
+        val constraints = request.constraints.trim()
+        val examples = parseExamples(request.examples)
 
         val title = deriveTitle(description)
         val createdProblemId = repository.createProblemForUser(
@@ -52,6 +56,8 @@ internal class CreateProblemUseCaseImpl(
             draft = NewProblemDraft(
                 title = title,
                 description = description,
+                constraints = constraints,
+                examples = examples,
                 prizeAmount = request.prizeAmount,
                 entryFeeAmount = request.entryFeeAmount,
                 requiredParticipants = request.requiredParticipants,
@@ -91,6 +97,35 @@ internal class CreateProblemUseCaseImpl(
                 isHidden = true,
                 timeoutMs = DEFAULT_TEST_TIMEOUT_MS,
                 memoryLimitMb = DEFAULT_TEST_MEMORY_LIMIT_MB,
+            )
+        }
+    }
+
+    private fun parseExamples(examples: List<ProblemExampleDto>): List<NewProblemExampleDraft> {
+        if (examples.size < MIN_PROBLEM_EXAMPLES) {
+            throw CreateProblemValidationException(
+                "At least $MIN_PROBLEM_EXAMPLES examples are required."
+            )
+        }
+        if (examples.size > MAX_PROBLEM_EXAMPLES) {
+            throw CreateProblemValidationException(
+                "Too many examples. Maximum supported examples count is $MAX_PROBLEM_EXAMPLES."
+            )
+        }
+        return examples.mapIndexed { index, example ->
+            val humanIndex = index + 1
+            val input = example.input.trim()
+            val output = example.output.trim()
+            val explanation = example.explanation.trim()
+            if (input.isBlank() || output.isBlank() || explanation.isBlank()) {
+                throw CreateProblemValidationException(
+                    "examples[$humanIndex] must define input, output, and explanation."
+                )
+            }
+            NewProblemExampleDraft(
+                input = input,
+                output = output,
+                explanation = explanation,
             )
         }
     }
@@ -154,6 +189,8 @@ internal class CreateProblemUseCaseImpl(
 
 private const val MAX_TITLE_LENGTH = 120
 private const val MAX_TEST_CASES = 100
+private const val MIN_PROBLEM_EXAMPLES = 3
+private const val MAX_PROBLEM_EXAMPLES = 10
 private const val DEFAULT_TEST_TIMEOUT_MS = 1000
 private const val DEFAULT_TEST_MEMORY_LIMIT_MB = 256
 private const val MAX_TEST_TIMEOUT_MS = 60_000

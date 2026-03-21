@@ -1,9 +1,17 @@
 package pl.dawidszczesniak.blockchain_platform.feature.problems.domain
 
+data class ProblemExample(
+    val input: String,
+    val output: String,
+    val explanation: String,
+)
+
 data class ProblemSummary(
     val id: Int,
     val title: String,
     val description: String,
+    val constraints: String = "",
+    val examples: List<ProblemExample> = emptyList(),
     val prizeAmount: Long,
     val entryFeeAmount: Long,
     val requiredParticipants: Int,

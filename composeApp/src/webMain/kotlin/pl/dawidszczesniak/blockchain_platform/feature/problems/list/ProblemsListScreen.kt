@@ -20,7 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.SolidColor
 import blockchain_platform.composeapp.generated.resources.Res
 import blockchain_platform.composeapp.generated.resources.days_count
-import blockchain_platform.composeapp.generated.resources.details_coming_soon
+import blockchain_platform.composeapp.generated.resources.details_action
 import blockchain_platform.composeapp.generated.resources.info_entry_fee
 import blockchain_platform.composeapp.generated.resources.info_prize
 import blockchain_platform.composeapp.generated.resources.info_start
@@ -48,6 +48,7 @@ import blockchain_platform.composeapp.generated.resources.sort_option_start_late
 import blockchain_platform.composeapp.generated.resources.sort_option_start_soonest
 import org.jetbrains.compose.resources.stringResource
 import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.ProblemSummary
+import pl.dawidszczesniak.blockchain_platform.feature.problems.statement.decodeProblemDescription
 import pl.dawidszczesniak.blockchain_platform.ui.AppSurface
 import kotlin.math.max
 import kotlin.math.min
@@ -56,6 +57,7 @@ import kotlin.math.min
 fun ProblemsListScreen(
     viewModel: ProblemsListViewModel,
     onCreateProblem: () -> Unit,
+    onOpenProblem: (ProblemSummary) -> Unit,
 ) {
     val listState = rememberLazyListState()
     DisposableEffect(viewModel) {
@@ -111,7 +113,7 @@ fun ProblemsListScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 items(state.pageItems) { p ->
-                    ProblemCard(problem = p, onOpen = { /* TODO */ })
+                    ProblemCard(problem = p, onOpen = { onOpenProblem(p) })
                 }
                 item {
                     Spacer(Modifier.height(8.dp))
@@ -288,6 +290,9 @@ private fun ProblemCard(
     problem: ProblemSummary,
     onOpen: () -> Unit
 ) {
+    val statement = remember(problem.id, problem.description) {
+        decodeProblemDescription(problem.description).statement
+    }
     val required = max(1, problem.requiredParticipants)
     val registered = min(problem.registeredParticipants, required)
     val progress = registered.toFloat() / required.toFloat()
@@ -301,7 +306,7 @@ private fun ProblemCard(
         )
         Spacer(Modifier.height(4.dp))
         Text(
-            problem.description,
+            statement,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -357,8 +362,8 @@ private fun ProblemCard(
         Spacer(Modifier.height(12.dp))
 
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            Button(onClick = onOpen, enabled = false) {
-                Text(stringResource(Res.string.details_coming_soon))
+            Button(onClick = onOpen) {
+                Text(stringResource(Res.string.details_action))
             }
         }
     }

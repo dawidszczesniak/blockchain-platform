@@ -54,6 +54,8 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetPartic
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetParticipationProblemsUseCaseImpl
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetProblemSummariesUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetProblemSummariesUseCaseImpl
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.JoinProblemUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.JoinProblemUseCaseImpl
 import pl.dawidszczesniak.blockchain_platform.redis.RedisConfig
 import pl.dawidszczesniak.blockchain_platform.redis.RedisFactory
 
@@ -91,7 +93,8 @@ internal fun serverModules() = module {
     factory<GetProblemSummariesUseCase> { GetProblemSummariesUseCaseImpl(get()) }
     factory<GetCreatedProblemsUseCase> { GetCreatedProblemsUseCaseImpl(get()) }
     factory<GetParticipationProblemsUseCase> { GetParticipationProblemsUseCaseImpl(get()) }
-    factory { ProblemController(get(), get(), get(), get()) }
+    factory<JoinProblemUseCase> { JoinProblemUseCaseImpl(get()) }
+    factory { ProblemController(get(), get(), get(), get(), get()) }
 
     single<DashboardDao> { DashboardDaoImpl(get()) }
     single<DashboardReadRepository> { DashboardReadRepositoryImpl(get(), get()) }

@@ -5,6 +5,7 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.Participat
 import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.ProblemSummary
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.CreatedProblemDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ParticipationProblemDto
+import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ProblemExampleDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ProblemSummaryDto
 
 internal fun ProblemSummary.toDto(): ProblemSummaryDto {
@@ -12,6 +13,14 @@ internal fun ProblemSummary.toDto(): ProblemSummaryDto {
         id = id,
         title = title,
         description = description,
+        constraints = constraints,
+        examples = examples.map { example ->
+            ProblemExampleDto(
+                input = example.input,
+                output = example.output,
+                explanation = example.explanation,
+            )
+        },
         prizeAmount = prizeAmount,
         entryFeeAmount = entryFeeAmount,
         requiredParticipants = requiredParticipants,

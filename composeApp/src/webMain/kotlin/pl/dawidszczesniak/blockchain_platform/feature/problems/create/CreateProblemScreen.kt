@@ -42,11 +42,18 @@ import androidx.compose.ui.unit.dp
 import blockchain_platform.composeapp.generated.resources.Res
 import blockchain_platform.composeapp.generated.resources.create_problem_action_create
 import blockchain_platform.composeapp.generated.resources.create_problem_action_creating
+import blockchain_platform.composeapp.generated.resources.create_problem_add_example
 import blockchain_platform.composeapp.generated.resources.create_problem_add_test
+import blockchain_platform.composeapp.generated.resources.create_problem_constraints_label
 import blockchain_platform.composeapp.generated.resources.create_problem_date_picker_confirm
 import blockchain_platform.composeapp.generated.resources.create_problem_date_picker_dismiss
 import blockchain_platform.composeapp.generated.resources.create_problem_description_label
 import blockchain_platform.composeapp.generated.resources.create_problem_entry_fee_label
+import blockchain_platform.composeapp.generated.resources.create_problem_example_explanation_label
+import blockchain_platform.composeapp.generated.resources.create_problem_example_input_label
+import blockchain_platform.composeapp.generated.resources.create_problem_example_label
+import blockchain_platform.composeapp.generated.resources.create_problem_example_output_label
+import blockchain_platform.composeapp.generated.resources.create_problem_example_remove
 import blockchain_platform.composeapp.generated.resources.create_problem_join_until_label
 import blockchain_platform.composeapp.generated.resources.create_problem_participants_label
 import blockchain_platform.composeapp.generated.resources.create_problem_profit_entry_fee
@@ -65,6 +72,7 @@ import blockchain_platform.composeapp.generated.resources.create_problem_test_co
 import blockchain_platform.composeapp.generated.resources.create_problem_test_expand
 import blockchain_platform.composeapp.generated.resources.create_problem_test_label
 import blockchain_platform.composeapp.generated.resources.create_problem_test_remove
+import blockchain_platform.composeapp.generated.resources.create_problem_examples_title
 import blockchain_platform.composeapp.generated.resources.create_problem_tests_title
 import blockchain_platform.composeapp.generated.resources.create_problem_validation_date_order
 import blockchain_platform.composeapp.generated.resources.create_problem_validation_invalid_date
@@ -109,6 +117,27 @@ fun CreateProblemScreen() {
                         onDescriptionChange = {
                             viewModel.onIntent(CreateProblemIntent.DescriptionChanged(it))
                         },
+                        onConstraintsChange = {
+                            viewModel.onIntent(CreateProblemIntent.ConstraintsChanged(it))
+                        },
+                        onAddExample = {
+                            viewModel.onIntent(CreateProblemIntent.AddExample)
+                        },
+                        onToggleExample = { id ->
+                            viewModel.onIntent(CreateProblemIntent.ToggleExample(id))
+                        },
+                        onRemoveExample = { id ->
+                            viewModel.onIntent(CreateProblemIntent.RemoveExample(id))
+                        },
+                        onExampleInputChange = { id, value ->
+                            viewModel.onIntent(CreateProblemIntent.ExampleInputChanged(id, value))
+                        },
+                        onExampleOutputChange = { id, value ->
+                            viewModel.onIntent(CreateProblemIntent.ExampleOutputChanged(id, value))
+                        },
+                        onExampleExplanationChange = { id, value ->
+                            viewModel.onIntent(CreateProblemIntent.ExampleExplanationChanged(id, value))
+                        },
                         onAddTest = {
                             viewModel.onIntent(CreateProblemIntent.AddTest)
                         },
@@ -150,6 +179,27 @@ fun CreateProblemScreen() {
                         onDescriptionChange = {
                             viewModel.onIntent(CreateProblemIntent.DescriptionChanged(it))
                         },
+                        onConstraintsChange = {
+                            viewModel.onIntent(CreateProblemIntent.ConstraintsChanged(it))
+                        },
+                        onAddExample = {
+                            viewModel.onIntent(CreateProblemIntent.AddExample)
+                        },
+                        onToggleExample = { id ->
+                            viewModel.onIntent(CreateProblemIntent.ToggleExample(id))
+                        },
+                        onRemoveExample = { id ->
+                            viewModel.onIntent(CreateProblemIntent.RemoveExample(id))
+                        },
+                        onExampleInputChange = { id, value ->
+                            viewModel.onIntent(CreateProblemIntent.ExampleInputChanged(id, value))
+                        },
+                        onExampleOutputChange = { id, value ->
+                            viewModel.onIntent(CreateProblemIntent.ExampleOutputChanged(id, value))
+                        },
+                        onExampleExplanationChange = { id, value ->
+                            viewModel.onIntent(CreateProblemIntent.ExampleExplanationChanged(id, value))
+                        },
                         onAddTest = {
                             viewModel.onIntent(CreateProblemIntent.AddTest)
                         },
@@ -190,6 +240,13 @@ private fun CreateProblemForm(
     onParticipantsChange: (String) -> Unit,
     onEntryFeeChange: (String) -> Unit,
     onDescriptionChange: (String) -> Unit,
+    onConstraintsChange: (String) -> Unit,
+    onAddExample: () -> Unit,
+    onToggleExample: (Int) -> Unit,
+    onRemoveExample: (Int) -> Unit,
+    onExampleInputChange: (Int, String) -> Unit,
+    onExampleOutputChange: (Int, String) -> Unit,
+    onExampleExplanationChange: (Int, String) -> Unit,
     onAddTest: () -> Unit,
     onToggleTest: (Int) -> Unit,
     onRemoveTest: (Int) -> Unit,
@@ -281,6 +338,62 @@ private fun CreateProblemForm(
                 }
             },
         )
+        Spacer(Modifier.height(10.dp))
+
+        OutlinedTextField(
+            value = state.constraints,
+            onValueChange = onConstraintsChange,
+            label = { Text(stringResource(Res.string.create_problem_constraints_label)) },
+            modifier = Modifier.fillMaxWidth(),
+            minLines = 2,
+            maxLines = 6,
+        )
+        Spacer(Modifier.height(10.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = stringResource(
+                    Res.string.create_problem_examples_title,
+                    state.examples.size,
+                    MAX_CREATE_PROBLEM_EXAMPLES
+                ),
+                style = MaterialTheme.typography.titleSmall
+            )
+            Spacer(Modifier.weight(1f))
+            OutlinedButton(
+                onClick = onAddExample,
+                enabled = state.canAddExample
+            ) {
+                Text(stringResource(Res.string.create_problem_add_example))
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+
+        state.examples.forEachIndexed { index, example ->
+            key(example.id) {
+                ExampleCard(
+                    index = index,
+                    example = example,
+                    onToggle = { onToggleExample(example.id) },
+                    canRemove = state.examples.size > MIN_CREATE_PROBLEM_EXAMPLES,
+                    onRemove = { onRemoveExample(example.id) },
+                    onInputChange = { value -> onExampleInputChange(example.id, value) },
+                    onOutputChange = { value -> onExampleOutputChange(example.id, value) },
+                    onExplanationChange = { value -> onExampleExplanationChange(example.id, value) },
+                    validation = if (state.submitAttempted) {
+                        validation.examplesById[example.id]
+                    } else {
+                        null
+                    }
+                )
+            }
+            if (index < state.examples.lastIndex) {
+                Spacer(Modifier.height(10.dp))
+            }
+        }
         Spacer(Modifier.height(10.dp))
 
         Row(
@@ -636,6 +749,115 @@ private fun ProfitRow(
         )
     }
     Spacer(Modifier.height(6.dp))
+}
+
+@Composable
+private fun ExampleCard(
+    index: Int,
+    example: CreateProblemExample,
+    onToggle: () -> Unit,
+    canRemove: Boolean,
+    onRemove: () -> Unit,
+    onInputChange: (String) -> Unit,
+    onOutputChange: (String) -> Unit,
+    onExplanationChange: (String) -> Unit,
+    validation: CreateProblemExampleValidation?,
+) {
+    val inputError = validationMessage(
+        visible = true,
+        error = validation?.input,
+    )
+    val outputError = validationMessage(
+        visible = true,
+        error = validation?.output,
+    )
+    val explanationError = validationMessage(
+        visible = true,
+        error = validation?.explanation,
+    )
+
+    OutlinedCard(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.outlinedCardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+        )
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = stringResource(Res.string.create_problem_example_label, index + 1),
+                    style = MaterialTheme.typography.titleSmall
+                )
+                Spacer(Modifier.weight(1f))
+                TextButton(onClick = onRemove, enabled = canRemove) {
+                    Text(stringResource(Res.string.create_problem_example_remove))
+                }
+                TextButton(onClick = onToggle) {
+                    Text(
+                        stringResource(
+                            if (example.expanded) {
+                                Res.string.create_problem_test_collapse
+                            } else {
+                                Res.string.create_problem_test_expand
+                            }
+                        )
+                    )
+                }
+            }
+
+            if (example.expanded) {
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = example.input,
+                    onValueChange = onInputChange,
+                    label = { Text(stringResource(Res.string.create_problem_example_input_label)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 2,
+                    maxLines = 6,
+                    isError = inputError != null,
+                    supportingText = {
+                        if (inputError != null) {
+                            Text(inputError)
+                        }
+                    },
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = example.output,
+                    onValueChange = onOutputChange,
+                    label = { Text(stringResource(Res.string.create_problem_example_output_label)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 2,
+                    maxLines = 6,
+                    isError = outputError != null,
+                    supportingText = {
+                        if (outputError != null) {
+                            Text(outputError)
+                        }
+                    },
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = example.explanation,
+                    onValueChange = onExplanationChange,
+                    label = { Text(stringResource(Res.string.create_problem_example_explanation_label)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 2,
+                    maxLines = 6,
+                    isError = explanationError != null,
+                    supportingText = {
+                        if (explanationError != null) {
+                            Text(explanationError)
+                        }
+                    },
+                )
+            }
+        }
+    }
 }
 
 @Composable

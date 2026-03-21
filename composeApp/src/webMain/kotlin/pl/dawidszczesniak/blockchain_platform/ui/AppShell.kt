@@ -13,9 +13,11 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 import pl.dawidszczesniak.blockchain_platform.navigation.Route
 import pl.dawidszczesniak.blockchain_platform.di.LocalKoin
 import pl.dawidszczesniak.blockchain_platform.feature.problems.create.CreateProblemScreen
@@ -25,8 +27,11 @@ import pl.dawidszczesniak.blockchain_platform.feature.maintenance.BackendHealthV
 import pl.dawidszczesniak.blockchain_platform.feature.maintenance.BackendMaintenanceScreen
 import pl.dawidszczesniak.blockchain_platform.feature.problems.participation.MyParticipationScreen
 import pl.dawidszczesniak.blockchain_platform.feature.problems.created.MyProblemsScreen
+import pl.dawidszczesniak.blockchain_platform.feature.problems.details.ProblemDetailsScreen
+import pl.dawidszczesniak.blockchain_platform.feature.problems.details.ProblemDetailsViewModel
 import pl.dawidszczesniak.blockchain_platform.feature.problems.list.ProblemsListScreen
 import pl.dawidszczesniak.blockchain_platform.feature.problems.list.ProblemsListViewModel
+import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.ProblemRepository
 import pl.dawidszczesniak.blockchain_platform.feature.settings.SettingsScreen
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -40,9 +45,15 @@ fun AppShell(
     onLogout: () -> Unit,
 ) {
     val koin = LocalKoin.current
+    val scope = rememberCoroutineScope()
     val backendHealthViewModel = remember { koin.get<BackendHealthViewModel>() }
+    val problemDetailsViewModel = remember { koin.get<ProblemDetailsViewModel>() }
+    val problemRepository = remember { koin.get<ProblemRepository>() }
     DisposableEffect(backendHealthViewModel) {
         onDispose { backendHealthViewModel.close() }
+    }
+    DisposableEffect(problemDetailsViewModel) {
+        onDispose { problemDetailsViewModel.close() }
     }
     val backendHealthState by backendHealthViewModel.state.collectAsState()
     if (backendHealthState.isAvailable == false) {
@@ -74,18 +85,36 @@ fun AppShell(
                     .fillMaxSize(),
                 contentPadding = pagePadding
             ) {
-                when (currentRoute) {
+                when (val route = currentRoute) {
                     Route.Home -> HomeScreen(onNavigateToProblems = { onNavigate(Route.Problems) })
                     Route.Problems -> {
                         val problemsListViewModel = remember { koin.get<ProblemsListViewModel>() }
                         ProblemsListScreen(
                             viewModel = problemsListViewModel,
-                            onCreateProblem = { onNavigate(Route.CreateProblem) }
+                            onCreateProblem = { onNavigate(Route.CreateProblem) },
+                            onOpenProblem = { onNavigate(Route.ProblemDetails(it)) }
+                        )
+                    }
+                    is Route.ProblemDetails -> {
+                        ProblemDetailsScreen(
+                            problem = route.problem,
+                            viewModel = problemDetailsViewModel,
+                            isLoggedIn = isLoggedIn,
+                            onRequireLogin = onLoginClick,
+                            onBackToProblems = { onNavigate(Route.Problems) },
                         )
                     }
                     Route.CreateProblem -> CreateProblemScreen()
                     Route.MyProblems -> MyProblemsScreen(
-                        onCreateProblem = { onNavigate(Route.CreateProblem) }
+                        onCreateProblem = { onNavigate(Route.CreateProblem) },
+                        onOpenProblem = { problemId ->
+                            scope.launch {
+                                runCatching { problemRepository.fetchProblemById(problemId) }
+                                    .onSuccess { problemSummary ->
+                                        onNavigate(Route.ProblemDetails(problemSummary))
+                                    }
+                            }
+                        }
                     )
                     Route.MyParticipation -> MyParticipationScreen(
                         onBrowseProblems = { onNavigate(Route.Problems) }

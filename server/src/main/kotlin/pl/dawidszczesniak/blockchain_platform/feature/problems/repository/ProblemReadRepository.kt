@@ -2,6 +2,9 @@ package pl.dawidszczesniak.blockchain_platform.feature.problems.repository
 
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import kotlin.math.max
 import pl.dawidszczesniak.blockchain_platform.db.DbTransactionRunner
 import pl.dawidszczesniak.blockchain_platform.db.ProblemLifecycleStatus
@@ -16,7 +19,9 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.CreatedPro
 import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.CreatedProblemStatus
 import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.ParticipationProblem
 import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.ParticipationStatus
+import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.ProblemExample
 import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.ProblemSummary
+import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ProblemExampleDto
 
 internal interface ProblemReadRepository {
     fun fetchProblemSummaries(): List<ProblemSummary>
@@ -40,6 +45,8 @@ internal class ProblemReadRepositoryImpl(
                     id = problemId.toInt(),
                     title = row[ProblemsTable.title],
                     description = row[ProblemsTable.description],
+                    constraints = row[ProblemsTable.constraintsText],
+                    examples = parseProblemExamples(row[ProblemsTable.examplesJson]),
                     prizeAmount = row[ProblemsTable.prizeAmount],
                     entryFeeAmount = row[ProblemsTable.entryFeeAmount],
                     requiredParticipants = row[ProblemsTable.requiredParticipants],
@@ -62,28 +69,37 @@ internal class ProblemReadRepositoryImpl(
 
             problemDao.fetchCreatedProblemRowsForUser(userId).map { row ->
                 val problemId = row[ProblemsTable.problemId]
+                val requiredParticipants = row[ProblemsTable.requiredParticipants]
+                val registeredParticipants = participantCounts[problemId] ?: 0
                 val daysToJoinEnd = daysBetween(today, row[ProblemsTable.joinUntilDate])
                 val daysToSubmitEnd = daysBetween(today, row[ProblemsTable.submitUntilDate])
                 val winnerInfo = winnerByProblem[problemId]
                 val status = createdProblemStatus(
                     problemStatus = row[ProblemsTable.problemStatus],
+                    requiredParticipants = requiredParticipants,
+                    registeredParticipants = registeredParticipants,
                     daysToJoinEnd = daysToJoinEnd,
                     daysToSubmitEnd = daysToSubmitEnd,
                     winnerWallet = winnerInfo?.walletAddress,
                 )
+                val startedOnLabel = if (status == CreatedProblemStatus.Started) {
+                    if (registeredParticipants >= requiredParticipants && daysToJoinEnd >= 0) {
+                        today.toString()
+                    } else {
+                        row[ProblemsTable.joinUntilDate].toString()
+                    }
+                } else {
+                    null
+                }
 
                 CreatedProblem(
                     id = problemId.toInt(),
                     title = row[ProblemsTable.title],
                     status = status,
-                    requiredParticipants = row[ProblemsTable.requiredParticipants],
-                    registeredParticipants = participantCounts[problemId] ?: 0,
+                    requiredParticipants = requiredParticipants,
+                    registeredParticipants = registeredParticipants,
                     submissions = submissionCounts[problemId] ?: 0,
-                    startedOn = if (status == CreatedProblemStatus.Started) {
-                        row[ProblemsTable.joinUntilDate].toString()
-                    } else {
-                        null
-                    },
+                    startedOn = startedOnLabel,
                     finishedOn = if (status == CreatedProblemStatus.Completed) {
                         winnerInfo?.wonAtLabel ?: row[ProblemsTable.submitUntilDate].toString()
                     } else {
@@ -142,6 +158,8 @@ internal class ProblemReadRepositoryImpl(
                 createdByUserId = userId,
                 title = draft.title,
                 description = draft.description,
+                constraints = draft.constraints,
+                examplesJson = serializeProblemExamples(draft.examples),
                 prizeAmount = draft.prizeAmount,
                 entryFeeAmount = draft.entryFeeAmount,
                 requiredParticipants = draft.requiredParticipants,
@@ -162,6 +180,51 @@ internal class ProblemReadRepositoryImpl(
                 )
             }
             problemId.toInt()
+        }
+    }
+
+    override fun registerUserForProblem(userId: Long, problemId: Int): JoinProblemResult {
+        return transactionRunner.inTransaction {
+            val normalizedProblemId = problemId.toLong()
+            val problemRow = problemDao.fetchOpenProblemRow(normalizedProblemId)
+                ?: throw IllegalArgumentException("Problem not found or not open.")
+            val requiredParticipants = problemRow[ProblemsTable.requiredParticipants]
+            val joinUntilDate = problemRow[ProblemsTable.joinUntilDate]
+
+            val alreadyRegistered = problemDao.isUserRegisteredForProblem(
+                problemId = normalizedProblemId,
+                userId = userId,
+            )
+            if (!alreadyRegistered) {
+                if (LocalDate.now().isAfter(joinUntilDate)) {
+                    throw IllegalArgumentException("Registration period has ended.")
+                }
+                val participantsBeforeJoin = problemDao.countParticipants(normalizedProblemId)
+                if (participantsBeforeJoin >= requiredParticipants) {
+                    throw IllegalArgumentException("Competition has already started. Registration is closed.")
+                }
+                runCatching {
+                    problemDao.insertProblemParticipant(
+                        problemId = normalizedProblemId,
+                        userId = userId,
+                    )
+                }.onFailure { error ->
+                    val nowRegistered = problemDao.isUserRegisteredForProblem(
+                        problemId = normalizedProblemId,
+                        userId = userId,
+                    )
+                    if (!nowRegistered) {
+                        throw error
+                    }
+                }
+            }
+
+            val registeredParticipants = problemDao.countParticipants(normalizedProblemId)
+            JoinProblemResult(
+                joined = !alreadyRegistered,
+                registeredParticipants = registeredParticipants,
+                requiredParticipants = requiredParticipants,
+            )
         }
     }
 
@@ -203,6 +266,8 @@ internal class ProblemReadRepositoryImpl(
 
     private fun createdProblemStatus(
         problemStatus: String,
+        requiredParticipants: Int,
+        registeredParticipants: Int,
         daysToJoinEnd: Int,
         daysToSubmitEnd: Int,
         winnerWallet: String?,
@@ -217,11 +282,16 @@ internal class ProblemReadRepositoryImpl(
         if (!winnerWallet.isNullOrBlank()) {
             return CreatedProblemStatus.Completed
         }
+        val hasReachedParticipantThreshold = registeredParticipants >= requiredParticipants
+        if (hasReachedParticipantThreshold) {
+            return if (daysToSubmitEnd >= 0) {
+                CreatedProblemStatus.Started
+            } else {
+                CreatedProblemStatus.Expired
+            }
+        }
         if (daysToJoinEnd >= 0) {
             return CreatedProblemStatus.Waiting
-        }
-        if (daysToSubmitEnd >= 0) {
-            return CreatedProblemStatus.Started
         }
         return CreatedProblemStatus.Expired
     }
@@ -235,3 +305,38 @@ private data class WinnerInfo(
     val walletAddress: String,
     val wonAtLabel: String,
 )
+
+private val problemExamplesJson = Json {
+    ignoreUnknownKeys = true
+}
+
+private fun parseProblemExamples(raw: String): List<ProblemExample> {
+    if (raw.isBlank()) {
+        return emptyList()
+    }
+    val parsed = runCatching {
+        problemExamplesJson.decodeFromString<List<ProblemExampleDto>>(raw)
+    }.getOrDefault(emptyList())
+    return parsed.map { example ->
+        ProblemExample(
+            input = example.input,
+            output = example.output,
+            explanation = example.explanation,
+        )
+    }
+}
+
+private fun serializeProblemExamples(examples: List<NewProblemExampleDraft>): String {
+    if (examples.isEmpty()) {
+        return "[]"
+    }
+    return problemExamplesJson.encodeToString(
+        examples.map { example ->
+            ProblemExampleDto(
+                input = example.input,
+                output = example.output,
+                explanation = example.explanation,
+            )
+        }
+    )
+}

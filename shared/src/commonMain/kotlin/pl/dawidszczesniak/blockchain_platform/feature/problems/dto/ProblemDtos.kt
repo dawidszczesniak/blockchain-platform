@@ -7,6 +7,8 @@ data class ProblemSummaryDto(
     val id: Int,
     val title: String,
     val description: String,
+    val constraints: String = "",
+    val examples: List<ProblemExampleDto> = emptyList(),
     val prizeAmount: Long,
     val entryFeeAmount: Long,
     val requiredParticipants: Int,
@@ -53,8 +55,17 @@ data class CreateProblemTestCaseDto(
 )
 
 @Serializable
+data class ProblemExampleDto(
+    val input: String,
+    val output: String,
+    val explanation: String,
+)
+
+@Serializable
 data class CreateProblemRequestDto(
     val description: String,
+    val constraints: String = "",
+    val examples: List<ProblemExampleDto> = emptyList(),
     val prizeAmount: Long,
     val entryFeeAmount: Long,
     val requiredParticipants: Int,
@@ -67,4 +78,11 @@ data class CreateProblemRequestDto(
 @Serializable
 data class CreateProblemResponseDto(
     val id: Int,
+)
+
+@Serializable
+data class JoinProblemResponseDto(
+    val joined: Boolean,
+    val registeredParticipants: Int,
+    val requiredParticipants: Int,
 )

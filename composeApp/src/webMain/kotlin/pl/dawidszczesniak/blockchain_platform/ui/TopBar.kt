@@ -227,7 +227,7 @@ fun TopBar(
                             Spacer(Modifier.width(8.dp))
                             NavTab(
                                 text = stringResource(Res.string.nav_problem_list),
-                                selected = currentRoute == Route.Problems,
+                                selected = currentRoute.isProblemsArea(),
                                 onClick = { onNavigate(Route.Problems) }
                             )
                             Spacer(Modifier.width(8.dp))
@@ -307,6 +307,10 @@ fun TopBar(
             }
         }
     }
+}
+
+private fun Route.isProblemsArea(): Boolean {
+    return this == Route.Problems || this is Route.ProblemDetails
 }
 
 @Composable

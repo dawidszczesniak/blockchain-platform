@@ -25,10 +25,13 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetPartic
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetParticipationProblemsUseCaseImpl
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetProblemListUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetProblemListUseCaseImpl
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.JoinProblemUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.JoinProblemUseCaseImpl
 import pl.dawidszczesniak.blockchain_platform.app.AppViewModel
 import pl.dawidszczesniak.blockchain_platform.feature.problems.create.CreateProblemUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.create.CreateProblemUseCaseImpl
 import pl.dawidszczesniak.blockchain_platform.feature.problems.create.CreateProblemViewModel
+import pl.dawidszczesniak.blockchain_platform.feature.problems.details.ProblemDetailsViewModel
 import pl.dawidszczesniak.blockchain_platform.feature.home.DashboardConfig
 import pl.dawidszczesniak.blockchain_platform.feature.home.HomeViewModel
 import pl.dawidszczesniak.blockchain_platform.feature.login.InjectedWalletProvider
@@ -80,6 +83,7 @@ fun appModules() = module {
     factory<GetProblemListUseCase> { GetProblemListUseCaseImpl(get()) }
     factory<GetCreatedProblemsUseCase> { GetCreatedProblemsUseCaseImpl(get()) }
     factory<GetParticipationProblemsUseCase> { GetParticipationProblemsUseCaseImpl(get()) }
+    factory<JoinProblemUseCase> { JoinProblemUseCaseImpl(get()) }
     factory<CreateProblemUseCase> { CreateProblemUseCaseImpl(get()) }
     factory<GetDashboardMetricsHistoryUseCase> { GetDashboardMetricsHistoryUseCaseImpl(get()) }
     factory<GetDashboardUpdatesUseCase> { GetDashboardUpdatesUseCaseImpl(get()) }
@@ -91,6 +95,7 @@ fun appModules() = module {
     factory { BackendHealthViewModel(get()) }
     factory { BackendMaintenanceViewModel() }
     factory { CreateProblemViewModel(get()) }
+    factory { ProblemDetailsViewModel(get(), get()) }
     factory { ProblemsListViewModel(get()) }
     factory { MyProblemsViewModel(get()) }
     factory { MyParticipationViewModel(get()) }

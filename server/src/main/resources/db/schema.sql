@@ -21,6 +21,8 @@ CREATE TABLE IF NOT EXISTS problems (
         CHECK (problem_status IN ('open', 'closed')),
     title TEXT NOT NULL,
     description TEXT NOT NULL,
+    constraints_text TEXT NOT NULL DEFAULT '',
+    examples_json TEXT NOT NULL DEFAULT '[]',
     prize_amount BIGINT NOT NULL CHECK (prize_amount >= 0),
     entry_fee_amount BIGINT NOT NULL CHECK (entry_fee_amount >= 0),
     required_participants INTEGER NOT NULL CHECK (required_participants > 0),
@@ -98,6 +100,32 @@ ALTER TABLE problems
 
 ALTER TABLE problems
     ALTER COLUMN entry_fee_amount TYPE BIGINT USING entry_fee_amount::BIGINT;
+
+ALTER TABLE problems
+    ADD COLUMN IF NOT EXISTS constraints_text TEXT;
+
+ALTER TABLE problems
+    ADD COLUMN IF NOT EXISTS examples_json TEXT;
+
+UPDATE problems
+SET constraints_text = COALESCE(constraints_text, '')
+WHERE constraints_text IS NULL;
+
+UPDATE problems
+SET examples_json = COALESCE(NULLIF(examples_json, ''), '[]')
+WHERE examples_json IS NULL OR examples_json = '';
+
+ALTER TABLE problems
+    ALTER COLUMN constraints_text SET DEFAULT '';
+
+ALTER TABLE problems
+    ALTER COLUMN examples_json SET DEFAULT '[]';
+
+ALTER TABLE problems
+    ALTER COLUMN constraints_text SET NOT NULL;
+
+ALTER TABLE problems
+    ALTER COLUMN examples_json SET NOT NULL;
 
 ALTER TABLE problem_winners
     ALTER COLUMN payout_amount TYPE BIGINT USING payout_amount::BIGINT;

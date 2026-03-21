@@ -24,8 +24,12 @@ internal object ProblemRowColumns {
 
 internal interface ProblemDao {
     fun fetchOpenProblemRows(): List<ResultRow>
+    fun fetchOpenProblemRow(problemId: Long): ResultRow?
     fun fetchCreatedProblemRowsForUser(userId: Long): List<ResultRow>
     fun fetchParticipationProblemRowsForUser(userId: Long): List<ResultRow>
+    fun isUserRegisteredForProblem(problemId: Long, userId: Long): Boolean
+    fun insertProblemParticipant(problemId: Long, userId: Long)
+    fun countParticipants(problemId: Long): Int
     fun fetchParticipantCountRows(): List<ResultRow>
     fun fetchSubmissionCountRows(): List<ResultRow>
     fun fetchSubmissionAttemptRows(): List<ResultRow>
@@ -34,6 +38,8 @@ internal interface ProblemDao {
         createdByUserId: Long,
         title: String,
         description: String,
+        constraints: String,
+        examplesJson: String,
         prizeAmount: Long,
         entryFeeAmount: Long,
         requiredParticipants: Int,
@@ -64,6 +70,16 @@ internal class ProblemDaoImpl : ProblemDao {
             .toList()
     }
 
+    override fun fetchOpenProblemRow(problemId: Long): ResultRow? {
+        return ProblemsTable
+            .selectAll()
+            .where { ProblemsTable.problemId eq problemId }
+            .singleOrNull()
+            ?.takeIf { row ->
+                row[ProblemsTable.problemStatus] == ProblemLifecycleStatus.Open.dbValue
+            }
+    }
+
     override fun fetchCreatedProblemRowsForUser(userId: Long): List<ResultRow> {
         return ProblemsTable
             .selectAll()
@@ -84,6 +100,28 @@ internal class ProblemDaoImpl : ProblemDao {
                 ProblemsTable.problemId to SortOrder.DESC,
             )
             .toList()
+    }
+
+    override fun isUserRegisteredForProblem(problemId: Long, userId: Long): Boolean {
+        return ProblemParticipantsTable
+            .selectAll()
+            .where { ProblemParticipantsTable.problemId eq problemId }
+            .any { row -> row[ProblemParticipantsTable.userId] == userId }
+    }
+
+    override fun insertProblemParticipant(problemId: Long, userId: Long) {
+        ProblemParticipantsTable.insert {
+            it[ProblemParticipantsTable.problemId] = problemId
+            it[ProblemParticipantsTable.userId] = userId
+        }
+    }
+
+    override fun countParticipants(problemId: Long): Int {
+        return ProblemParticipantsTable
+            .selectAll()
+            .where { ProblemParticipantsTable.problemId eq problemId }
+            .count()
+            .toInt()
     }
 
     override fun fetchParticipantCountRows(): List<ResultRow> {
@@ -131,6 +169,8 @@ internal class ProblemDaoImpl : ProblemDao {
         createdByUserId: Long,
         title: String,
         description: String,
+        constraints: String,
+        examplesJson: String,
         prizeAmount: Long,
         entryFeeAmount: Long,
         requiredParticipants: Int,
@@ -142,6 +182,8 @@ internal class ProblemDaoImpl : ProblemDao {
             it[ProblemsTable.problemStatus] = ProblemLifecycleStatus.Open.dbValue
             it[ProblemsTable.title] = title
             it[ProblemsTable.description] = description
+            it[ProblemsTable.constraintsText] = constraints
+            it[ProblemsTable.examplesJson] = examplesJson
             it[ProblemsTable.prizeAmount] = prizeAmount
             it[ProblemsTable.entryFeeAmount] = entryFeeAmount
             it[ProblemsTable.requiredParticipants] = requiredParticipants

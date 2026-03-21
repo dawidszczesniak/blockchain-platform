@@ -19,6 +19,8 @@ internal object ProblemsTable : Table("problems") {
     val problemStatus = varchar("problem_status", length = 16)
     val title = text("title")
     val description = text("description")
+    val constraintsText = text("constraints_text")
+    val examplesJson = text("examples_json")
     val prizeAmount = long("prize_amount")
     val entryFeeAmount = long("entry_fee_amount")
     val requiredParticipants = integer("required_participants")

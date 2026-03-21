@@ -1,28 +1,40 @@
 package pl.dawidszczesniak.blockchain_platform.feature.problems.created
 
+import androidx.compose.foundation.VerticalScrollbar
+import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollbarAdapter
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -31,9 +43,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import blockchain_platform.composeapp.generated.resources.Res
+import blockchain_platform.composeapp.generated.resources.details_action
 import blockchain_platform.composeapp.generated.resources.my_problem_finished_on
 import blockchain_platform.composeapp.generated.resources.my_problem_participants
 import blockchain_platform.composeapp.generated.resources.my_problem_started_on
@@ -55,20 +69,28 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.CreatedPro
 import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.CreatedProblemStatus
 import pl.dawidszczesniak.blockchain_platform.di.LocalKoin
 import pl.dawidszczesniak.blockchain_platform.ui.AppSurface
+import kotlin.math.max
+import kotlin.math.min
 
 @Composable
-fun MyProblemsScreen(onCreateProblem: () -> Unit) {
+fun MyProblemsScreen(
+    onCreateProblem: () -> Unit,
+    onOpenProblem: (Int) -> Unit,
+) {
     val koin = LocalKoin.current
     val viewModel = remember { koin.get<MyProblemsViewModel>() }
+    val listState = rememberLazyListState()
     DisposableEffect(viewModel) {
         onDispose { viewModel.close() }
     }
     val state by viewModel.state.collectAsState()
 
+    LaunchedEffect(state.currentPage, state.filter) {
+        listState.scrollToItem(0)
+    }
+
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .verticalScroll(rememberScrollState()),
+        modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
         if (!state.isEmpty) {
@@ -85,37 +107,89 @@ fun MyProblemsScreen(onCreateProblem: () -> Unit) {
                 )
             }
         }
-        if (state.isLoading) {
-            androidx.compose.foundation.layout.Box(
-                modifier = Modifier.fillMaxWidth(),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(20.dp),
-                    strokeWidth = 2.dp
-                )
-            }
-        } else if (state.isEmpty) {
-            EmptyMyProblems(onCreateProblem = onCreateProblem)
-        } else {
-            state.pageItems.forEachIndexed { index, problem ->
-                MyProblemCard(problem = problem)
-                if (index < state.pageItems.lastIndex) {
-                    Spacer(Modifier.height(12.dp))
+
+        when {
+            state.isLoading -> {
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp
+                    )
                 }
             }
-            Spacer(Modifier.height(14.dp))
-            PaginationRow(
-                currentPage = state.currentPage,
-                totalPages = state.totalPages,
-                onPageSelected = { viewModel.onIntent(MyProblemsIntent.ChangePage(it)) }
-            )
+            state.isEmpty -> {
+                EmptyMyProblems(onCreateProblem = onCreateProblem)
+                return@Column
+            }
+        }
+
+        Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(end = 44.dp, bottom = 18.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                items(state.pageItems) { problem ->
+                    MyProblemCard(
+                        problem = problem,
+                        onOpenProblem = onOpenProblem,
+                    )
+                }
+                item {
+                    Spacer(Modifier.height(8.dp))
+                    PaginationRow(
+                        currentPage = state.currentPage,
+                        totalPages = state.totalPages,
+                        onPageSelected = { viewModel.onIntent(MyProblemsIntent.ChangePage(it)) }
+                    )
+                    Spacer(Modifier.height(8.dp))
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .fillMaxHeight()
+                    .padding(end = 6.dp)
+            ) {
+                val shape = RoundedCornerShape(8.dp)
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .width(8.dp)
+                        .background(
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
+                            shape = shape
+                        )
+                )
+
+                VerticalScrollbar(
+                    adapter = rememberScrollbarAdapter(listState),
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .width(8.dp)
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun MyProblemCard(problem: CreatedProblem) {
+private fun MyProblemCard(
+    problem: CreatedProblem,
+    onOpenProblem: (Int) -> Unit,
+) {
+    val required = max(1, problem.requiredParticipants)
+    val registered = min(problem.registeredParticipants, required)
+    val progress = registered.toFloat() / required.toFloat()
+    val canOpenDetails = problem.status == CreatedProblemStatus.Started ||
+        problem.status == CreatedProblemStatus.Waiting
+
     AppSurface(
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -151,6 +225,33 @@ private fun MyProblemCard(problem: CreatedProblem) {
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+        }
+        Spacer(Modifier.height(10.dp))
+        Text(
+            stringResource(
+                Res.string.my_problem_participants,
+                registered,
+                problem.requiredParticipants
+            ),
+            style = MaterialTheme.typography.bodyMedium
+        )
+        Spacer(Modifier.height(6.dp))
+        LinearProgressIndicator(
+            progress = { progress },
+            modifier = Modifier.fillMaxWidth()
+        )
+        if (canOpenDetails) {
+            Spacer(Modifier.height(12.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End
+            ) {
+                Button(
+                    onClick = { onOpenProblem(problem.id) }
+                ) {
+                    Text(stringResource(Res.string.details_action))
+                }
             }
         }
     }
@@ -197,11 +298,17 @@ private fun TypeFilterRow(
 
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(label, style = MaterialTheme.typography.labelLarge)
-        Spacer(Modifier.width(8.dp))
-        androidx.compose.foundation.layout.Box(
-            modifier = Modifier.wrapContentSize(Alignment.TopEnd)
-        ) {
-            OutlinedButton(onClick = { expanded = true }) {
+        Spacer(Modifier.width(10.dp))
+        Box(modifier = Modifier.wrapContentSize(Alignment.TopEnd)) {
+            OutlinedButton(
+                onClick = { expanded = true },
+                shape = RoundedCornerShape(14.dp),
+                border = androidx.compose.material3.ButtonDefaults.outlinedButtonBorder(enabled = true).copy(
+                    brush = SolidColor(
+                        MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)
+                    )
+                )
+            ) {
                 Text(buttonText)
             }
             DropdownMenu(
@@ -242,10 +349,7 @@ private fun PaginationRow(
     if (totalPages <= 1) return
 
     val scrollState = rememberScrollState()
-    androidx.compose.foundation.layout.Box(
-        modifier = Modifier.fillMaxWidth(),
-        contentAlignment = Alignment.Center
-    ) {
+    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
         Row(
             modifier = Modifier.horizontalScroll(scrollState),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -254,18 +358,18 @@ private fun PaginationRow(
             for (page in 1..totalPages) {
                 val selected = page == currentPage
                 if (selected) {
-                    Button(onClick = { onPageSelected(page) }) {
-                        Text(
-                            text = page.toString(),
-                            color = MaterialTheme.colorScheme.onPrimary
-                        )
+                    Button(
+                        onClick = { onPageSelected(page) },
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                    ) {
+                        Text(page.toString())
                     }
                 } else {
                     OutlinedButton(
                         onClick = { onPageSelected(page) },
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = MaterialTheme.colorScheme.onSurface
-                        )
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
                     ) {
                         Text(page.toString())
                     }
@@ -287,30 +391,21 @@ private fun statusLabel(status: CreatedProblemStatus): String {
 
 @Composable
 private fun detailsFor(problem: CreatedProblem): List<String> {
-    val participants = stringResource(
-        Res.string.my_problem_participants,
-        problem.registeredParticipants,
-        problem.requiredParticipants
-    )
     return when (problem.status) {
         CreatedProblemStatus.Started -> listOf(
-            participants,
             stringResource(Res.string.my_problem_started_on, problem.startedOn.orEmpty()),
             stringResource(Res.string.my_problem_submitted, problem.submissions)
         )
         CreatedProblemStatus.Waiting -> listOf(
-            participants,
             stringResource(Res.string.my_problem_registration_ends, problem.registrationEnds.orEmpty()),
             stringResource(Res.string.my_problem_submitted, 0)
         )
         CreatedProblemStatus.Completed -> listOf(
-            participants,
             stringResource(Res.string.my_problem_finished_on, problem.finishedOn.orEmpty()),
             stringResource(Res.string.my_problem_submitted, problem.submissions),
             stringResource(Res.string.my_problem_winner, problem.winner.orEmpty())
         )
         CreatedProblemStatus.Expired -> listOf(
-            participants,
             stringResource(Res.string.my_problem_time_elapsed, problem.timeElapsed.orEmpty()),
             stringResource(Res.string.my_problem_submitted, 0)
         )

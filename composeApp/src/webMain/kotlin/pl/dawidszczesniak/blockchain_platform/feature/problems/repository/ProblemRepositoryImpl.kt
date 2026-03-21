@@ -14,6 +14,11 @@ class ProblemRepositoryImpl(
         return remoteDataSource.fetchProblems().map { it.toDomain() }
     }
 
+    override suspend fun fetchProblemById(problemId: Int): ProblemSummary {
+        return fetchProblems().firstOrNull { it.id == problemId }
+            ?: error("Problem with id=$problemId not found.")
+    }
+
     override suspend fun fetchCreatedProblems(): List<CreatedProblem> {
         return remoteDataSource.fetchCreatedProblems().map { it.toDomain() }
     }
@@ -25,4 +30,7 @@ class ProblemRepositoryImpl(
     override suspend fun createProblem(request: CreateProblemRequestDto): Int {
         return remoteDataSource.createProblem(request).id
     }
+
+    override suspend fun joinProblem(problemId: Int) =
+        remoteDataSource.joinProblem(problemId)
 }

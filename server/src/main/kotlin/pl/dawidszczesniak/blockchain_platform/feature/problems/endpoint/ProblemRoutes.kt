@@ -19,6 +19,7 @@ import pl.dawidszczesniak.blockchain_platform.feature.auth.store.AuthSessionStor
 import pl.dawidszczesniak.blockchain_platform.feature.problems.controller.ProblemController
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.CreateProblemRequestDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.CreateProblemValidationException
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.JoinProblemValidationException
 
 internal fun Route.problemRoutes() {
     val controller by inject<ProblemController>()
@@ -82,6 +83,41 @@ internal fun Route.problemRoutes() {
             call.respond(
                 HttpStatusCode.BadRequest,
                 mapOf("message" to (error.message ?: "Invalid create problem payload.")),
+            )
+        } catch (error: AuthRequiredException) {
+            call.respond(
+                HttpStatusCode.Unauthorized,
+                mapOf("message" to (error.message ?: "Login required.")),
+            )
+        } catch (error: AuthCsrfException) {
+            call.respond(
+                HttpStatusCode.Forbidden,
+                mapOf("message" to (error.message ?: "Request origin is not allowed.")),
+            )
+        } catch (error: AuthServiceUnavailableException) {
+            call.respond(
+                HttpStatusCode.ServiceUnavailable,
+                mapOf("message" to (error.message ?: "Authentication service is unavailable.")),
+            )
+        }
+    }
+    post("/problems/{problemId}/join") {
+        try {
+            call.requireTrustedOrigin(authConfig)
+            val session = call.requireAuthSession(authConfig, sessionStore)
+            val problemId = call.parameters["problemId"]?.toIntOrNull()
+                ?: throw JoinProblemValidationException("Invalid problem identifier.")
+            val joined = withContext(Dispatchers.IO) {
+                controller.joinProblem(
+                    userId = session.userId,
+                    problemId = problemId,
+                )
+            }
+            call.respond(HttpStatusCode.OK, joined)
+        } catch (error: JoinProblemValidationException) {
+            call.respond(
+                HttpStatusCode.BadRequest,
+                mapOf("message" to (error.message ?: "Cannot register for this problem.")),
             )
         } catch (error: AuthRequiredException) {
             call.respond(

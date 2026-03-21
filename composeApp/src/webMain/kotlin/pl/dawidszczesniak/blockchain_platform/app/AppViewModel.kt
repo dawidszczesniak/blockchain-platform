@@ -58,7 +58,14 @@ class AppViewModel(
 
             AppIntent.OpenLogin -> {
                 _state.update { current ->
-                    current.copy(route = Route.Login)
+                    current.copy(
+                        route = Route.Login,
+                        pendingRouteAfterLogin = if (current.route == Route.Login) {
+                            current.pendingRouteAfterLogin
+                        } else {
+                            current.route
+                        },
+                    )
                 }
             }
 
@@ -117,6 +124,7 @@ private fun Route.requiresAuthentication(): Boolean {
         Route.Home,
         Route.Login,
         Route.Problems,
+        is Route.ProblemDetails,
         -> false
     }
 }
