@@ -18,8 +18,10 @@
     <string name="create_problem_prize_label">Prize (e.g., wei / USDC)</string>
     <string name="create_problem_participants_label">Number of participants</string>
     <string name="create_problem_entry_fee_label">Entry fee (e.g., wei / USDC)</string>
+    <string name="create_problem_title_label">Problem title</string>
     <string name="create_problem_description_label">Problem description</string>
     <string name="create_problem_constraints_label">Constraints (optional)</string>
+    <string name="create_problem_reference_solution_label">Reference solution code (Kotlin)</string>
     <string name="create_problem_examples_title">Examples (%1$d/%2$d)</string>
     <string name="create_problem_add_example">Add example</string>
     <string name="create_problem_example_label">Example %1$d</string>
@@ -27,13 +29,22 @@
     <string name="create_problem_example_input_label">Input</string>
     <string name="create_problem_example_output_label">Output</string>
     <string name="create_problem_example_explanation_label">Explanation</string>
-    <string name="create_problem_test_code_label">Test code / validator</string>
+    <string name="create_problem_test_input_label">Test input</string>
+    <string name="create_problem_test_output_label">Expected output (optional)</string>
+    <string name="create_problem_test_validator_label">Validator code (optional)</string>
+    <string name="create_problem_test_hidden_label">Hidden test</string>
     <string name="create_problem_tests_title">Tests (%1$d/%2$d)</string>
     <string name="create_problem_add_test">Add test</string>
     <string name="create_problem_test_label">Test %1$d</string>
     <string name="create_problem_test_remove">Remove</string>
     <string name="create_problem_test_expand">Expand</string>
     <string name="create_problem_test_collapse">Collapse</string>
+    <string name="create_problem_run_all">Run all</string>
+    <string name="create_problem_run_test">Run</string>
+    <string name="create_problem_run_running">Running...</string>
+    <string name="create_problem_run_status">Status: %1$s (%2$d ms)</string>
+    <string name="create_problem_run_output">Output: %1$s</string>
+    <string name="create_problem_copy_error">Copy error</string>
     <string name="create_problem_profit_title">Profit estimate</string>
     <string name="create_problem_profit_note">Calculated from prize, entry fee, participants, and 2% platform fee. Gas for deposits/withdrawals is not covered by the platform.</string>
     <string name="create_problem_profit_gross">Entry fees collected</string>
@@ -54,6 +65,10 @@
     <string name="create_problem_validation_non_negative">Value cannot be negative.</string>
     <string name="create_problem_validation_invalid_date">Invalid date format (YYYY-MM-DD).</string>
     <string name="create_problem_validation_date_order">Submission end must be later than registration end.</string>
+    <string name="create_problem_validation_expected_or_validator">Provide expected output or validator code.</string>
+    <string name="create_problem_validation_min_public_tests">At least 1 test must be public.</string>
+    <string name="create_problem_validation_ready">All tests validated for current inputs.</string>
+    <string name="create_problem_validation_run_required">Run all tests after any change before creating.</string>
     <string name="create_problem_submit_success">Problem created successfully.</string>
     <string name="create_problem_submit_failed">Failed to create problem.</string>
 
@@ -185,6 +200,31 @@
     <string name="problem_details_editor_locked_join_action_loading">Joining...</string>
     <string name="problem_details_editor_locked_waiting_title">Competition has not started yet</string>
     <string name="problem_details_editor_locked_waiting_body">Registered participants: %1$d / %2$d required to start.</string>
+    <string name="problem_details_run_running">Running tests...</string>
+    <string name="problem_details_run_error_console_title">Run failed. Console output:</string>
+    <string name="problem_details_run_error_prefix">Run failed: %1$s</string>
+    <string name="problem_details_run_result_passed">Passed %1$d/%2$d tests</string>
+    <string name="problem_details_run_result_test_label">Test %1$d</string>
+    <string name="problem_details_run_result_status_passed">Status: Passed</string>
+    <string name="problem_details_run_result_status_failed">Status: Failed</string>
+    <string name="problem_details_run_result_status_timeout">Status: Timeout</string>
+    <string name="problem_details_run_result_status_error">Status: Error</string>
+    <string name="problem_details_run_result_time">Execution: %1$d ms</string>
+    <string name="problem_details_run_result_expected">Expected: %1$s</string>
+    <string name="problem_details_run_result_actual">Actual: %1$s</string>
+    <string name="problem_details_run_result_hidden_failed">Hidden test failed.</string>
+    <string name="problem_details_submit_submitting">Submitting solution...</string>
+    <string name="problem_details_submit_error_prefix">Submit failed: %1$s</string>
+    <string name="problem_details_submit_result_title">Submission proof</string>
+    <string name="problem_details_submit_consensus">Consensus: %1$d/%2$d nodes</string>
+    <string name="problem_details_submit_anchor_status">Anchor status: %1$s</string>
+    <string name="problem_details_submit_anchor_commitment">Commitment: %1$s</string>
+    <string name="problem_details_submit_anchor_batch">Batch ID: %1$d</string>
+    <string name="problem_details_submit_anchor_root">Merkle root: %1$s</string>
+    <string name="problem_details_submit_anchor_proof">Merkle proof items: %1$d</string>
+    <string name="problem_details_submit_anchor_tx">Tx hash: %1$s</string>
+    <string name="problem_details_submit_anchor_explorer">Explorer: %1$s</string>
+    <string name="problem_details_submit_anchor_error">Anchor error: %1$s</string>
 
     <string name="problem_title_template">Problem #%1$d – Algorithm optimization (%2$s)</string>
 

@@ -18,8 +18,10 @@
     <string name="create_problem_prize_label">Nagroda (np. wei / USDC)</string>
     <string name="create_problem_participants_label">Liczba uczestników</string>
     <string name="create_problem_entry_fee_label">Wejściówka (np. wei / USDC)</string>
+    <string name="create_problem_title_label">Tytuł problemu</string>
     <string name="create_problem_description_label">Opis problemu</string>
     <string name="create_problem_constraints_label">Constraints (opcjonalnie)</string>
+    <string name="create_problem_reference_solution_label">Kod referencyjnego rozwiązania (Kotlin)</string>
     <string name="create_problem_examples_title">Przykłady (%1$d/%2$d)</string>
     <string name="create_problem_add_example">Dodaj przykład</string>
     <string name="create_problem_example_label">Przykład %1$d</string>
@@ -27,13 +29,22 @@
     <string name="create_problem_example_input_label">Input</string>
     <string name="create_problem_example_output_label">Output</string>
     <string name="create_problem_example_explanation_label">Explanation</string>
-    <string name="create_problem_test_code_label">Kod testujący / walidator</string>
+    <string name="create_problem_test_input_label">Input testu</string>
+    <string name="create_problem_test_output_label">Oczekiwany output (opcjonalnie)</string>
+    <string name="create_problem_test_validator_label">Kod walidatora (opcjonalnie)</string>
+    <string name="create_problem_test_hidden_label">Ukryty test</string>
     <string name="create_problem_tests_title">Testy (%1$d/%2$d)</string>
     <string name="create_problem_add_test">Dodaj test</string>
     <string name="create_problem_test_label">Test %1$d</string>
     <string name="create_problem_test_remove">Usuń</string>
     <string name="create_problem_test_expand">Rozwiń</string>
     <string name="create_problem_test_collapse">Zwiń</string>
+    <string name="create_problem_run_all">Uruchom wszystkie</string>
+    <string name="create_problem_run_test">Uruchom</string>
+    <string name="create_problem_run_running">Uruchamianie...</string>
+    <string name="create_problem_run_status">Status: %1$s (%2$d ms)</string>
+    <string name="create_problem_run_output">Output: %1$s</string>
+    <string name="create_problem_copy_error">Kopiuj błąd</string>
     <string name="create_problem_profit_title">Szacowany zysk</string>
     <string name="create_problem_profit_note">Wyliczane z nagrody, wejściówki, liczby uczestników i opłaty platformy 2%. Gas dla wpłat/wypłat nie jest pokrywany przez platformę.</string>
     <string name="create_problem_profit_gross">Suma wejściówek</string>
@@ -54,6 +65,10 @@
     <string name="create_problem_validation_non_negative">Wartość nie może być ujemna.</string>
     <string name="create_problem_validation_invalid_date">Niepoprawny format daty (YYYY-MM-DD).</string>
     <string name="create_problem_validation_date_order">Koniec zgłoszeń musi być później niż koniec rejestracji.</string>
+    <string name="create_problem_validation_expected_or_validator">Podaj oczekiwany output lub kod walidatora.</string>
+    <string name="create_problem_validation_min_public_tests">Co najmniej 1 test musi być publiczny.</string>
+    <string name="create_problem_validation_ready">Wszystkie testy zwalidowane dla bieżących danych.</string>
+    <string name="create_problem_validation_run_required">Po każdej zmianie uruchom wszystkie testy przed utworzeniem problemu.</string>
     <string name="create_problem_submit_success">Problem został utworzony.</string>
     <string name="create_problem_submit_failed">Nie udało się utworzyć problemu.</string>
 
@@ -185,6 +200,31 @@
     <string name="problem_details_editor_locked_join_action_loading">Zapisywanie...</string>
     <string name="problem_details_editor_locked_waiting_title">Konkurs jeszcze nie wystartował</string>
     <string name="problem_details_editor_locked_waiting_body">Zapisani uczestnicy: %1$d / %2$d wymaganych do startu.</string>
+    <string name="problem_details_run_running">Uruchamianie testów...</string>
+    <string name="problem_details_run_error_console_title">Błąd RUN. Output z konsoli:</string>
+    <string name="problem_details_run_error_prefix">Błąd RUN: %1$s</string>
+    <string name="problem_details_run_result_passed">Zaliczone testy: %1$d/%2$d</string>
+    <string name="problem_details_run_result_test_label">Test %1$d</string>
+    <string name="problem_details_run_result_status_passed">Status: Passed</string>
+    <string name="problem_details_run_result_status_failed">Status: Failed</string>
+    <string name="problem_details_run_result_status_timeout">Status: Timeout</string>
+    <string name="problem_details_run_result_status_error">Status: Error</string>
+    <string name="problem_details_run_result_time">Czas wykonania: %1$d ms</string>
+    <string name="problem_details_run_result_expected">Oczekiwane: %1$s</string>
+    <string name="problem_details_run_result_actual">Otrzymane: %1$s</string>
+    <string name="problem_details_run_result_hidden_failed">Ukryty test niezaliczony.</string>
+    <string name="problem_details_submit_submitting">Wysyłanie rozwiązania...</string>
+    <string name="problem_details_submit_error_prefix">Błąd Submit: %1$s</string>
+    <string name="problem_details_submit_result_title">Dowód submission</string>
+    <string name="problem_details_submit_consensus">Konsensus: %1$d/%2$d nodów</string>
+    <string name="problem_details_submit_anchor_status">Status anchor: %1$s</string>
+    <string name="problem_details_submit_anchor_commitment">Commitment: %1$s</string>
+    <string name="problem_details_submit_anchor_batch">Batch ID: %1$d</string>
+    <string name="problem_details_submit_anchor_root">Merkle root: %1$s</string>
+    <string name="problem_details_submit_anchor_proof">Elementy proof: %1$d</string>
+    <string name="problem_details_submit_anchor_tx">Tx hash: %1$s</string>
+    <string name="problem_details_submit_anchor_explorer">Explorer: %1$s</string>
+    <string name="problem_details_submit_anchor_error">Błąd anchora: %1$s</string>
 
     <string name="problem_title_template">Problem #%1$d – Optymalizacja algorytmu (%2$s)</string>
 

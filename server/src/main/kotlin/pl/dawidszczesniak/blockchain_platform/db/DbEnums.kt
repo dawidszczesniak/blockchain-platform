@@ -17,3 +17,22 @@ internal enum class SubmissionTestResultStatus(val dbValue: String) {
     Error("error"),
     Timeout("timeout"),
 }
+
+internal enum class SubmissionAnchorStatus(val dbValue: String) {
+    Pending("pending"),
+    Anchored("anchored"),
+    Failed("failed"),
+    Disabled("disabled"),
+}
+
+internal enum class SubmissionAttestationStatus(val dbValue: String) {
+    Ok("ok"),
+    Error("error"),
+    Invalid("invalid"),
+}
+
+internal enum class AnchorBatchStatus(val dbValue: String) {
+    Pending("pending"),
+    Anchored("anchored"),
+    Failed("failed"),
+}

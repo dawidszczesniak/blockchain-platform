@@ -1,12 +1,12 @@
 package pl.dawidszczesniak.blockchain_platform.feature.problems.usecase
 
+import java.security.MessageDigest
 import java.time.LocalDate
 import java.time.format.DateTimeParseException
+import org.web3j.utils.Numeric
 import pl.dawidszczesniak.blockchain_platform.db.DashboardMetricsRefresher
 import pl.dawidszczesniak.blockchain_platform.db.DbTransactionRunner
-import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ProblemExampleDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.CreateProblemRequestDto
-import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.CreateProblemTestCaseDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.NewProblemDraft
 import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.NewProblemExampleDraft
 import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.NewProblemTestDraft
@@ -24,11 +24,19 @@ internal class CreateProblemUseCaseImpl(
     private val repository: ProblemWriteRepository,
     private val dashboardMetricsRefresher: DashboardMetricsRefresher,
     private val transactionRunner: DbTransactionRunner,
+    private val referenceValidationService: CreateProblemReferenceValidationService,
 ) : CreateProblemUseCase {
     override fun invoke(userId: Long, request: CreateProblemRequestDto): Int {
+        val rawTitle = request.title.trim()
+        if (rawTitle.length > MAX_TITLE_LENGTH) {
+            throw CreateProblemValidationException("Title is too long. Max length is $MAX_TITLE_LENGTH characters.")
+        }
         val description = request.description.trim()
         if (description.isBlank()) {
             throw CreateProblemValidationException("Description is required.")
+        }
+        if (description.length > MAX_DESCRIPTION_CHARS) {
+            throw CreateProblemValidationException("Description is too long. Max length is $MAX_DESCRIPTION_CHARS characters.")
         }
         if (request.prizeAmount < 0) {
             throw CreateProblemValidationException("Prize amount cannot be negative.")
@@ -46,11 +54,70 @@ internal class CreateProblemUseCaseImpl(
             throw CreateProblemValidationException("submitUntilDate must be later than joinUntilDate.")
         }
 
-        val tests = parseTests(request)
         val constraints = request.constraints.trim()
-        val examples = parseExamples(request.examples)
+        if (constraints.length > MAX_CONSTRAINTS_CHARS) {
+            throw CreateProblemValidationException(
+                "Constraints are too long. Max length is $MAX_CONSTRAINTS_CHARS characters."
+            )
+        }
 
-        val title = deriveTitle(description)
+        if (request.tests.isNotEmpty()) {
+            throw CreateProblemValidationException(
+                "Legacy 'tests' format is no longer supported. Send structured 'testCases'."
+            )
+        }
+
+        val publicTests = request.testCases.filterNot { it.isHidden }
+        if (publicTests.size < MIN_PUBLIC_TEST_CASES) {
+            throw CreateProblemValidationException("At least $MIN_PUBLIC_TEST_CASES tests must be public.")
+        }
+
+        val validationResult = referenceValidationService.validateReferenceSolution(
+            referenceSolutionLanguage = request.referenceSolutionLanguage,
+            referenceSolutionCode = request.referenceSolutionCode,
+            testCases = request.testCases,
+            requireDeterminism = true,
+        )
+        val expectedOutputs = validationResult.tests.map { testResult ->
+            if (testResult.status != CreateProblemReferenceTestStatus.Ok || testResult.output == null) {
+                val reason = testResult.message?.ifBlank { null } ?: "Execution failed."
+                throw CreateProblemValidationException(
+                    "Reference solution failed testCases[${testResult.index}]: $reason"
+                )
+            }
+            testResult.output
+        }
+        val computedTests = request.testCases.zip(expectedOutputs).map { (testCase, expectedOutput) ->
+            NewProblemTestDraft(
+                inputData = testCase.inputData,
+                expectedOutput = expectedOutput,
+                validatorCode = "",
+                validatorLanguage = CREATE_PROBLEM_SUPPORTED_LANGUAGE,
+                isHidden = testCase.isHidden,
+                timeoutMs = testCase.timeoutMs,
+                memoryLimitMb = testCase.memoryLimitMb,
+            )
+        }
+
+        val examples = request.testCases
+            .mapIndexedNotNull { index, test ->
+                if (test.isHidden) {
+                    null
+                } else {
+                    test to expectedOutputs[index]
+                }
+            }
+            .take(MAX_PROBLEM_EXAMPLES)
+            .map { (test, expectedOutput) ->
+                NewProblemExampleDraft(
+                    input = test.inputData,
+                    output = expectedOutput,
+                    explanation = GENERATED_EXAMPLE_EXPLANATION,
+                )
+            }
+
+        val normalizedReferenceSolutionCode = request.referenceSolutionCode.trim()
+        val title = if (rawTitle.isNotBlank()) rawTitle else deriveTitle(description)
         val createdProblemId = repository.createProblemForUser(
             userId = userId,
             draft = NewProblemDraft(
@@ -58,114 +125,24 @@ internal class CreateProblemUseCaseImpl(
                 description = description,
                 constraints = constraints,
                 examples = examples,
+                referenceSolutionHash = sha256Hex(normalizedReferenceSolutionCode),
+                validationNodeId = validationResult.evidence.nodeId,
+                validationRunHash = validationResult.evidence.runHash,
+                validationResultHash = validationResult.evidence.resultHash,
+                validationImageHash = validationResult.evidence.imageHash,
+                validatedAt = validationResult.evidence.validatedAt,
                 prizeAmount = request.prizeAmount,
                 entryFeeAmount = request.entryFeeAmount,
                 requiredParticipants = request.requiredParticipants,
                 joinUntilDate = joinUntilDate,
                 submitUntilDate = submitUntilDate,
-                tests = tests,
+                tests = computedTests,
             )
         )
         transactionRunner.inTransaction {
             dashboardMetricsRefresher.refreshTodayMetrics()
         }
         return createdProblemId
-    }
-
-    private fun parseTests(request: CreateProblemRequestDto): List<NewProblemTestDraft> {
-        val structuredTests = request.testCases.map { it.toDraft() }
-        if (structuredTests.isNotEmpty()) {
-            validateTestCount(structuredTests.size)
-            structuredTests.forEachIndexed { index, test ->
-                validateStructuredTest(index = index, test = test)
-            }
-            return structuredTests
-        }
-
-        val legacyTests = request.tests.map { it.trim() }
-        if (legacyTests.isEmpty() || legacyTests.any { it.isBlank() }) {
-            throw CreateProblemValidationException(
-                "At least one non-empty test is required."
-            )
-        }
-        validateTestCount(legacyTests.size)
-        return legacyTests.map { validatorCode ->
-            NewProblemTestDraft(
-                inputData = "",
-                expectedOutput = "",
-                validatorCode = validatorCode,
-                isHidden = true,
-                timeoutMs = DEFAULT_TEST_TIMEOUT_MS,
-                memoryLimitMb = DEFAULT_TEST_MEMORY_LIMIT_MB,
-            )
-        }
-    }
-
-    private fun parseExamples(examples: List<ProblemExampleDto>): List<NewProblemExampleDraft> {
-        if (examples.size < MIN_PROBLEM_EXAMPLES) {
-            throw CreateProblemValidationException(
-                "At least $MIN_PROBLEM_EXAMPLES examples are required."
-            )
-        }
-        if (examples.size > MAX_PROBLEM_EXAMPLES) {
-            throw CreateProblemValidationException(
-                "Too many examples. Maximum supported examples count is $MAX_PROBLEM_EXAMPLES."
-            )
-        }
-        return examples.mapIndexed { index, example ->
-            val humanIndex = index + 1
-            val input = example.input.trim()
-            val output = example.output.trim()
-            val explanation = example.explanation.trim()
-            if (input.isBlank() || output.isBlank() || explanation.isBlank()) {
-                throw CreateProblemValidationException(
-                    "examples[$humanIndex] must define input, output, and explanation."
-                )
-            }
-            NewProblemExampleDraft(
-                input = input,
-                output = output,
-                explanation = explanation,
-            )
-        }
-    }
-
-    private fun validateTestCount(count: Int) {
-        if (count > MAX_TEST_CASES) {
-            throw CreateProblemValidationException(
-                "Too many tests. Maximum supported tests count is $MAX_TEST_CASES."
-            )
-        }
-    }
-
-    private fun validateStructuredTest(index: Int, test: NewProblemTestDraft) {
-        val humanIndex = index + 1
-        if (test.validatorCode.isBlank() && test.expectedOutput.isBlank()) {
-            throw CreateProblemValidationException(
-                "testCases[$humanIndex] must define validatorCode or expectedOutput."
-            )
-        }
-        if (test.timeoutMs !in 1..MAX_TEST_TIMEOUT_MS) {
-            throw CreateProblemValidationException(
-                "testCases[$humanIndex].timeoutMs must be in range 1..$MAX_TEST_TIMEOUT_MS."
-            )
-        }
-        if (test.memoryLimitMb !in 1..MAX_TEST_MEMORY_LIMIT_MB) {
-            throw CreateProblemValidationException(
-                "testCases[$humanIndex].memoryLimitMb must be in range 1..$MAX_TEST_MEMORY_LIMIT_MB."
-            )
-        }
-    }
-
-    private fun CreateProblemTestCaseDto.toDraft(): NewProblemTestDraft {
-        return NewProblemTestDraft(
-            inputData = inputData.trim(),
-            expectedOutput = expectedOutput.trim(),
-            validatorCode = validatorCode.trim(),
-            isHidden = isHidden,
-            timeoutMs = timeoutMs,
-            memoryLimitMb = memoryLimitMb,
-        )
     }
 
     private fun parseDate(value: String, fieldName: String): LocalDate {
@@ -187,11 +164,14 @@ internal class CreateProblemUseCaseImpl(
     }
 }
 
+private fun sha256Hex(text: String): String {
+    val digest = MessageDigest.getInstance("SHA-256").digest(text.toByteArray(Charsets.UTF_8))
+    return "0x${Numeric.toHexStringNoPrefix(digest).lowercase()}"
+}
+
 private const val MAX_TITLE_LENGTH = 120
-private const val MAX_TEST_CASES = 100
-private const val MIN_PROBLEM_EXAMPLES = 3
+private const val MIN_PUBLIC_TEST_CASES = 1
 private const val MAX_PROBLEM_EXAMPLES = 10
-private const val DEFAULT_TEST_TIMEOUT_MS = 1000
-private const val DEFAULT_TEST_MEMORY_LIMIT_MB = 256
-private const val MAX_TEST_TIMEOUT_MS = 60_000
-private const val MAX_TEST_MEMORY_LIMIT_MB = 2048
+private const val MAX_DESCRIPTION_CHARS = 20_000
+private const val MAX_CONSTRAINTS_CHARS = 8_000
+private const val GENERATED_EXAMPLE_EXPLANATION = "Auto-generated from reference solution."

@@ -18,8 +18,12 @@ import pl.dawidszczesniak.blockchain_platform.feature.auth.requireTrustedOrigin
 import pl.dawidszczesniak.blockchain_platform.feature.auth.store.AuthSessionStore
 import pl.dawidszczesniak.blockchain_platform.feature.problems.controller.ProblemController
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.CreateProblemRequestDto
+import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.RunProblemRequestDto
+import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ValidateCreateProblemRequestDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.CreateProblemValidationException
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.JoinProblemValidationException
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.RunProblemValidationException
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.SubmitProblemValidationException
 
 internal fun Route.problemRoutes() {
     val controller by inject<ProblemController>()
@@ -101,6 +105,37 @@ internal fun Route.problemRoutes() {
             )
         }
     }
+    post("/problems/create/validate") {
+        val request = call.receive<ValidateCreateProblemRequestDto>()
+        try {
+            call.requireTrustedOrigin(authConfig)
+            val session = call.requireAuthSession(authConfig, sessionStore)
+            val result = withContext(Dispatchers.IO) {
+                controller.validateCreateProblem(session.userId, request)
+            }
+            call.respond(HttpStatusCode.OK, result)
+        } catch (error: CreateProblemValidationException) {
+            call.respond(
+                HttpStatusCode.BadRequest,
+                mapOf("message" to (error.message ?: "Invalid create problem validation payload.")),
+            )
+        } catch (error: AuthRequiredException) {
+            call.respond(
+                HttpStatusCode.Unauthorized,
+                mapOf("message" to (error.message ?: "Login required.")),
+            )
+        } catch (error: AuthCsrfException) {
+            call.respond(
+                HttpStatusCode.Forbidden,
+                mapOf("message" to (error.message ?: "Request origin is not allowed.")),
+            )
+        } catch (error: AuthServiceUnavailableException) {
+            call.respond(
+                HttpStatusCode.ServiceUnavailable,
+                mapOf("message" to (error.message ?: "Authentication service is unavailable.")),
+            )
+        }
+    }
     post("/problems/{problemId}/join") {
         try {
             call.requireTrustedOrigin(authConfig)
@@ -118,6 +153,80 @@ internal fun Route.problemRoutes() {
             call.respond(
                 HttpStatusCode.BadRequest,
                 mapOf("message" to (error.message ?: "Cannot register for this problem.")),
+            )
+        } catch (error: AuthRequiredException) {
+            call.respond(
+                HttpStatusCode.Unauthorized,
+                mapOf("message" to (error.message ?: "Login required.")),
+            )
+        } catch (error: AuthCsrfException) {
+            call.respond(
+                HttpStatusCode.Forbidden,
+                mapOf("message" to (error.message ?: "Request origin is not allowed.")),
+            )
+        } catch (error: AuthServiceUnavailableException) {
+            call.respond(
+                HttpStatusCode.ServiceUnavailable,
+                mapOf("message" to (error.message ?: "Authentication service is unavailable.")),
+            )
+        }
+    }
+    post("/problems/{problemId}/run") {
+        try {
+            call.requireTrustedOrigin(authConfig)
+            val session = call.requireAuthSession(authConfig, sessionStore)
+            val problemId = call.parameters["problemId"]?.toIntOrNull()
+                ?: throw RunProblemValidationException("Invalid problem identifier.")
+            val request = call.receive<RunProblemRequestDto>()
+            val result = withContext(Dispatchers.IO) {
+                controller.runProblemCode(
+                    userId = session.userId,
+                    problemId = problemId,
+                    request = request,
+                )
+            }
+            call.respond(HttpStatusCode.OK, result)
+        } catch (error: RunProblemValidationException) {
+            call.respond(
+                HttpStatusCode.BadRequest,
+                mapOf("message" to (error.message ?: "Cannot run this solution.")),
+            )
+        } catch (error: AuthRequiredException) {
+            call.respond(
+                HttpStatusCode.Unauthorized,
+                mapOf("message" to (error.message ?: "Login required.")),
+            )
+        } catch (error: AuthCsrfException) {
+            call.respond(
+                HttpStatusCode.Forbidden,
+                mapOf("message" to (error.message ?: "Request origin is not allowed.")),
+            )
+        } catch (error: AuthServiceUnavailableException) {
+            call.respond(
+                HttpStatusCode.ServiceUnavailable,
+                mapOf("message" to (error.message ?: "Authentication service is unavailable.")),
+            )
+        }
+    }
+    post("/problems/{problemId}/submit") {
+        try {
+            call.requireTrustedOrigin(authConfig)
+            val session = call.requireAuthSession(authConfig, sessionStore)
+            val problemId = call.parameters["problemId"]?.toIntOrNull()
+                ?: throw SubmitProblemValidationException("Invalid problem identifier.")
+            val request = call.receive<RunProblemRequestDto>()
+            val result = withContext(Dispatchers.IO) {
+                controller.submitProblemCode(
+                    userId = session.userId,
+                    problemId = problemId,
+                    request = request,
+                )
+            }
+            call.respond(HttpStatusCode.OK, result)
+        } catch (error: SubmitProblemValidationException) {
+            call.respond(
+                HttpStatusCode.BadRequest,
+                mapOf("message" to (error.message ?: "Cannot submit this solution.")),
             )
         } catch (error: AuthRequiredException) {
             call.respond(

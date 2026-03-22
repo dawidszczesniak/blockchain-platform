@@ -7,6 +7,7 @@ import java.time.temporal.ChronoUnit
 import pl.dawidszczesniak.blockchain_platform.feature.auth.AuthConfig
 import pl.dawidszczesniak.blockchain_platform.feature.auth.AuthValidationException
 import pl.dawidszczesniak.blockchain_platform.feature.auth.AuthVerificationException
+import pl.dawidszczesniak.blockchain_platform.feature.auth.BlockchainConfig
 import pl.dawidszczesniak.blockchain_platform.feature.auth.dto.AuthChallengeResponseDto
 import pl.dawidszczesniak.blockchain_platform.feature.auth.store.ChallengeConsumeResult
 import pl.dawidszczesniak.blockchain_platform.feature.auth.store.ChallengeInsertResult
@@ -24,14 +25,19 @@ internal data class PendingWalletChallenge(
 
 internal class WalletChallengeService(
     private val authConfig: AuthConfig,
+    private val blockchainConfig: BlockchainConfig,
     private val challengeStore: WalletChallengeStore,
     private val clock: Clock = Clock.systemUTC(),
     private val random: SecureRandom = SecureRandom(),
 ) {
     fun createChallenge(walletAddress: String, chainId: Long): AuthChallengeResponseDto {
         val normalizedAddress = normalizeWalletAddress(walletAddress)
-        if (chainId <= 0L) {
-            throw AuthValidationException("chainId must be greater than 0.")
+        runCatching {
+            blockchainConfig.validateChainIdForEnvironment(chainId)
+        }.onFailure { error ->
+            throw AuthValidationException(
+                error.message?.ifBlank { null } ?: "Unsupported chainId for current environment."
+            )
         }
 
         val issuedAt = Instant.now(clock).truncatedTo(ChronoUnit.SECONDS)

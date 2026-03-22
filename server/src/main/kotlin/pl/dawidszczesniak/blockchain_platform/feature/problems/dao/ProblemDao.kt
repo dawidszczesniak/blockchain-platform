@@ -34,12 +34,19 @@ internal interface ProblemDao {
     fun fetchSubmissionCountRows(): List<ResultRow>
     fun fetchSubmissionAttemptRows(): List<ResultRow>
     fun fetchWinnerRows(): List<ResultRow>
+    fun fetchProblemTestRows(problemId: Long): List<ResultRow>
     fun insertProblem(
         createdByUserId: Long,
         title: String,
         description: String,
         constraints: String,
         examplesJson: String,
+        referenceSolutionHash: String,
+        validationNodeId: String?,
+        validationRunHash: String?,
+        validationResultHash: String?,
+        validationImageHash: String?,
+        validatedAt: java.time.Instant,
         prizeAmount: Long,
         entryFeeAmount: Long,
         requiredParticipants: Int,
@@ -52,6 +59,7 @@ internal interface ProblemDao {
         inputData: String,
         expectedOutput: String,
         validatorCode: String,
+        validatorLanguage: String,
         isHidden: Boolean,
         timeoutMs: Int,
         memoryLimitMb: Int,
@@ -165,12 +173,26 @@ internal class ProblemDaoImpl : ProblemDao {
             .toList()
     }
 
+    override fun fetchProblemTestRows(problemId: Long): List<ResultRow> {
+        return ProblemTestsTable
+            .selectAll()
+            .where { ProblemTestsTable.problemId eq problemId }
+            .orderBy(ProblemTestsTable.testOrder to SortOrder.ASC)
+            .toList()
+    }
+
     override fun insertProblem(
         createdByUserId: Long,
         title: String,
         description: String,
         constraints: String,
         examplesJson: String,
+        referenceSolutionHash: String,
+        validationNodeId: String?,
+        validationRunHash: String?,
+        validationResultHash: String?,
+        validationImageHash: String?,
+        validatedAt: java.time.Instant,
         prizeAmount: Long,
         entryFeeAmount: Long,
         requiredParticipants: Int,
@@ -184,6 +206,15 @@ internal class ProblemDaoImpl : ProblemDao {
             it[ProblemsTable.description] = description
             it[ProblemsTable.constraintsText] = constraints
             it[ProblemsTable.examplesJson] = examplesJson
+            it[ProblemsTable.referenceSolutionHash] = referenceSolutionHash
+            it[ProblemsTable.validationNodeId] = validationNodeId
+            it[ProblemsTable.validationRunHash] = validationRunHash
+            it[ProblemsTable.validationResultHash] = validationResultHash
+            it[ProblemsTable.validationImageHash] = validationImageHash
+            it[ProblemsTable.validatedAt] = java.time.LocalDateTime.ofInstant(
+                validatedAt,
+                java.time.ZoneOffset.UTC,
+            )
             it[ProblemsTable.prizeAmount] = prizeAmount
             it[ProblemsTable.entryFeeAmount] = entryFeeAmount
             it[ProblemsTable.requiredParticipants] = requiredParticipants
@@ -199,6 +230,7 @@ internal class ProblemDaoImpl : ProblemDao {
         inputData: String,
         expectedOutput: String,
         validatorCode: String,
+        validatorLanguage: String,
         isHidden: Boolean,
         timeoutMs: Int,
         memoryLimitMb: Int,
@@ -209,6 +241,7 @@ internal class ProblemDaoImpl : ProblemDao {
             it[ProblemTestsTable.inputData] = inputData
             it[ProblemTestsTable.expectedOutput] = expectedOutput
             it[ProblemTestsTable.validatorCode] = validatorCode
+            it[ProblemTestsTable.validatorLanguage] = validatorLanguage
             it[ProblemTestsTable.isHidden] = isHidden
             it[ProblemTestsTable.timeoutMs] = timeoutMs
             it[ProblemTestsTable.memoryLimitMb] = memoryLimitMb

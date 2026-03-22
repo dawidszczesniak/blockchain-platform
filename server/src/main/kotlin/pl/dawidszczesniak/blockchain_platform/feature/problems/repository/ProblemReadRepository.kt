@@ -1,17 +1,30 @@
 package pl.dawidszczesniak.blockchain_platform.feature.problems.repository
 
+import java.time.Instant
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlin.math.max
+import org.jetbrains.exposed.sql.SortOrder
+import org.jetbrains.exposed.sql.insert
+import org.jetbrains.exposed.sql.selectAll
+import org.jetbrains.exposed.sql.update
+import pl.dawidszczesniak.blockchain_platform.db.AnchorBatchStatus
 import pl.dawidszczesniak.blockchain_platform.db.DbTransactionRunner
 import pl.dawidszczesniak.blockchain_platform.db.ProblemLifecycleStatus
+import pl.dawidszczesniak.blockchain_platform.db.SubmissionAnchorStatus
+import pl.dawidszczesniak.blockchain_platform.db.SubmissionAttemptStatus
+import pl.dawidszczesniak.blockchain_platform.db.SubmissionTestResultStatus
 import pl.dawidszczesniak.blockchain_platform.db.tables.ProblemParticipantsTable
+import pl.dawidszczesniak.blockchain_platform.db.tables.ProblemSubmissionAttestationsTable
 import pl.dawidszczesniak.blockchain_platform.db.tables.ProblemSubmissionsTable
+import pl.dawidszczesniak.blockchain_platform.db.tables.ProblemSubmissionTestResultsTable
+import pl.dawidszczesniak.blockchain_platform.db.tables.ProblemTestsTable
 import pl.dawidszczesniak.blockchain_platform.db.tables.ProblemWinnersTable
 import pl.dawidszczesniak.blockchain_platform.db.tables.ProblemsTable
+import pl.dawidszczesniak.blockchain_platform.db.tables.SubmissionAnchorBatchesTable
 import pl.dawidszczesniak.blockchain_platform.db.tables.UsersTable
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dao.ProblemDao
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dao.ProblemRowColumns
@@ -160,6 +173,12 @@ internal class ProblemReadRepositoryImpl(
                 description = draft.description,
                 constraints = draft.constraints,
                 examplesJson = serializeProblemExamples(draft.examples),
+                referenceSolutionHash = draft.referenceSolutionHash,
+                validationNodeId = draft.validationNodeId,
+                validationRunHash = draft.validationRunHash,
+                validationResultHash = draft.validationResultHash,
+                validationImageHash = draft.validationImageHash,
+                validatedAt = draft.validatedAt,
                 prizeAmount = draft.prizeAmount,
                 entryFeeAmount = draft.entryFeeAmount,
                 requiredParticipants = draft.requiredParticipants,
@@ -174,6 +193,7 @@ internal class ProblemReadRepositoryImpl(
                     inputData = test.inputData,
                     expectedOutput = test.expectedOutput,
                     validatorCode = test.validatorCode,
+                    validatorLanguage = test.validatorLanguage,
                     isHidden = test.isHidden,
                     timeoutMs = test.timeoutMs,
                     memoryLimitMb = test.memoryLimitMb,
@@ -225,6 +245,199 @@ internal class ProblemReadRepositoryImpl(
                 registeredParticipants = registeredParticipants,
                 requiredParticipants = requiredParticipants,
             )
+        }
+    }
+
+    override fun fetchExecutionContextForUser(userId: Long, problemId: Int): ProblemExecutionContext {
+        return transactionRunner.inTransaction {
+            val normalizedProblemId = problemId.toLong()
+            val problemRow = problemDao.fetchOpenProblemRow(normalizedProblemId)
+                ?: throw IllegalArgumentException("Problem not found or not open.")
+
+            val requiredParticipants = problemRow[ProblemsTable.requiredParticipants]
+            val submitUntilDate = problemRow[ProblemsTable.submitUntilDate]
+            val registeredParticipants = problemDao.countParticipants(normalizedProblemId)
+
+            val isRegistered = problemDao.isUserRegisteredForProblem(
+                problemId = normalizedProblemId,
+                userId = userId,
+            )
+            if (!isRegistered) {
+                throw IllegalArgumentException("Join this competition to run code.")
+            }
+            if (registeredParticipants < requiredParticipants) {
+                throw IllegalArgumentException("Competition has not started yet.")
+            }
+            if (LocalDate.now().isAfter(submitUntilDate)) {
+                throw IllegalArgumentException("Submission window has ended.")
+            }
+
+            val tests = problemDao.fetchProblemTestRows(normalizedProblemId).map { row ->
+                ProblemExecutionTest(
+                    id = row[ProblemTestsTable.problemTestId],
+                    order = row[ProblemTestsTable.testOrder],
+                    inputData = row[ProblemTestsTable.inputData],
+                    expectedOutput = row[ProblemTestsTable.expectedOutput],
+                    validatorCode = row[ProblemTestsTable.validatorCode],
+                    validatorLanguage = row[ProblemTestsTable.validatorLanguage],
+                    isHidden = row[ProblemTestsTable.isHidden],
+                    timeoutMs = row[ProblemTestsTable.timeoutMs],
+                    memoryLimitMb = row[ProblemTestsTable.memoryLimitMb],
+                )
+            }
+            if (tests.isEmpty()) {
+                throw IllegalArgumentException("Problem has no tests configured.")
+            }
+
+            ProblemExecutionContext(
+                problemId = problemId,
+                requiredParticipants = requiredParticipants,
+                registeredParticipants = registeredParticipants,
+                submitUntilDate = submitUntilDate,
+                tests = tests,
+            )
+        }
+    }
+
+    override fun createSubmissionRecord(draft: SubmissionRecordDraft): PersistedSubmissionRecord {
+        return transactionRunner.inTransaction {
+            val insertedSubmission = ProblemSubmissionsTable.insert {
+                it[problemId] = draft.problemId.toLong()
+                it[userId] = draft.userId
+                it[status] = draft.status.dbValue
+                it[sourceCode] = draft.sourceCode
+                it[language] = draft.language
+                it[codeHash] = draft.codeHash
+                it[testsHash] = draft.testsHash
+                it[resultHash] = draft.resultHash
+                it[consensusImageHash] = draft.consensusImageHash
+                it[consensusNodes] = draft.consensusNodes
+                it[commitmentHash] = draft.commitmentHash
+                it[anchorStatus] = draft.anchor.status.dbValue
+                it[anchorBatchId] = draft.anchor.batchId
+                it[anchorMerkleRoot] = draft.anchor.merkleRoot
+                it[anchorMerkleProofJson] = anchorProofJson.encodeToString(draft.anchor.merkleProof)
+                it[anchorTxHash] = draft.anchor.txHash
+                it[anchorError] = draft.anchor.error
+                it[anchoredAt] = draft.anchor.anchoredAt?.toDbDateTime()
+            }
+            val submissionId = insertedSubmission[ProblemSubmissionsTable.submissionId]
+
+            draft.testResults.forEach { test ->
+                ProblemSubmissionTestResultsTable.insert {
+                    it[ProblemSubmissionTestResultsTable.submissionId] = submissionId
+                    it[problemTestId] = test.problemTestId
+                    it[resultStatus] = test.status.dbValue
+                    it[executionTimeMs] = test.executionTimeMs
+                    it[memoryUsedKb] = null
+                    it[message] = test.message
+                }
+            }
+
+            draft.nodeAttestations.forEach { attestation ->
+                ProblemSubmissionAttestationsTable.insert {
+                    it[ProblemSubmissionAttestationsTable.submissionId] = submissionId
+                    it[nodeId] = attestation.nodeId
+                    it[nodeUrl] = attestation.nodeUrl
+                    it[imageHash] = attestation.imageHash
+                    it[runHash] = attestation.runHash
+                    it[resultHash] = attestation.resultHash
+                    it[attestationPayloadHash] = attestation.attestationPayloadHash
+                    it[attestationSignature] = attestation.attestationSignature
+                    it[attestationScheme] = attestation.attestationScheme
+                    it[isValid] = attestation.isValid
+                    it[isConsensus] = attestation.isConsensus
+                    it[nodeStatus] = attestation.status.dbValue
+                    it[message] = attestation.message
+                }
+            }
+
+            PersistedSubmissionRecord(
+                submissionId = submissionId,
+                anchorStatus = draft.anchor.status,
+            )
+        }
+    }
+
+    override fun fetchPendingSubmissionAnchors(limit: Int): List<PendingSubmissionAnchorRecord> {
+        return transactionRunner.inTransaction {
+            val safeLimit = limit.coerceIn(1, 250)
+            ProblemSubmissionsTable
+                .selectAll()
+                .where { ProblemSubmissionsTable.anchorStatus eq SubmissionAnchorStatus.Pending.dbValue }
+                .orderBy(ProblemSubmissionsTable.submittedAt to SortOrder.ASC)
+                .limit(safeLimit)
+                .map { row ->
+                    PendingSubmissionAnchorRecord(
+                        submissionId = row[ProblemSubmissionsTable.submissionId],
+                        commitmentHash = row[ProblemSubmissionsTable.commitmentHash],
+                    )
+                }
+        }
+    }
+
+    override fun createAnchorBatch(
+        rootHash: String,
+        submissionIds: List<Long>,
+        status: AnchorBatchStatus,
+        txHash: String?,
+        chainId: Long?,
+        contractAddress: String?,
+        failureReason: String?,
+        anchoredAt: Instant?,
+    ): SubmissionAnchorBatchRecord {
+        require(submissionIds.isNotEmpty()) { "Anchor batch requires at least one submission." }
+        return transactionRunner.inTransaction {
+            val sorted = submissionIds.sorted()
+            val insertedBatch = SubmissionAnchorBatchesTable.insert {
+                it[merkleRootHash] = rootHash
+                it[leavesCount] = sorted.size
+                it[fromSubmissionId] = sorted.first()
+                it[toSubmissionId] = sorted.last()
+                it[SubmissionAnchorBatchesTable.chainId] = chainId
+                it[SubmissionAnchorBatchesTable.contractAddress] = contractAddress
+                it[SubmissionAnchorBatchesTable.txHash] = txHash
+                it[SubmissionAnchorBatchesTable.status] = status.dbValue
+                it[SubmissionAnchorBatchesTable.failureReason] = failureReason
+                it[SubmissionAnchorBatchesTable.anchoredAt] = anchoredAt?.toDbDateTime()
+            }
+            SubmissionAnchorBatchRecord(
+                batchId = insertedBatch[SubmissionAnchorBatchesTable.batchId],
+                rootHash = rootHash,
+                submissionIds = sorted,
+            )
+        }
+    }
+
+    override fun updateSubmissionAnchors(
+        submissionIds: List<Long>,
+        status: SubmissionAnchorStatus,
+        batchId: Long,
+        merkleRoot: String,
+        proofBySubmission: Map<Long, List<String>>,
+        txHash: String?,
+        error: String?,
+        anchoredAt: Instant?,
+    ) {
+        if (submissionIds.isEmpty()) {
+            return
+        }
+        transactionRunner.inTransaction {
+            submissionIds.forEach { submissionId ->
+                ProblemSubmissionsTable.update(
+                    where = { ProblemSubmissionsTable.submissionId eq submissionId }
+                ) {
+                    it[anchorStatus] = status.dbValue
+                    it[anchorBatchId] = batchId
+                    it[anchorMerkleRoot] = merkleRoot
+                    it[anchorMerkleProofJson] = anchorProofJson.encodeToString(
+                        proofBySubmission[submissionId].orEmpty()
+                    )
+                    it[anchorTxHash] = txHash
+                    it[anchorError] = error
+                    it[ProblemSubmissionsTable.anchoredAt] = anchoredAt?.toDbDateTime()
+                }
+            }
         }
     }
 
@@ -339,4 +552,12 @@ private fun serializeProblemExamples(examples: List<NewProblemExampleDraft>): St
             )
         }
     )
+}
+
+private val anchorProofJson = Json {
+    ignoreUnknownKeys = true
+}
+
+private fun Instant.toDbDateTime(): java.time.LocalDateTime {
+    return java.time.LocalDateTime.ofInstant(this, java.time.ZoneOffset.UTC)
 }

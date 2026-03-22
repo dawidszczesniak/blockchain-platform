@@ -22,6 +22,90 @@ services:
     volumes:
       - redis_data:/data
 
+  sandbox-node-1:
+    build:
+      context: ./sandbox-runner
+      dockerfile: Dockerfile
+    container_name: blockchain-platform-sandbox-node-1
+    restart: unless-stopped
+    environment:
+      SANDBOX_NODE_ID: sandbox-node-1
+      SANDBOX_PORT: 8080
+      SANDBOX_IMAGE_HASH: ${SANDBOX_IMAGE_HASH:-unknown}
+      SANDBOX_VERSION: ${SANDBOX_VERSION:-1}
+      SANDBOX_ATTESTATION_SECRET: ${SANDBOX_NODE_1_SECRET:-local-dev-sandbox-secret-1}
+      JDK_JAVA_OPTIONS: -Djansi.tmpdir=/jansi
+      JAVA_TOOL_OPTIONS: -Djansi.tmpdir=/jansi
+    ports:
+      - "8091:8080"
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m,noexec,nosuid
+      - /jansi:size=32m,exec,nosuid
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 256
+    mem_limit: 512m
+    cpus: 1.0
+
+  sandbox-node-2:
+    build:
+      context: ./sandbox-runner
+      dockerfile: Dockerfile
+    container_name: blockchain-platform-sandbox-node-2
+    restart: unless-stopped
+    environment:
+      SANDBOX_NODE_ID: sandbox-node-2
+      SANDBOX_PORT: 8080
+      SANDBOX_IMAGE_HASH: ${SANDBOX_IMAGE_HASH:-unknown}
+      SANDBOX_VERSION: ${SANDBOX_VERSION:-1}
+      SANDBOX_ATTESTATION_SECRET: ${SANDBOX_NODE_2_SECRET:-local-dev-sandbox-secret-2}
+      JDK_JAVA_OPTIONS: -Djansi.tmpdir=/jansi
+      JAVA_TOOL_OPTIONS: -Djansi.tmpdir=/jansi
+    ports:
+      - "8092:8080"
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m,noexec,nosuid
+      - /jansi:size=32m,exec,nosuid
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 256
+    mem_limit: 512m
+    cpus: 1.0
+
+  sandbox-node-3:
+    build:
+      context: ./sandbox-runner
+      dockerfile: Dockerfile
+    container_name: blockchain-platform-sandbox-node-3
+    restart: unless-stopped
+    environment:
+      SANDBOX_NODE_ID: sandbox-node-3
+      SANDBOX_PORT: 8080
+      SANDBOX_IMAGE_HASH: ${SANDBOX_IMAGE_HASH:-unknown}
+      SANDBOX_VERSION: ${SANDBOX_VERSION:-1}
+      SANDBOX_ATTESTATION_SECRET: ${SANDBOX_NODE_3_SECRET:-local-dev-sandbox-secret-3}
+      JDK_JAVA_OPTIONS: -Djansi.tmpdir=/jansi
+      JAVA_TOOL_OPTIONS: -Djansi.tmpdir=/jansi
+    ports:
+      - "8093:8080"
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m,noexec,nosuid
+      - /jansi:size=32m,exec,nosuid
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 256
+    mem_limit: 512m
+    cpus: 1.0
+
 volumes:
   postgres_data:
   redis_data:

@@ -22,6 +22,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
@@ -42,18 +43,13 @@ import androidx.compose.ui.unit.dp
 import blockchain_platform.composeapp.generated.resources.Res
 import blockchain_platform.composeapp.generated.resources.create_problem_action_create
 import blockchain_platform.composeapp.generated.resources.create_problem_action_creating
-import blockchain_platform.composeapp.generated.resources.create_problem_add_example
 import blockchain_platform.composeapp.generated.resources.create_problem_add_test
 import blockchain_platform.composeapp.generated.resources.create_problem_constraints_label
+import blockchain_platform.composeapp.generated.resources.create_problem_copy_error
 import blockchain_platform.composeapp.generated.resources.create_problem_date_picker_confirm
 import blockchain_platform.composeapp.generated.resources.create_problem_date_picker_dismiss
 import blockchain_platform.composeapp.generated.resources.create_problem_description_label
 import blockchain_platform.composeapp.generated.resources.create_problem_entry_fee_label
-import blockchain_platform.composeapp.generated.resources.create_problem_example_explanation_label
-import blockchain_platform.composeapp.generated.resources.create_problem_example_input_label
-import blockchain_platform.composeapp.generated.resources.create_problem_example_label
-import blockchain_platform.composeapp.generated.resources.create_problem_example_output_label
-import blockchain_platform.composeapp.generated.resources.create_problem_example_remove
 import blockchain_platform.composeapp.generated.resources.create_problem_join_until_label
 import blockchain_platform.composeapp.generated.resources.create_problem_participants_label
 import blockchain_platform.composeapp.generated.resources.create_problem_profit_entry_fee
@@ -64,22 +60,33 @@ import blockchain_platform.composeapp.generated.resources.create_problem_profit_
 import blockchain_platform.composeapp.generated.resources.create_problem_profit_prize
 import blockchain_platform.composeapp.generated.resources.create_problem_profit_title
 import blockchain_platform.composeapp.generated.resources.create_problem_prize_label
-import blockchain_platform.composeapp.generated.resources.create_problem_submit_until_label
+import blockchain_platform.composeapp.generated.resources.create_problem_reference_solution_label
+import blockchain_platform.composeapp.generated.resources.create_problem_run_all
+import blockchain_platform.composeapp.generated.resources.create_problem_run_output
+import blockchain_platform.composeapp.generated.resources.create_problem_run_running
+import blockchain_platform.composeapp.generated.resources.create_problem_run_status
+import blockchain_platform.composeapp.generated.resources.create_problem_run_test
 import blockchain_platform.composeapp.generated.resources.create_problem_submit_failed
 import blockchain_platform.composeapp.generated.resources.create_problem_submit_success
-import blockchain_platform.composeapp.generated.resources.create_problem_test_code_label
+import blockchain_platform.composeapp.generated.resources.create_problem_submit_until_label
 import blockchain_platform.composeapp.generated.resources.create_problem_test_collapse
 import blockchain_platform.composeapp.generated.resources.create_problem_test_expand
+import blockchain_platform.composeapp.generated.resources.create_problem_test_hidden_label
+import blockchain_platform.composeapp.generated.resources.create_problem_test_input_label
 import blockchain_platform.composeapp.generated.resources.create_problem_test_label
 import blockchain_platform.composeapp.generated.resources.create_problem_test_remove
-import blockchain_platform.composeapp.generated.resources.create_problem_examples_title
 import blockchain_platform.composeapp.generated.resources.create_problem_tests_title
+import blockchain_platform.composeapp.generated.resources.create_problem_title_label
 import blockchain_platform.composeapp.generated.resources.create_problem_validation_date_order
-import blockchain_platform.composeapp.generated.resources.create_problem_validation_invalid_date
 import blockchain_platform.composeapp.generated.resources.create_problem_validation_integer
+import blockchain_platform.composeapp.generated.resources.create_problem_validation_invalid_date
+import blockchain_platform.composeapp.generated.resources.create_problem_validation_min_public_tests
 import blockchain_platform.composeapp.generated.resources.create_problem_validation_non_negative
 import blockchain_platform.composeapp.generated.resources.create_problem_validation_positive
 import blockchain_platform.composeapp.generated.resources.create_problem_validation_required
+import blockchain_platform.composeapp.generated.resources.create_problem_validation_run_required
+import blockchain_platform.composeapp.generated.resources.create_problem_validation_ready
+import kotlinx.browser.window
 import org.jetbrains.compose.resources.stringResource
 import pl.dawidszczesniak.blockchain_platform.di.LocalKoin
 
@@ -105,60 +112,27 @@ fun CreateProblemScreen() {
                 Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
                     CreateProblemForm(
                         state = state,
-                        onPrizeChange = {
-                            viewModel.onIntent(CreateProblemIntent.PrizeChanged(it))
+                        onPrizeChange = { viewModel.onIntent(CreateProblemIntent.PrizeChanged(it)) },
+                        onParticipantsChange = { viewModel.onIntent(CreateProblemIntent.ParticipantsChanged(it)) },
+                        onEntryFeeChange = { viewModel.onIntent(CreateProblemIntent.EntryFeeChanged(it)) },
+                        onTitleChange = { viewModel.onIntent(CreateProblemIntent.TitleChanged(it)) },
+                        onDescriptionChange = { viewModel.onIntent(CreateProblemIntent.DescriptionChanged(it)) },
+                        onConstraintsChange = { viewModel.onIntent(CreateProblemIntent.ConstraintsChanged(it)) },
+                        onReferenceSolutionChange = { viewModel.onIntent(CreateProblemIntent.ReferenceSolutionChanged(it)) },
+                        onAddTest = { viewModel.onIntent(CreateProblemIntent.AddTest) },
+                        onToggleTest = { id -> viewModel.onIntent(CreateProblemIntent.ToggleTest(id)) },
+                        onRemoveTest = { id -> viewModel.onIntent(CreateProblemIntent.RemoveTest(id)) },
+                        onTestInputChange = { id, value ->
+                            viewModel.onIntent(CreateProblemIntent.TestInputChanged(id, value))
                         },
-                        onParticipantsChange = {
-                            viewModel.onIntent(CreateProblemIntent.ParticipantsChanged(it))
+                        onTestHiddenChange = { id, value ->
+                            viewModel.onIntent(CreateProblemIntent.TestHiddenChanged(id, value))
                         },
-                        onEntryFeeChange = {
-                            viewModel.onIntent(CreateProblemIntent.EntryFeeChanged(it))
-                        },
-                        onDescriptionChange = {
-                            viewModel.onIntent(CreateProblemIntent.DescriptionChanged(it))
-                        },
-                        onConstraintsChange = {
-                            viewModel.onIntent(CreateProblemIntent.ConstraintsChanged(it))
-                        },
-                        onAddExample = {
-                            viewModel.onIntent(CreateProblemIntent.AddExample)
-                        },
-                        onToggleExample = { id ->
-                            viewModel.onIntent(CreateProblemIntent.ToggleExample(id))
-                        },
-                        onRemoveExample = { id ->
-                            viewModel.onIntent(CreateProblemIntent.RemoveExample(id))
-                        },
-                        onExampleInputChange = { id, value ->
-                            viewModel.onIntent(CreateProblemIntent.ExampleInputChanged(id, value))
-                        },
-                        onExampleOutputChange = { id, value ->
-                            viewModel.onIntent(CreateProblemIntent.ExampleOutputChanged(id, value))
-                        },
-                        onExampleExplanationChange = { id, value ->
-                            viewModel.onIntent(CreateProblemIntent.ExampleExplanationChanged(id, value))
-                        },
-                        onAddTest = {
-                            viewModel.onIntent(CreateProblemIntent.AddTest)
-                        },
-                        onToggleTest = { id ->
-                            viewModel.onIntent(CreateProblemIntent.ToggleTest(id))
-                        },
-                        onRemoveTest = { id ->
-                            viewModel.onIntent(CreateProblemIntent.RemoveTest(id))
-                        },
-                        onTestCodeChange = { id, value ->
-                            viewModel.onIntent(CreateProblemIntent.TestCodeChanged(id, value))
-                        },
-                        onJoinUntilChange = {
-                            viewModel.onIntent(CreateProblemIntent.JoinUntilChanged(it))
-                        },
-                        onSubmitUntilChange = {
-                            viewModel.onIntent(CreateProblemIntent.SubmitUntilChanged(it))
-                        },
-                        onSubmit = {
-                            viewModel.onIntent(CreateProblemIntent.Submit)
-                        }
+                        onRunSingleTest = { id -> viewModel.onIntent(CreateProblemIntent.RunSingleTest(id)) },
+                        onRunAllTests = { viewModel.onIntent(CreateProblemIntent.RunAllTests) },
+                        onJoinUntilChange = { viewModel.onIntent(CreateProblemIntent.JoinUntilChanged(it)) },
+                        onSubmitUntilChange = { viewModel.onIntent(CreateProblemIntent.SubmitUntilChanged(it)) },
+                        onSubmit = { viewModel.onIntent(CreateProblemIntent.Submit) },
                     )
                     ProfitPanel(state = state)
                 }
@@ -167,60 +141,27 @@ fun CreateProblemScreen() {
                     CreateProblemForm(
                         modifier = Modifier.weight(2f),
                         state = state,
-                        onPrizeChange = {
-                            viewModel.onIntent(CreateProblemIntent.PrizeChanged(it))
+                        onPrizeChange = { viewModel.onIntent(CreateProblemIntent.PrizeChanged(it)) },
+                        onParticipantsChange = { viewModel.onIntent(CreateProblemIntent.ParticipantsChanged(it)) },
+                        onEntryFeeChange = { viewModel.onIntent(CreateProblemIntent.EntryFeeChanged(it)) },
+                        onTitleChange = { viewModel.onIntent(CreateProblemIntent.TitleChanged(it)) },
+                        onDescriptionChange = { viewModel.onIntent(CreateProblemIntent.DescriptionChanged(it)) },
+                        onConstraintsChange = { viewModel.onIntent(CreateProblemIntent.ConstraintsChanged(it)) },
+                        onReferenceSolutionChange = { viewModel.onIntent(CreateProblemIntent.ReferenceSolutionChanged(it)) },
+                        onAddTest = { viewModel.onIntent(CreateProblemIntent.AddTest) },
+                        onToggleTest = { id -> viewModel.onIntent(CreateProblemIntent.ToggleTest(id)) },
+                        onRemoveTest = { id -> viewModel.onIntent(CreateProblemIntent.RemoveTest(id)) },
+                        onTestInputChange = { id, value ->
+                            viewModel.onIntent(CreateProblemIntent.TestInputChanged(id, value))
                         },
-                        onParticipantsChange = {
-                            viewModel.onIntent(CreateProblemIntent.ParticipantsChanged(it))
+                        onTestHiddenChange = { id, value ->
+                            viewModel.onIntent(CreateProblemIntent.TestHiddenChanged(id, value))
                         },
-                        onEntryFeeChange = {
-                            viewModel.onIntent(CreateProblemIntent.EntryFeeChanged(it))
-                        },
-                        onDescriptionChange = {
-                            viewModel.onIntent(CreateProblemIntent.DescriptionChanged(it))
-                        },
-                        onConstraintsChange = {
-                            viewModel.onIntent(CreateProblemIntent.ConstraintsChanged(it))
-                        },
-                        onAddExample = {
-                            viewModel.onIntent(CreateProblemIntent.AddExample)
-                        },
-                        onToggleExample = { id ->
-                            viewModel.onIntent(CreateProblemIntent.ToggleExample(id))
-                        },
-                        onRemoveExample = { id ->
-                            viewModel.onIntent(CreateProblemIntent.RemoveExample(id))
-                        },
-                        onExampleInputChange = { id, value ->
-                            viewModel.onIntent(CreateProblemIntent.ExampleInputChanged(id, value))
-                        },
-                        onExampleOutputChange = { id, value ->
-                            viewModel.onIntent(CreateProblemIntent.ExampleOutputChanged(id, value))
-                        },
-                        onExampleExplanationChange = { id, value ->
-                            viewModel.onIntent(CreateProblemIntent.ExampleExplanationChanged(id, value))
-                        },
-                        onAddTest = {
-                            viewModel.onIntent(CreateProblemIntent.AddTest)
-                        },
-                        onToggleTest = { id ->
-                            viewModel.onIntent(CreateProblemIntent.ToggleTest(id))
-                        },
-                        onRemoveTest = { id ->
-                            viewModel.onIntent(CreateProblemIntent.RemoveTest(id))
-                        },
-                        onTestCodeChange = { id, value ->
-                            viewModel.onIntent(CreateProblemIntent.TestCodeChanged(id, value))
-                        },
-                        onJoinUntilChange = {
-                            viewModel.onIntent(CreateProblemIntent.JoinUntilChanged(it))
-                        },
-                        onSubmitUntilChange = {
-                            viewModel.onIntent(CreateProblemIntent.SubmitUntilChanged(it))
-                        },
-                        onSubmit = {
-                            viewModel.onIntent(CreateProblemIntent.Submit)
-                        }
+                        onRunSingleTest = { id -> viewModel.onIntent(CreateProblemIntent.RunSingleTest(id)) },
+                        onRunAllTests = { viewModel.onIntent(CreateProblemIntent.RunAllTests) },
+                        onJoinUntilChange = { viewModel.onIntent(CreateProblemIntent.JoinUntilChanged(it)) },
+                        onSubmitUntilChange = { viewModel.onIntent(CreateProblemIntent.SubmitUntilChanged(it)) },
+                        onSubmit = { viewModel.onIntent(CreateProblemIntent.Submit) },
                     )
                     ProfitPanel(
                         modifier = Modifier.weight(1f),
@@ -239,18 +180,17 @@ private fun CreateProblemForm(
     onPrizeChange: (String) -> Unit,
     onParticipantsChange: (String) -> Unit,
     onEntryFeeChange: (String) -> Unit,
+    onTitleChange: (String) -> Unit,
     onDescriptionChange: (String) -> Unit,
     onConstraintsChange: (String) -> Unit,
-    onAddExample: () -> Unit,
-    onToggleExample: (Int) -> Unit,
-    onRemoveExample: (Int) -> Unit,
-    onExampleInputChange: (Int, String) -> Unit,
-    onExampleOutputChange: (Int, String) -> Unit,
-    onExampleExplanationChange: (Int, String) -> Unit,
+    onReferenceSolutionChange: (String) -> Unit,
     onAddTest: () -> Unit,
     onToggleTest: (Int) -> Unit,
     onRemoveTest: (Int) -> Unit,
-    onTestCodeChange: (Int, String) -> Unit,
+    onTestInputChange: (Int, String) -> Unit,
+    onTestHiddenChange: (Int, Boolean) -> Unit,
+    onRunSingleTest: (Int) -> Unit,
+    onRunAllTests: () -> Unit,
     onJoinUntilChange: (String) -> Unit,
     onSubmitUntilChange: (String) -> Unit,
     onSubmit: () -> Unit,
@@ -268,9 +208,17 @@ private fun CreateProblemForm(
         visible = state.submitAttempted,
         error = validation.entryFee,
     )
+    val titleError = validationMessage(
+        visible = state.submitAttempted,
+        error = validation.title,
+    )
     val descriptionError = validationMessage(
         visible = state.submitAttempted,
         error = validation.description,
+    )
+    val referenceSolutionError = validationMessage(
+        visible = state.submitAttempted,
+        error = validation.referenceSolution,
     )
     val joinUntilError = validationMessage(
         visible = state.submitAttempted,
@@ -280,45 +228,21 @@ private fun CreateProblemForm(
         visible = state.submitAttempted,
         error = validation.submitUntilDate,
     )
+    val publicTestsError = validationMessage(
+        visible = state.submitAttempted,
+        error = validation.publicTests,
+    )
 
     Column(modifier = modifier.fillMaxWidth()) {
         OutlinedTextField(
-            value = state.prize,
-            onValueChange = onPrizeChange,
-            label = { Text(stringResource(Res.string.create_problem_prize_label)) },
+            value = state.title,
+            onValueChange = onTitleChange,
+            label = { Text(stringResource(Res.string.create_problem_title_label)) },
             modifier = Modifier.fillMaxWidth(),
-            isError = prizeError != null,
+            isError = titleError != null,
             supportingText = {
-                if (prizeError != null) {
-                    Text(prizeError)
-                }
-            },
-        )
-        Spacer(Modifier.height(10.dp))
-
-        OutlinedTextField(
-            value = state.participants,
-            onValueChange = onParticipantsChange,
-            label = { Text(stringResource(Res.string.create_problem_participants_label)) },
-            modifier = Modifier.fillMaxWidth(),
-            isError = participantsError != null,
-            supportingText = {
-                if (participantsError != null) {
-                    Text(participantsError)
-                }
-            },
-        )
-        Spacer(Modifier.height(10.dp))
-
-        OutlinedTextField(
-            value = state.entryFee,
-            onValueChange = onEntryFeeChange,
-            label = { Text(stringResource(Res.string.create_problem_entry_fee_label)) },
-            modifier = Modifier.fillMaxWidth(),
-            isError = entryFeeError != null,
-            supportingText = {
-                if (entryFeeError != null) {
-                    Text(entryFeeError)
+                if (titleError != null) {
+                    Text(titleError)
                 }
             },
         )
@@ -340,6 +264,50 @@ private fun CreateProblemForm(
         )
         Spacer(Modifier.height(10.dp))
 
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.Top,
+        ) {
+            OutlinedTextField(
+                value = state.prize,
+                onValueChange = onPrizeChange,
+                label = { Text(stringResource(Res.string.create_problem_prize_label)) },
+                modifier = Modifier.weight(1f),
+                isError = prizeError != null,
+                supportingText = {
+                    if (prizeError != null) {
+                        Text(prizeError)
+                    }
+                },
+            )
+            OutlinedTextField(
+                value = state.participants,
+                onValueChange = onParticipantsChange,
+                label = { Text(stringResource(Res.string.create_problem_participants_label)) },
+                modifier = Modifier.weight(1f),
+                isError = participantsError != null,
+                supportingText = {
+                    if (participantsError != null) {
+                        Text(participantsError)
+                    }
+                },
+            )
+            OutlinedTextField(
+                value = state.entryFee,
+                onValueChange = onEntryFeeChange,
+                label = { Text(stringResource(Res.string.create_problem_entry_fee_label)) },
+                modifier = Modifier.weight(1f),
+                isError = entryFeeError != null,
+                supportingText = {
+                    if (entryFeeError != null) {
+                        Text(entryFeeError)
+                    }
+                },
+            )
+        }
+        Spacer(Modifier.height(10.dp))
+
         OutlinedTextField(
             value = state.constraints,
             onValueChange = onConstraintsChange,
@@ -350,50 +318,20 @@ private fun CreateProblemForm(
         )
         Spacer(Modifier.height(10.dp))
 
-        Row(
+        OutlinedTextField(
+            value = state.referenceSolutionCode,
+            onValueChange = onReferenceSolutionChange,
+            label = { Text(stringResource(Res.string.create_problem_reference_solution_label)) },
             modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = stringResource(
-                    Res.string.create_problem_examples_title,
-                    state.examples.size,
-                    MAX_CREATE_PROBLEM_EXAMPLES
-                ),
-                style = MaterialTheme.typography.titleSmall
-            )
-            Spacer(Modifier.weight(1f))
-            OutlinedButton(
-                onClick = onAddExample,
-                enabled = state.canAddExample
-            ) {
-                Text(stringResource(Res.string.create_problem_add_example))
-            }
-        }
-        Spacer(Modifier.height(8.dp))
-
-        state.examples.forEachIndexed { index, example ->
-            key(example.id) {
-                ExampleCard(
-                    index = index,
-                    example = example,
-                    onToggle = { onToggleExample(example.id) },
-                    canRemove = state.examples.size > MIN_CREATE_PROBLEM_EXAMPLES,
-                    onRemove = { onRemoveExample(example.id) },
-                    onInputChange = { value -> onExampleInputChange(example.id, value) },
-                    onOutputChange = { value -> onExampleOutputChange(example.id, value) },
-                    onExplanationChange = { value -> onExampleExplanationChange(example.id, value) },
-                    validation = if (state.submitAttempted) {
-                        validation.examplesById[example.id]
-                    } else {
-                        null
-                    }
-                )
-            }
-            if (index < state.examples.lastIndex) {
-                Spacer(Modifier.height(10.dp))
-            }
-        }
+            minLines = 6,
+            maxLines = 14,
+            isError = referenceSolutionError != null,
+            supportingText = {
+                if (referenceSolutionError != null) {
+                    Text(referenceSolutionError)
+                }
+            },
+        )
         Spacer(Modifier.height(10.dp))
 
         Row(
@@ -410,10 +348,57 @@ private fun CreateProblemForm(
             )
             Spacer(Modifier.weight(1f))
             OutlinedButton(
+                onClick = onRunAllTests,
+                enabled = !state.isRunningAllTests && state.runningTestIds.isEmpty() && !state.isSubmitting,
+            ) {
+                Text(
+                    stringResource(
+                        if (state.isRunningAllTests) {
+                            Res.string.create_problem_run_running
+                        } else {
+                            Res.string.create_problem_run_all
+                        }
+                    )
+                )
+            }
+            Spacer(Modifier.width(8.dp))
+            OutlinedButton(
                 onClick = onAddTest,
                 enabled = state.canAddTest
             ) {
                 Text(stringResource(Res.string.create_problem_add_test))
+            }
+        }
+        if (publicTestsError != null) {
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = publicTestsError,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = stringResource(
+                if (state.isValidationFresh) {
+                    Res.string.create_problem_validation_ready
+                } else {
+                    Res.string.create_problem_validation_run_required
+                }
+            ),
+            style = MaterialTheme.typography.bodySmall,
+            color = if (state.isValidationFresh) Color(0xFF33C97A) else MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        state.runErrorMessage?.let { runErrorMessage ->
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = runErrorMessage,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+            Spacer(Modifier.height(2.dp))
+            TextButton(onClick = { copyToClipboard(runErrorMessage) }) {
+                Text(stringResource(Res.string.create_problem_copy_error))
             }
         }
         Spacer(Modifier.height(8.dp))
@@ -424,10 +409,14 @@ private fun CreateProblemForm(
                     index = index,
                     test = test,
                     onToggle = { onToggleTest(test.id) },
-                    canRemove = state.tests.size > 1,
+                    canRemove = state.tests.size > MIN_CREATE_PROBLEM_TESTS,
                     onRemove = { onRemoveTest(test.id) },
-                    onCodeChange = { value -> onTestCodeChange(test.id, value) },
-                    validationError = if (state.submitAttempted) {
+                    onInputChange = { value -> onTestInputChange(test.id, value) },
+                    onHiddenChange = { value -> onTestHiddenChange(test.id, value) },
+                    onRun = { onRunSingleTest(test.id) },
+                    isRunning = state.isRunningAllTests || test.id in state.runningTestIds,
+                    runResult = state.testRunResultsById[test.id],
+                    validation = if (state.submitAttempted) {
                         validation.testsById[test.id]
                     } else {
                         null
@@ -457,7 +446,11 @@ private fun CreateProblemForm(
         if (state.submitFailed) {
             Spacer(Modifier.height(10.dp))
             Text(
-                text = state.submitErrorMessage ?: stringResource(Res.string.create_problem_submit_failed),
+                text = if (state.requiresFreshValidationForSubmit) {
+                    stringResource(Res.string.create_problem_validation_run_required)
+                } else {
+                    state.submitErrorMessage ?: stringResource(Res.string.create_problem_submit_failed)
+                },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error,
             )
@@ -474,7 +467,7 @@ private fun CreateProblemForm(
 
         Button(
             onClick = onSubmit,
-            enabled = !state.isSubmitting
+            enabled = state.canSubmit
         ) {
             Text(
                 stringResource(
@@ -505,6 +498,7 @@ private fun validationMessage(
             CreateProblemValidationError.MustBeNonNegative -> Res.string.create_problem_validation_non_negative
             CreateProblemValidationError.InvalidDate -> Res.string.create_problem_validation_invalid_date
             CreateProblemValidationError.SubmitBeforeJoin -> Res.string.create_problem_validation_date_order
+            CreateProblemValidationError.MinPublicTests -> Res.string.create_problem_validation_min_public_tests
         }
     )
 }
@@ -674,6 +668,13 @@ private fun floorDiv(dividend: Long, divisor: Long): Long {
     return quotient
 }
 
+private fun copyToClipboard(value: String) {
+    runCatching<Unit> {
+        window.navigator.clipboard.writeText(value)
+        Unit
+    }
+}
+
 @Composable
 private fun ProfitPanel(
     modifier: Modifier = Modifier,
@@ -752,127 +753,22 @@ private fun ProfitRow(
 }
 
 @Composable
-private fun ExampleCard(
-    index: Int,
-    example: CreateProblemExample,
-    onToggle: () -> Unit,
-    canRemove: Boolean,
-    onRemove: () -> Unit,
-    onInputChange: (String) -> Unit,
-    onOutputChange: (String) -> Unit,
-    onExplanationChange: (String) -> Unit,
-    validation: CreateProblemExampleValidation?,
-) {
-    val inputError = validationMessage(
-        visible = true,
-        error = validation?.input,
-    )
-    val outputError = validationMessage(
-        visible = true,
-        error = validation?.output,
-    )
-    val explanationError = validationMessage(
-        visible = true,
-        error = validation?.explanation,
-    )
-
-    OutlinedCard(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.outlinedCardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
-        )
-    ) {
-        Column(modifier = Modifier.padding(14.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = stringResource(Res.string.create_problem_example_label, index + 1),
-                    style = MaterialTheme.typography.titleSmall
-                )
-                Spacer(Modifier.weight(1f))
-                TextButton(onClick = onRemove, enabled = canRemove) {
-                    Text(stringResource(Res.string.create_problem_example_remove))
-                }
-                TextButton(onClick = onToggle) {
-                    Text(
-                        stringResource(
-                            if (example.expanded) {
-                                Res.string.create_problem_test_collapse
-                            } else {
-                                Res.string.create_problem_test_expand
-                            }
-                        )
-                    )
-                }
-            }
-
-            if (example.expanded) {
-                Spacer(Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = example.input,
-                    onValueChange = onInputChange,
-                    label = { Text(stringResource(Res.string.create_problem_example_input_label)) },
-                    modifier = Modifier.fillMaxWidth(),
-                    minLines = 2,
-                    maxLines = 6,
-                    isError = inputError != null,
-                    supportingText = {
-                        if (inputError != null) {
-                            Text(inputError)
-                        }
-                    },
-                )
-                Spacer(Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = example.output,
-                    onValueChange = onOutputChange,
-                    label = { Text(stringResource(Res.string.create_problem_example_output_label)) },
-                    modifier = Modifier.fillMaxWidth(),
-                    minLines = 2,
-                    maxLines = 6,
-                    isError = outputError != null,
-                    supportingText = {
-                        if (outputError != null) {
-                            Text(outputError)
-                        }
-                    },
-                )
-                Spacer(Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = example.explanation,
-                    onValueChange = onExplanationChange,
-                    label = { Text(stringResource(Res.string.create_problem_example_explanation_label)) },
-                    modifier = Modifier.fillMaxWidth(),
-                    minLines = 2,
-                    maxLines = 6,
-                    isError = explanationError != null,
-                    supportingText = {
-                        if (explanationError != null) {
-                            Text(explanationError)
-                        }
-                    },
-                )
-            }
-        }
-    }
-}
-
-@Composable
 private fun TestCaseCard(
     index: Int,
     test: CreateProblemTest,
     onToggle: () -> Unit,
     canRemove: Boolean,
     onRemove: () -> Unit,
-    onCodeChange: (String) -> Unit,
-    validationError: CreateProblemValidationError?,
+    onInputChange: (String) -> Unit,
+    onHiddenChange: (Boolean) -> Unit,
+    onRun: () -> Unit,
+    isRunning: Boolean,
+    runResult: CreateProblemTestRunResult?,
+    validation: CreateProblemTestValidation?,
 ) {
-    val codeErrorMessage = validationMessage(
+    val inputErrorMessage = validationMessage(
         visible = true,
-        error = validationError,
+        error = validation?.input,
     )
 
     OutlinedCard(
@@ -892,6 +788,21 @@ private fun TestCaseCard(
                     style = MaterialTheme.typography.titleSmall
                 )
                 Spacer(Modifier.weight(1f))
+                OutlinedButton(
+                    onClick = onRun,
+                    enabled = !isRunning,
+                ) {
+                    Text(
+                        stringResource(
+                            if (isRunning) {
+                                Res.string.create_problem_run_running
+                            } else {
+                                Res.string.create_problem_run_test
+                            }
+                        )
+                    )
+                }
+                Spacer(Modifier.width(6.dp))
                 TextButton(onClick = onRemove, enabled = canRemove) {
                     Text(stringResource(Res.string.create_problem_test_remove))
                 }
@@ -911,19 +822,72 @@ private fun TestCaseCard(
             if (test.expanded) {
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
-                    value = test.code,
-                    onValueChange = onCodeChange,
-                    label = { Text(stringResource(Res.string.create_problem_test_code_label)) },
+                    value = test.input,
+                    onValueChange = onInputChange,
+                    label = { Text(stringResource(Res.string.create_problem_test_input_label)) },
                     modifier = Modifier.fillMaxWidth(),
-                    minLines = 4,
-                    maxLines = 10,
-                    isError = codeErrorMessage != null,
+                    minLines = 2,
+                    maxLines = 8,
+                    isError = inputErrorMessage != null,
                     supportingText = {
-                        if (codeErrorMessage != null) {
-                            Text(codeErrorMessage)
+                        if (inputErrorMessage != null) {
+                            Text(inputErrorMessage)
                         }
                     },
                 )
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = stringResource(Res.string.create_problem_test_hidden_label),
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Switch(
+                        checked = test.isHidden,
+                        onCheckedChange = onHiddenChange,
+                    )
+                }
+                runResult?.let { result ->
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = stringResource(
+                            Res.string.create_problem_run_status,
+                            result.status,
+                            result.executionTimeMs,
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = when (result.status.uppercase()) {
+                            "OK" -> Color(0xFF33C97A)
+                            "TIMEOUT", "ERROR" -> MaterialTheme.colorScheme.error
+                            else -> MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                    )
+                    result.output?.let { output ->
+                        if (output.isNotBlank()) {
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                text = stringResource(Res.string.create_problem_run_output, output),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    result.message?.let { message ->
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = message,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                        Spacer(Modifier.height(2.dp))
+                        TextButton(onClick = { copyToClipboard(message) }) {
+                            Text(stringResource(Res.string.create_problem_copy_error))
+                        }
+                    }
+                }
             }
         }
     }

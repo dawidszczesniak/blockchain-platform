@@ -47,8 +47,6 @@ data class ParticipationProblemDto(
 @Serializable
 data class CreateProblemTestCaseDto(
     val inputData: String,
-    val expectedOutput: String,
-    val validatorCode: String = "",
     val isHidden: Boolean = true,
     val timeoutMs: Int = 1000,
     val memoryLimitMb: Int = 256,
@@ -63,9 +61,12 @@ data class ProblemExampleDto(
 
 @Serializable
 data class CreateProblemRequestDto(
+    val title: String = "",
     val description: String,
     val constraints: String = "",
     val examples: List<ProblemExampleDto> = emptyList(),
+    val referenceSolutionCode: String = "",
+    val referenceSolutionLanguage: String = "kotlin",
     val prizeAmount: Long,
     val entryFeeAmount: Long,
     val requiredParticipants: Int,
@@ -73,6 +74,33 @@ data class CreateProblemRequestDto(
     val submitUntilDate: String,
     val tests: List<String> = emptyList(),
     val testCases: List<CreateProblemTestCaseDto> = emptyList(),
+)
+
+@Serializable
+data class ValidateCreateProblemRequestDto(
+    val referenceSolutionCode: String,
+    val referenceSolutionLanguage: String = "kotlin",
+    val testCases: List<CreateProblemTestCaseDto> = emptyList(),
+)
+
+@Serializable
+data class CreateProblemValidationTestResultDto(
+    val index: Int,
+    val status: String,
+    val output: String? = null,
+    val executionTimeMs: Int,
+    val message: String? = null,
+)
+
+@Serializable
+data class ValidateCreateProblemResponseDto(
+    val total: Int,
+    val successful: Int,
+    val allSuccessful: Boolean,
+    val results: List<CreateProblemValidationTestResultDto>,
+    val sandboxNodeId: String? = null,
+    val sandboxImageHash: String? = null,
+    val sandboxRunHash: String? = null,
 )
 
 @Serializable
@@ -85,4 +113,55 @@ data class JoinProblemResponseDto(
     val joined: Boolean,
     val registeredParticipants: Int,
     val requiredParticipants: Int,
+)
+
+@Serializable
+data class RunProblemRequestDto(
+    val sourceCode: String,
+    val language: String = "kotlin",
+)
+
+@Serializable
+data class RunProblemTestResultDto(
+    val index: Int,
+    val status: String,
+    val passed: Boolean,
+    val hidden: Boolean,
+    val executionTimeMs: Int,
+    val input: String? = null,
+    val expectedOutput: String? = null,
+    val actualOutput: String? = null,
+    val message: String? = null,
+)
+
+@Serializable
+data class RunProblemResponseDto(
+    val total: Int,
+    val passed: Int,
+    val allPassed: Boolean,
+    val results: List<RunProblemTestResultDto>,
+    val sandboxNodeId: String? = null,
+    val sandboxImageHash: String? = null,
+    val sandboxRunHash: String? = null,
+)
+
+@Serializable
+data class SubmitProblemResponseDto(
+    val submissionId: Long,
+    val total: Int,
+    val passed: Int,
+    val allPassed: Boolean,
+    val results: List<RunProblemTestResultDto>,
+    val consensusRequired: Int,
+    val consensusReached: Int,
+    val sandboxImageHash: String? = null,
+    val sandboxResultHash: String,
+    val commitmentHash: String,
+    val anchorStatus: String,
+    val anchorBatchId: Long? = null,
+    val anchorMerkleRoot: String? = null,
+    val anchorProof: List<String> = emptyList(),
+    val anchorTxHash: String? = null,
+    val anchorExplorerUrl: String? = null,
+    val anchorError: String? = null,
 )

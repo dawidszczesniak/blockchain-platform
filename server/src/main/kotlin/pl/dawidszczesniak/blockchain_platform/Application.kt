@@ -30,6 +30,7 @@ import pl.dawidszczesniak.blockchain_platform.feature.auth.AuthSessionCookie
 import pl.dawidszczesniak.blockchain_platform.feature.auth.endpoint.authRoutes
 import pl.dawidszczesniak.blockchain_platform.feature.auth.service.Eip1271SignatureVerifier
 import pl.dawidszczesniak.blockchain_platform.feature.dashboard.endpoint.dashboardRoutes
+import pl.dawidszczesniak.blockchain_platform.feature.problems.anchor.BlockchainAnchorClient
 import pl.dawidszczesniak.blockchain_platform.feature.problems.endpoint.problemRoutes
 
 fun main() {
@@ -52,9 +53,11 @@ fun Application.module() {
     val transactionRunner = get<DbTransactionRunner>()
     val redisClient = get<JedisPooled>()
     val eip1271Verifier = get<Eip1271SignatureVerifier>()
+    val blockchainAnchorClient = get<BlockchainAnchorClient>()
     monitor.subscribe(ApplicationStopped) {
         redisClient.close()
         eip1271Verifier.close()
+        blockchainAnchorClient.close()
     }
 
     install(CORS) {

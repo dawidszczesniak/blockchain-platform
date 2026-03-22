@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AssistChip
@@ -41,6 +42,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import blockchain_platform.composeapp.generated.resources.Res
+import blockchain_platform.composeapp.generated.resources.create_problem_copy_error
 import blockchain_platform.composeapp.generated.resources.days_count
 import blockchain_platform.composeapp.generated.resources.problem_details_back
 import blockchain_platform.composeapp.generated.resources.problem_details_constraints_title
@@ -55,7 +57,29 @@ import blockchain_platform.composeapp.generated.resources.problem_details_editor
 import blockchain_platform.composeapp.generated.resources.problem_details_editor_run
 import blockchain_platform.composeapp.generated.resources.problem_details_editor_submit
 import blockchain_platform.composeapp.generated.resources.problem_details_editor_title
-import blockchain_platform.composeapp.generated.resources.problem_details_example_explanation
+import blockchain_platform.composeapp.generated.resources.problem_details_run_result_actual
+import blockchain_platform.composeapp.generated.resources.problem_details_run_result_expected
+import blockchain_platform.composeapp.generated.resources.problem_details_run_result_hidden_failed
+import blockchain_platform.composeapp.generated.resources.problem_details_run_result_passed
+import blockchain_platform.composeapp.generated.resources.problem_details_run_result_status_error
+import blockchain_platform.composeapp.generated.resources.problem_details_run_result_status_failed
+import blockchain_platform.composeapp.generated.resources.problem_details_run_result_status_passed
+import blockchain_platform.composeapp.generated.resources.problem_details_run_result_status_timeout
+import blockchain_platform.composeapp.generated.resources.problem_details_run_result_test_label
+import blockchain_platform.composeapp.generated.resources.problem_details_run_result_time
+import blockchain_platform.composeapp.generated.resources.problem_details_run_running
+import blockchain_platform.composeapp.generated.resources.problem_details_submit_anchor_batch
+import blockchain_platform.composeapp.generated.resources.problem_details_submit_anchor_commitment
+import blockchain_platform.composeapp.generated.resources.problem_details_submit_anchor_error
+import blockchain_platform.composeapp.generated.resources.problem_details_submit_anchor_explorer
+import blockchain_platform.composeapp.generated.resources.problem_details_submit_anchor_proof
+import blockchain_platform.composeapp.generated.resources.problem_details_submit_anchor_root
+import blockchain_platform.composeapp.generated.resources.problem_details_submit_anchor_status
+import blockchain_platform.composeapp.generated.resources.problem_details_submit_anchor_tx
+import blockchain_platform.composeapp.generated.resources.problem_details_submit_consensus
+import blockchain_platform.composeapp.generated.resources.problem_details_submit_error_prefix
+import blockchain_platform.composeapp.generated.resources.problem_details_submit_result_title
+import blockchain_platform.composeapp.generated.resources.problem_details_submit_submitting
 import blockchain_platform.composeapp.generated.resources.problem_details_example_input
 import blockchain_platform.composeapp.generated.resources.problem_details_example_label
 import blockchain_platform.composeapp.generated.resources.problem_details_example_output
@@ -66,12 +90,17 @@ import blockchain_platform.composeapp.generated.resources.problem_details_requir
 import blockchain_platform.composeapp.generated.resources.problem_details_requirement_prize
 import blockchain_platform.composeapp.generated.resources.problem_details_requirement_start
 import blockchain_platform.composeapp.generated.resources.problem_details_requirement_submit
+import blockchain_platform.composeapp.generated.resources.problem_details_run_error_console_title
 import blockchain_platform.composeapp.generated.resources.problem_details_statement
 import blockchain_platform.composeapp.generated.resources.problem_details_title
 import kotlin.math.max
+import kotlinx.browser.window
 import org.jetbrains.compose.resources.stringResource
 import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.ProblemExample
 import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.ProblemSummary
+import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.RunProblemResponseDto
+import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.RunProblemTestResultDto
+import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.SubmitProblemResponseDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.statement.ProblemStatementContent
 import pl.dawidszczesniak.blockchain_platform.feature.problems.statement.decodeProblemDescription
 import pl.dawidszczesniak.blockchain_platform.ui.AppSurface
@@ -170,6 +199,14 @@ fun ProblemDetailsScreen(
                         onCodeChange = { solutionCode = it },
                         fillEditorSpace = false,
                         overlayState = editorOverlayState,
+                        isRunning = gateState.isRunning,
+                        runErrorMessage = gateState.runErrorMessage,
+                        runResult = gateState.runResult,
+                        isSubmitting = gateState.isSubmitting,
+                        submitErrorMessage = gateState.submitErrorMessage,
+                        submitResult = gateState.submitResult,
+                        onRun = { viewModel.run(problem.id, solutionCode) },
+                        onSubmit = { viewModel.submit(problem.id, solutionCode) },
                         onJoinRequest = {
                             if (isLoggedIn) {
                                 viewModel.join(problem.id)
@@ -200,6 +237,14 @@ fun ProblemDetailsScreen(
                         onCodeChange = { solutionCode = it },
                         fillEditorSpace = true,
                         overlayState = editorOverlayState,
+                        isRunning = gateState.isRunning,
+                        runErrorMessage = gateState.runErrorMessage,
+                        runResult = gateState.runResult,
+                        isSubmitting = gateState.isSubmitting,
+                        submitErrorMessage = gateState.submitErrorMessage,
+                        submitResult = gateState.submitResult,
+                        onRun = { viewModel.run(problem.id, solutionCode) },
+                        onSubmit = { viewModel.submit(problem.id, solutionCode) },
                         onJoinRequest = {
                             if (isLoggedIn) {
                                 viewModel.join(problem.id)
@@ -311,11 +356,6 @@ private fun ExampleBlock(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Text(
-                text = stringResource(Res.string.problem_details_example_explanation, example.explanation),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
         }
     }
 }
@@ -327,6 +367,14 @@ private fun CodeEditorPane(
     onCodeChange: (String) -> Unit,
     fillEditorSpace: Boolean,
     overlayState: EditorOverlayState,
+    isRunning: Boolean,
+    runErrorMessage: String?,
+    runResult: RunProblemResponseDto?,
+    isSubmitting: Boolean,
+    submitErrorMessage: String?,
+    submitResult: SubmitProblemResponseDto?,
+    onRun: () -> Unit,
+    onSubmit: () -> Unit,
     onJoinRequest: () -> Unit,
 ) {
     val editorBlocked = overlayState.show
@@ -371,17 +419,59 @@ private fun CodeEditorPane(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 OutlinedButton(
-                    onClick = { },
-                    enabled = !editorBlocked,
+                    onClick = onRun,
+                    enabled = !editorBlocked && !isRunning && !isSubmitting,
                 ) {
                     Text(stringResource(Res.string.problem_details_editor_run))
                 }
                 Button(
-                    onClick = { },
-                    enabled = !editorBlocked,
+                    onClick = onSubmit,
+                    enabled = !editorBlocked && !isRunning && !isSubmitting,
                 ) {
                     Text(stringResource(Res.string.problem_details_editor_submit))
                 }
+            }
+            Spacer(Modifier.height(10.dp))
+            if (isRunning || isSubmitting) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.height(16.dp).width(16.dp),
+                        strokeWidth = 2.dp,
+                    )
+                    Text(
+                        text = if (isRunning) {
+                            stringResource(Res.string.problem_details_run_running)
+                        } else {
+                            stringResource(Res.string.problem_details_submit_submitting)
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            } else if (!runErrorMessage.isNullOrBlank()) {
+                Text(
+                    text = stringResource(Res.string.problem_details_run_error_console_title),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+                Spacer(Modifier.height(6.dp))
+                ErrorConsoleMessage(
+                    message = runErrorMessage,
+                    isError = true,
+                )
+            } else if (!submitErrorMessage.isNullOrBlank()) {
+                Text(
+                    text = stringResource(Res.string.problem_details_submit_error_prefix, submitErrorMessage),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            } else if (runResult != null) {
+                RunResultsPane(result = runResult)
+            } else if (submitResult != null) {
+                SubmitResultPane(result = submitResult)
             }
         }
 
@@ -476,6 +566,228 @@ private fun CodeEditorPane(
 }
 
 @Composable
+private fun SubmitResultPane(result: SubmitProblemResponseDto) {
+    Text(
+        text = stringResource(Res.string.problem_details_submit_result_title),
+        style = MaterialTheme.typography.titleSmall,
+    )
+    Spacer(Modifier.height(6.dp))
+    Text(
+        text = stringResource(Res.string.problem_details_run_result_passed, result.passed, result.total),
+        style = MaterialTheme.typography.bodyMedium,
+        color = if (result.allPassed) {
+            MaterialTheme.colorScheme.primary
+        } else {
+            MaterialTheme.colorScheme.onSurface
+        },
+    )
+    Text(
+        text = stringResource(
+            Res.string.problem_details_submit_consensus,
+            result.consensusReached,
+            result.consensusRequired,
+        ),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Text(
+        text = stringResource(Res.string.problem_details_submit_anchor_status, result.anchorStatus),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Text(
+        text = stringResource(Res.string.problem_details_submit_anchor_commitment, result.commitmentHash),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    result.anchorBatchId?.let { batchId ->
+        Text(
+            text = stringResource(Res.string.problem_details_submit_anchor_batch, batchId),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+    result.anchorMerkleRoot?.takeIf { it.isNotBlank() }?.let { root ->
+        Text(
+            text = stringResource(Res.string.problem_details_submit_anchor_root, root),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+    if (result.anchorProof.isNotEmpty()) {
+        Text(
+            text = stringResource(Res.string.problem_details_submit_anchor_proof, result.anchorProof.size),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+    result.anchorTxHash?.takeIf { it.isNotBlank() }?.let { tx ->
+        Text(
+            text = stringResource(Res.string.problem_details_submit_anchor_tx, tx),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+    result.anchorExplorerUrl?.takeIf { it.isNotBlank() }?.let { url ->
+        Text(
+            text = stringResource(Res.string.problem_details_submit_anchor_explorer, url),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+    result.anchorError?.takeIf { it.isNotBlank() }?.let { error ->
+        Text(
+            text = stringResource(Res.string.problem_details_submit_anchor_error, error),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+        )
+    }
+}
+
+@Composable
+private fun RunResultsPane(result: RunProblemResponseDto) {
+    Text(
+        text = stringResource(Res.string.problem_details_run_result_passed, result.passed, result.total),
+        style = MaterialTheme.typography.bodyMedium,
+        color = if (result.allPassed) {
+            MaterialTheme.colorScheme.primary
+        } else {
+            MaterialTheme.colorScheme.onSurface
+        },
+    )
+    Spacer(Modifier.height(8.dp))
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        result.results.forEach { testResult ->
+            OutlinedCard(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.outlinedCardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                ),
+            ) {
+                Column(
+                    modifier = Modifier.padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Text(
+                        text = stringResource(Res.string.problem_details_run_result_test_label, testResult.index),
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    Text(
+                        text = runStatusLabel(testResult),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = runStatusColor(testResult),
+                    )
+                    Text(
+                        text = stringResource(
+                            Res.string.problem_details_run_result_time,
+                            testResult.executionTimeMs,
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    if (testResult.hidden && !testResult.passed && testResult.message.isNullOrBlank()) {
+                        Text(
+                            text = stringResource(Res.string.problem_details_run_result_hidden_failed),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    if (!testResult.hidden) {
+                        testResult.expectedOutput?.takeIf { it.isNotBlank() }?.let { expected ->
+                            Text(
+                                text = stringResource(Res.string.problem_details_run_result_expected, expected),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        testResult.actualOutput?.let { actual ->
+                            Text(
+                                text = stringResource(Res.string.problem_details_run_result_actual, actual),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    testResult.message?.takeIf { it.isNotBlank() }?.let { message ->
+                        val status = testResult.status.uppercase()
+                        if (testResult.hidden && status == "FAILED") {
+                            Text(
+                                text = message,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        } else {
+                            ErrorConsoleMessage(
+                                message = message,
+                                isError = !testResult.passed,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ErrorConsoleMessage(
+    message: String,
+    isError: Boolean,
+) {
+    val scrollState = rememberScrollState()
+    OutlinedCard(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.outlinedCardColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+        ),
+    ) {
+        Column(
+            modifier = Modifier.padding(10.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            SelectionContainer {
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                    color = if (isError) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 220.dp)
+                        .verticalScroll(scrollState),
+                )
+            }
+            TextButton(onClick = { copyToClipboard(message) }) {
+                Text(stringResource(Res.string.create_problem_copy_error))
+            }
+        }
+    }
+}
+
+@Composable
+private fun runStatusLabel(testResult: RunProblemTestResultDto): String {
+    return when (testResult.status.uppercase()) {
+        "PASSED" -> stringResource(Res.string.problem_details_run_result_status_passed)
+        "FAILED" -> stringResource(Res.string.problem_details_run_result_status_failed)
+        "TIMEOUT" -> stringResource(Res.string.problem_details_run_result_status_timeout)
+        else -> stringResource(Res.string.problem_details_run_result_status_error)
+    }
+}
+
+@Composable
+private fun runStatusColor(testResult: RunProblemTestResultDto): androidx.compose.ui.graphics.Color {
+    return when (testResult.status.uppercase()) {
+        "PASSED" -> MaterialTheme.colorScheme.primary
+        "FAILED" -> MaterialTheme.colorScheme.error
+        "TIMEOUT" -> MaterialTheme.colorScheme.error
+        else -> MaterialTheme.colorScheme.error
+    }
+}
+
+@Composable
 private fun DetailLine(text: String) {
     Text(
         text = text,
@@ -492,6 +804,13 @@ private fun defaultSolutionTemplate(problem: ProblemSummary): String {
             return input
         }
     """.trimIndent()
+}
+
+private fun copyToClipboard(value: String) {
+    runCatching<Unit> {
+        window.navigator.clipboard.writeText(value)
+        Unit
+    }
 }
 
 private data class EditorOverlayState(

@@ -2,6 +2,8 @@ package pl.dawidszczesniak.blockchain_platform.feature.problems.repository
 
 import pl.dawidszczesniak.blockchain_platform.feature.problems.datasource.ProblemRemoteDataSource
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.CreateProblemRequestDto
+import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.RunProblemRequestDto
+import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ValidateCreateProblemRequestDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.CreatedProblem
 import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.ParticipationProblem
 import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.ProblemSummary
@@ -31,6 +33,21 @@ class ProblemRepositoryImpl(
         return remoteDataSource.createProblem(request).id
     }
 
+    override suspend fun validateCreateProblem(request: ValidateCreateProblemRequestDto) =
+        remoteDataSource.validateCreateProblem(request)
+
     override suspend fun joinProblem(problemId: Int) =
         remoteDataSource.joinProblem(problemId)
+
+    override suspend fun runProblemCode(problemId: Int, sourceCode: String) =
+        remoteDataSource.runProblemCode(
+            problemId = problemId,
+            request = RunProblemRequestDto(sourceCode = sourceCode),
+        )
+
+    override suspend fun submitProblemCode(problemId: Int, sourceCode: String) =
+        remoteDataSource.submitProblemCode(
+            problemId = problemId,
+            request = RunProblemRequestDto(sourceCode = sourceCode),
+        )
 }

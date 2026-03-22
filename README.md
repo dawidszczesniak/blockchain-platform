@@ -74,7 +74,17 @@ Database schema (3NF):
 
 Local startup:
 
-- start DB + Redis: `docker compose up -d postgres redis`
+- optional: build sandbox image hash for attestation:
+  - `docker build -t blockchain-platform-sandbox-runner:local sandbox-runner`
+  - `docker save blockchain-platform-sandbox-runner:local | shasum -a 256`
+  - copy hash to env `SANDBOX_IMAGE_HASH` (same value for all 3 nodes)
+- optional: set node attestation secrets for backend verification:
+  - `export SANDBOX_NODE_SECRETS="sandbox-node-1=local-dev-sandbox-secret-1,sandbox-node-2=local-dev-sandbox-secret-2,sandbox-node-3=local-dev-sandbox-secret-3"`
+- start DB + Redis + 3 sandbox nodes:
+  - `docker compose up -d postgres redis sandbox-node-1 sandbox-node-2 sandbox-node-3`
+  - after changes in `sandbox-runner/runner.py`, rebuild nodes:
+    - `docker compose build sandbox-node-1 sandbox-node-2 sandbox-node-3`
+    - `docker compose up -d sandbox-node-1 sandbox-node-2 sandbox-node-3`
 - start backend: `./gradlew :server:run -PappEnv=local`
 
 Backend auth startup requirement:
@@ -105,6 +115,102 @@ Redis environment variables:
 - `REDIS_SSL` (`true|false`, default: `false`; ignored when `REDIS_URL` is set)
 - in `staging/prod`: Redis password is required
 
+Sandbox execution environment variables (backend):
+
+- `SANDBOX_NODES` (comma-separated URLs; default: `http://127.0.0.1:8091,http://127.0.0.1:8092,http://127.0.0.1:8093`)
+- `SANDBOX_REQUEST_TIMEOUT_MS` (default: `20000`)
+- `SANDBOX_CONNECT_TIMEOUT_MS` (default: `2500`)
+- `SANDBOX_IMAGE_HASH` (optional; if set, backend verifies returned sandbox image hash and rejects mismatches)
+- `SANDBOX_CONSENSUS_THRESHOLD` (default: `2`; minimum matching nodes required during `submit`)
+- `SANDBOX_NODE_SECRETS` (comma-separated `nodeId=secret`; backend verifies node HMAC attestations during `submit`)
+
+Sandbox runner environment variables (each docker node):
+
+- `SANDBOX_NODE_ID` (e.g. `sandbox-node-1`)
+- `SANDBOX_PORT` (default: `8080`)
+- `SANDBOX_IMAGE_HASH` (same hash on all 3 nodes)
+- `SANDBOX_VERSION` (arbitrary version label for attestation metadata)
+- `SANDBOX_ATTESTATION_SECRET` (shared secret for node-level HMAC attestation signature)
+
+Submission anchoring environment variables (backend):
+
+- `ETH_ANCHOR_ENABLED` (`true|false`, default: `false`)
+- `ETH_CHAIN_ID` (required when anchoring enabled)
+- `ETH_ANCHOR_CONTRACT_ADDRESS` (required when anchoring enabled)
+- `ETH_ANCHOR_PRIVATE_KEY` (required when anchoring enabled)
+- `ETH_ANCHOR_METHOD_NAME` (default: `anchorSubmissionBatch`)
+- `ETH_ANCHOR_BATCH_SIZE` (default: `20`)
+- `ETH_ANCHOR_GAS_LIMIT` (default: `350000`)
+- `ETH_ANCHOR_GAS_PRICE_WEI` (optional; if omitted backend reads `eth_gasPrice`)
+- `ETH_ANCHOR_RECEIPT_TIMEOUT_MS` (default: `90000`)
+- `ETH_ANCHOR_RECEIPT_POLL_INTERVAL_MS` (default: `2000`)
+- `ETH_ANCHOR_EXPLORER_TX_BASE_URL` (optional, e.g. `https://sepolia.etherscan.io/tx`)
+
+Submission endpoints:
+
+- `POST /problems/{problemId}/run` - single-node run with failover (preview)
+- `POST /problems/{problemId}/submit` - 3-node attested consensus + DB persistence + Merkle batch anchoring flow
+
+Create problem validation contract (production flow):
+
+- `testCases` are the only source of cases for judge.
+- at least `3` tests must be public (`isHidden=false`).
+- `referenceSolutionCode` is required and is executed in sandbox during create.
+- backend computes `expectedOutput` for every test directly from `referenceSolutionCode`.
+- Problem is persisted only if reference solution passes:
+  - all `testCases`,
+  - and repeated runs produce deterministic output set.
+
+Minimal payload example (`POST /problems`):
+
+```json
+{
+  "title": "Square Number",
+  "description": "Given integer n, return n*n.",
+  "constraints": "1 <= n <= 10^6",
+  "referenceSolutionCode": "fun solve(input: String): String { val n = input.trim().toLong(); return (n * n).toString() }",
+  "referenceSolutionLanguage": "kotlin",
+  "prizeAmount": 1000,
+  "entryFeeAmount": 10,
+  "requiredParticipants": 1,
+  "joinUntilDate": "2026-04-10",
+  "submitUntilDate": "2026-04-20",
+  "testCases": [
+    {
+      "inputData": "5",
+      "isHidden": false,
+      "timeoutMs": 1000,
+      "memoryLimitMb": 256
+    },
+    {
+      "inputData": "7",
+      "isHidden": false,
+      "timeoutMs": 1000,
+      "memoryLimitMb": 256
+    },
+    {
+      "inputData": "10",
+      "isHidden": false,
+      "timeoutMs": 1000,
+      "memoryLimitMb": 256
+    }
+  ]
+}
+```
+
+Minimal participant code that passes the example above:
+
+```kotlin
+fun solve(input: String): String {
+    val n = input.trim().toLong()
+    return (n * n).toString()
+}
+```
+
+Reference contract:
+
+- `contracts/SubmissionAnchorRegistry.sol`
+
 Auth environment variables:
 
 - `AUTH_DOMAIN` (default: `localhost:8081`)
@@ -125,6 +231,10 @@ Auth environment variables:
 Blockchain environment variables:
 
 - `ETH_RPC_URL` (required in `staging/prod`; enables smart-contract wallet signature verification via EIP-1271)
+- chain policy is environment-bound:
+  - `APP_ENV=prod` => mainnet only (`chainId=1`)
+  - `APP_ENV=local|staging` => testnet only (`chainId != 1`)
+  - this policy is enforced for login challenges (`/auth/challenge`) and submit anchoring (`ETH_CHAIN_ID`)
 
 CORS environment variables:
 

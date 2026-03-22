@@ -41,11 +41,17 @@ import pl.dawidszczesniak.blockchain_platform.feature.dashboard.usecase.GetDashb
 import pl.dawidszczesniak.blockchain_platform.feature.dashboard.usecase.GetDashboardUpdatesUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.dashboard.usecase.GetDashboardUpdatesUseCaseImpl
 import pl.dawidszczesniak.blockchain_platform.feature.problems.controller.ProblemController
+import pl.dawidszczesniak.blockchain_platform.feature.problems.anchor.AnchorConfig
+import pl.dawidszczesniak.blockchain_platform.feature.problems.anchor.BlockchainAnchorClient
+import pl.dawidszczesniak.blockchain_platform.feature.problems.anchor.EthereumBlockchainAnchorClient
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dao.ProblemDao
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dao.ProblemDaoImpl
 import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.ProblemReadRepository
 import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.ProblemReadRepositoryImpl
 import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.ProblemWriteRepository
+import pl.dawidszczesniak.blockchain_platform.feature.problems.sandbox.SandboxClient
+import pl.dawidszczesniak.blockchain_platform.feature.problems.sandbox.SandboxConfig
+import pl.dawidszczesniak.blockchain_platform.feature.problems.sandbox.SandboxHttpClient
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.CreateProblemUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.CreateProblemUseCaseImpl
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetCreatedProblemsUseCase
@@ -56,6 +62,14 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetProble
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetProblemSummariesUseCaseImpl
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.JoinProblemUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.JoinProblemUseCaseImpl
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.RunProblemCodeUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.RunProblemCodeUseCaseImpl
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.SubmitProblemCodeUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.SubmitProblemCodeUseCaseImpl
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.ValidateCreateProblemUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.ValidateCreateProblemUseCaseImpl
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.CreateProblemReferenceValidationService
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.CreateProblemReferenceValidationServiceImpl
 import pl.dawidszczesniak.blockchain_platform.redis.RedisConfig
 import pl.dawidszczesniak.blockchain_platform.redis.RedisFactory
 
@@ -76,7 +90,7 @@ internal fun serverModules() = module {
     single<AuthSessionStore> { RedisAuthSessionStore(get()) }
     single<WalletChallengeStore> { RedisWalletChallengeStore(get()) }
     single<AuthRepository> { AuthRepositoryImpl(get(), get()) }
-    single { WalletChallengeService(get(), get()) }
+    single { WalletChallengeService(get(), get(), get()) }
     single { AuthRateLimiter(get(), get()) }
     single { EthereumSignatureVerifier() }
     single { Eip1271SignatureVerifier(get()) }
@@ -89,12 +103,20 @@ internal fun serverModules() = module {
     single { ProblemReadRepositoryImpl(get(), get()) }
     single<ProblemReadRepository> { get<ProblemReadRepositoryImpl>() }
     single<ProblemWriteRepository> { get<ProblemReadRepositoryImpl>() }
-    factory<CreateProblemUseCase> { CreateProblemUseCaseImpl(get(), get(), get()) }
+    single { SandboxConfig.fromEnvironment() }
+    single { AnchorConfig.fromEnvironment() }
+    single<SandboxClient> { SandboxHttpClient(get()) }
+    single<CreateProblemReferenceValidationService> { CreateProblemReferenceValidationServiceImpl(get()) }
+    single<BlockchainAnchorClient> { EthereumBlockchainAnchorClient(get(), get()) }
+    factory<CreateProblemUseCase> { CreateProblemUseCaseImpl(get(), get(), get(), get()) }
+    factory<ValidateCreateProblemUseCase> { ValidateCreateProblemUseCaseImpl(get()) }
     factory<GetProblemSummariesUseCase> { GetProblemSummariesUseCaseImpl(get()) }
     factory<GetCreatedProblemsUseCase> { GetCreatedProblemsUseCaseImpl(get()) }
     factory<GetParticipationProblemsUseCase> { GetParticipationProblemsUseCaseImpl(get()) }
     factory<JoinProblemUseCase> { JoinProblemUseCaseImpl(get()) }
-    factory { ProblemController(get(), get(), get(), get(), get()) }
+    factory<RunProblemCodeUseCase> { RunProblemCodeUseCaseImpl(get(), get()) }
+    factory<SubmitProblemCodeUseCase> { SubmitProblemCodeUseCaseImpl(get(), get(), get(), get(), get()) }
+    factory { ProblemController(get(), get(), get(), get(), get(), get(), get(), get()) }
 
     single<DashboardDao> { DashboardDaoImpl(get()) }
     single<DashboardReadRepository> { DashboardReadRepositoryImpl(get(), get()) }

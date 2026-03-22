@@ -18,13 +18,23 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.JoinProblemRe
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ParticipationProblemDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ProblemExampleDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ProblemSummaryDto
+import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.RunProblemRequestDto
+import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.RunProblemResponseDto
+import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.RunProblemTestResultDto
+import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.SubmitProblemResponseDto
+import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ValidateCreateProblemRequestDto
+import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ValidateCreateProblemResponseDto
+import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.CreateProblemValidationTestResultDto
 
 interface ProblemRemoteDataSource {
     suspend fun fetchProblems(): List<ProblemSummaryDto>
     suspend fun fetchCreatedProblems(): List<CreatedProblemDto>
     suspend fun fetchParticipationProblems(): List<ParticipationProblemDto>
     suspend fun createProblem(request: CreateProblemRequestDto): CreateProblemResponseDto
+    suspend fun validateCreateProblem(request: ValidateCreateProblemRequestDto): ValidateCreateProblemResponseDto
     suspend fun joinProblem(problemId: Int): JoinProblemResponseDto
+    suspend fun runProblemCode(problemId: Int, request: RunProblemRequestDto): RunProblemResponseDto
+    suspend fun submitProblemCode(problemId: Int, request: RunProblemRequestDto): SubmitProblemResponseDto
 }
 
 class ProblemRemoteDataSourceImpl(
@@ -111,6 +121,32 @@ class ProblemRemoteDataSourceImpl(
         )
     }
 
+    override suspend fun validateCreateProblem(request: ValidateCreateProblemRequestDto): ValidateCreateProblemResponseDto {
+        val json = Json { ignoreUnknownKeys = true }
+        val body = json.encodeToString(ValidateCreateProblemRequestDto.serializer(), request)
+        val payload = httpTextClient.postJson(endpoint(apiBaseUrl, "/problems/create/validate"), body)
+        val obj = json.parseToJsonElement(payload).jsonObject
+        val results = obj.optionalArray("results").map { item ->
+            val resultObj = item.jsonObject
+            CreateProblemValidationTestResultDto(
+                index = resultObj.requiredInt("index"),
+                status = resultObj.requiredString("status"),
+                output = resultObj.optionalString("output"),
+                executionTimeMs = resultObj.requiredInt("executionTimeMs"),
+                message = resultObj.optionalString("message"),
+            )
+        }
+        return ValidateCreateProblemResponseDto(
+            total = obj.requiredInt("total"),
+            successful = obj.requiredInt("successful"),
+            allSuccessful = obj.requiredBoolean("allSuccessful"),
+            results = results,
+            sandboxNodeId = obj.optionalString("sandboxNodeId"),
+            sandboxImageHash = obj.optionalString("sandboxImageHash"),
+            sandboxRunHash = obj.optionalString("sandboxRunHash"),
+        )
+    }
+
     override suspend fun joinProblem(problemId: Int): JoinProblemResponseDto {
         val json = Json { ignoreUnknownKeys = true }
         val payload = httpTextClient.postJson(
@@ -122,6 +158,90 @@ class ProblemRemoteDataSourceImpl(
             joined = obj.requiredBoolean("joined"),
             registeredParticipants = obj.requiredInt("registeredParticipants"),
             requiredParticipants = obj.requiredInt("requiredParticipants"),
+        )
+    }
+
+    override suspend fun runProblemCode(
+        problemId: Int,
+        request: RunProblemRequestDto,
+    ): RunProblemResponseDto {
+        val json = Json { ignoreUnknownKeys = true }
+        val body = json.encodeToString(RunProblemRequestDto.serializer(), request)
+        val payload = httpTextClient.postJson(
+            endpoint(apiBaseUrl, "/problems/$problemId/run"),
+            body,
+        )
+        val obj = json.parseToJsonElement(payload).jsonObject
+        val results = obj.optionalArray("results").map { item ->
+            val resultObj = item.jsonObject
+            RunProblemTestResultDto(
+                index = resultObj.requiredInt("index"),
+                status = resultObj.requiredString("status"),
+                passed = resultObj.requiredBoolean("passed"),
+                hidden = resultObj.requiredBoolean("hidden"),
+                executionTimeMs = resultObj.requiredInt("executionTimeMs"),
+                input = resultObj.optionalString("input"),
+                expectedOutput = resultObj.optionalString("expectedOutput"),
+                actualOutput = resultObj.optionalString("actualOutput"),
+                message = resultObj.optionalString("message"),
+            )
+        }
+        return RunProblemResponseDto(
+            total = obj.requiredInt("total"),
+            passed = obj.requiredInt("passed"),
+            allPassed = obj.requiredBoolean("allPassed"),
+            results = results,
+            sandboxNodeId = obj.optionalString("sandboxNodeId"),
+            sandboxImageHash = obj.optionalString("sandboxImageHash"),
+            sandboxRunHash = obj.optionalString("sandboxRunHash"),
+        )
+    }
+
+    override suspend fun submitProblemCode(
+        problemId: Int,
+        request: RunProblemRequestDto,
+    ): SubmitProblemResponseDto {
+        val json = Json { ignoreUnknownKeys = true }
+        val body = json.encodeToString(RunProblemRequestDto.serializer(), request)
+        val payload = httpTextClient.postJson(
+            endpoint(apiBaseUrl, "/problems/$problemId/submit"),
+            body,
+        )
+        val obj = json.parseToJsonElement(payload).jsonObject
+        val results = obj.optionalArray("results").map { item ->
+            val resultObj = item.jsonObject
+            RunProblemTestResultDto(
+                index = resultObj.requiredInt("index"),
+                status = resultObj.requiredString("status"),
+                passed = resultObj.requiredBoolean("passed"),
+                hidden = resultObj.requiredBoolean("hidden"),
+                executionTimeMs = resultObj.requiredInt("executionTimeMs"),
+                input = resultObj.optionalString("input"),
+                expectedOutput = resultObj.optionalString("expectedOutput"),
+                actualOutput = resultObj.optionalString("actualOutput"),
+                message = resultObj.optionalString("message"),
+            )
+        }
+        return SubmitProblemResponseDto(
+            submissionId = obj.requiredLong("submissionId"),
+            total = obj.requiredInt("total"),
+            passed = obj.requiredInt("passed"),
+            allPassed = obj.requiredBoolean("allPassed"),
+            results = results,
+            consensusRequired = obj.requiredInt("consensusRequired"),
+            consensusReached = obj.requiredInt("consensusReached"),
+            sandboxImageHash = obj.optionalString("sandboxImageHash"),
+            sandboxResultHash = obj.requiredString("sandboxResultHash"),
+            commitmentHash = obj.requiredString("commitmentHash"),
+            anchorStatus = obj.requiredString("anchorStatus"),
+            anchorBatchId = obj.optionalLong("anchorBatchId"),
+            anchorMerkleRoot = obj.optionalString("anchorMerkleRoot"),
+            anchorProof = obj.optionalArray("anchorProof").mapNotNull { proofItem ->
+                proofItem.jsonPrimitive.contentOrNull
+            },
+            anchorTxHash = obj.optionalString("anchorTxHash"),
+            anchorExplorerUrl = obj.optionalString("anchorExplorerUrl"),
+            anchorError = obj.optionalString("anchorError"),
         )
     }
 }
@@ -156,6 +276,10 @@ private fun JsonObject.requiredInt(name: String): Int {
 private fun JsonObject.requiredLong(name: String): Long {
     return this[name]?.jsonPrimitive?.longOrNull
         ?: error("Missing or invalid '$name' in backend response.")
+}
+
+private fun JsonObject.optionalLong(name: String): Long? {
+    return this[name]?.jsonPrimitive?.longOrNull
 }
 
 private fun JsonObject.requiredBoolean(name: String): Boolean {

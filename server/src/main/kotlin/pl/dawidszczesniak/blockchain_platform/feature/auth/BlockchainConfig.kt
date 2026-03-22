@@ -3,10 +3,27 @@ package pl.dawidszczesniak.blockchain_platform.feature.auth
 import java.net.URI
 
 internal data class BlockchainConfig(
+    val appEnvironment: String,
     val ethRpcUrl: String?,
 ) {
     val eip1271Enabled: Boolean
         get() = !ethRpcUrl.isNullOrBlank()
+
+    val isProductionEnvironment: Boolean
+        get() = appEnvironment == PROD_ENV
+
+    fun validateChainIdForEnvironment(chainId: Long) {
+        require(chainId > 0L) { "chainId must be greater than 0." }
+        if (isProductionEnvironment) {
+            require(chainId == ETHEREUM_MAINNET_CHAIN_ID) {
+                "In APP_ENV=prod chainId must be $ETHEREUM_MAINNET_CHAIN_ID (Ethereum mainnet)."
+            }
+        } else {
+            require(chainId != ETHEREUM_MAINNET_CHAIN_ID) {
+                "In APP_ENV=$appEnvironment chainId must be a testnet chain id (mainnet is allowed only in prod)."
+            }
+        }
+    }
 
     companion object {
         fun fromEnvironment(env: Map<String, String> = System.getenv()): BlockchainConfig {
@@ -30,8 +47,12 @@ internal data class BlockchainConfig(
             }
 
             return BlockchainConfig(
+                appEnvironment = appEnv,
                 ethRpcUrl = rpcUrl,
             )
         }
     }
 }
+
+private const val ETHEREUM_MAINNET_CHAIN_ID = 1L
+private const val PROD_ENV = "prod"
