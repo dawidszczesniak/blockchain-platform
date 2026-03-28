@@ -94,7 +94,6 @@ import blockchain_platform.composeapp.generated.resources.problem_details_run_er
 import blockchain_platform.composeapp.generated.resources.problem_details_statement
 import blockchain_platform.composeapp.generated.resources.problem_details_title
 import kotlin.math.max
-import kotlinx.browser.window
 import org.jetbrains.compose.resources.stringResource
 import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.ProblemExample
 import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.ProblemSummary
@@ -103,6 +102,7 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.RunProblemTes
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.SubmitProblemResponseDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.statement.ProblemStatementContent
 import pl.dawidszczesniak.blockchain_platform.feature.problems.statement.decodeProblemDescription
+import pl.dawidszczesniak.blockchain_platform.platform.copyTextToClipboard
 import pl.dawidszczesniak.blockchain_platform.ui.AppSurface
 
 @Composable
@@ -808,7 +808,7 @@ private fun defaultSolutionTemplate(problem: ProblemSummary): String {
 
 private fun copyToClipboard(value: String) {
     runCatching<Unit> {
-        window.navigator.clipboard.writeText(value)
+        copyTextToClipboard(value)
         Unit
     }
 }

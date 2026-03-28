@@ -68,6 +68,18 @@ echo location of your Java installation. 1>&2
 goto fail
 
 :execute
+set "JAVA_VENDOR_LINE="
+for /f "usebackq tokens=* delims=" %%i in (`"%JAVA_EXE%" -XshowSettings:properties -version 2^>^&1 ^| findstr /c:"java.vendor = "`) do set "JAVA_VENDOR_LINE=%%i"
+set "JAVA_VENDOR=%JAVA_VENDOR_LINE:*java.vendor = =%"
+
+set "JAVA_VERSION_LINE="
+for /f "usebackq tokens=* delims=" %%i in (`"%JAVA_EXE%" -version 2^>^&1 ^| findstr /c:"version \""`) do set "JAVA_VERSION_LINE=%%i"
+set "JAVA_VERSION=%JAVA_VERSION_LINE:*version \"=%"
+for /f "tokens=1 delims=." %%i in ("%JAVA_VERSION%") do set "JAVA_MAJOR=%%i"
+
+if not "%JAVA_MAJOR%"=="21" goto wrongJava
+if not "%JAVA_VENDOR%"=="Eclipse Adoptium" goto wrongJava
+
 @rem Setup the command line
 
 set CLASSPATH=
@@ -75,6 +87,17 @@ set CLASSPATH=
 
 @rem Execute Gradle
 "%JAVA_EXE%" %DEFAULT_JVM_OPTS% %JAVA_OPTS% %GRADLE_OPTS% "-Dorg.gradle.appname=%APP_BASE_NAME%" -classpath "%CLASSPATH%" -jar "%APP_HOME%\gradle\wrapper\gradle-wrapper.jar" %*
+
+goto end
+
+:wrongJava
+echo. 1>&2
+echo ERROR: This project requires Temurin (Eclipse Adoptium) JDK 21. 1>&2
+echo Detected Java: %JAVA_VENDOR% %JAVA_MAJOR% 1>&2
+echo Java command: %JAVA_EXE% 1>&2
+echo. 1>&2
+echo Set JAVA_HOME to your Temurin 21 installation and try again. 1>&2
+goto fail
 
 :end
 @rem End local scope for the variables with windows NT shell

@@ -85,7 +85,6 @@ import blockchain_platform.composeapp.generated.resources.create_problem_validat
 import blockchain_platform.composeapp.generated.resources.create_problem_validation_required
 import blockchain_platform.composeapp.generated.resources.create_problem_validation_run_required
 import blockchain_platform.composeapp.generated.resources.create_problem_validation_ready
-import kotlinx.browser.window
 import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
@@ -93,6 +92,7 @@ import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.toLocalDateTime
 import org.jetbrains.compose.resources.stringResource
 import pl.dawidszczesniak.blockchain_platform.di.LocalKoin
+import pl.dawidszczesniak.blockchain_platform.platform.copyTextToClipboard
 
 @Composable
 fun CreateProblemScreen() {
@@ -575,7 +575,7 @@ private fun utcMillisToLocalDate(millis: Long): LocalDate {
 
 private fun copyToClipboard(value: String) {
     runCatching<Unit> {
-        window.navigator.clipboard.writeText(value)
+        copyTextToClipboard(value)
         Unit
     }
 }

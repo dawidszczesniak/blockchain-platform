@@ -142,6 +142,19 @@ location of your Java installation."
     fi
 fi
 
+java_version_output=$( "$JAVACMD" -version 2>&1 )
+java_major_version=$( printf '%s\n' "$java_version_output" | sed -n '1s/.*version "\([0-9][0-9]*\).*/\1/p' )
+java_vendor=$( "$JAVACMD" -XshowSettings:properties -version 2>&1 | sed -n 's/^[[:space:]]*java.vendor = //p' | sed -n '1p' )
+
+if [ "$java_major_version" != "21" ] || [ "$java_vendor" != "Eclipse Adoptium" ] ; then
+    die "ERROR: This project requires Temurin (Eclipse Adoptium) JDK 21.
+
+Detected Java: ${java_vendor:-unknown vendor} ${java_major_version:-unknown version}
+Java command: $JAVACMD
+
+Set JAVA_HOME to your Temurin 21 installation and try again."
+fi
+
 # Increase the maximum file descriptors if we can.
 if ! "$cygwin" && ! "$darwin" && ! "$nonstop" ; then
     case $MAX_FD in #(
