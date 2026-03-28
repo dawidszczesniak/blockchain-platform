@@ -15,6 +15,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.datetime.LocalDate
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.CreateProblemValidationTestResultDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.CreateProblemRequestDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.CreateProblemTestCaseDto
@@ -47,7 +48,6 @@ enum class CreateProblemValidationError {
     InvalidInteger,
     MustBePositive,
     MustBeNonNegative,
-    InvalidDate,
     SubmitBeforeJoin,
     MinPublicTests,
 }
@@ -85,8 +85,8 @@ data class CreateProblemState(
     val description: String = "",
     val constraints: String = "",
     val referenceSolutionCode: String = "",
-    val joinUntilDate: String = "",
-    val submitUntilDate: String = "",
+    val joinUntilDate: LocalDate? = null,
+    val submitUntilDate: LocalDate? = null,
     val tests: List<CreateProblemTest> = listOf(
         CreateProblemTest(
             id = 1,
@@ -154,8 +154,8 @@ sealed interface CreateProblemIntent {
     data class DescriptionChanged(val value: String) : CreateProblemIntent
     data class ConstraintsChanged(val value: String) : CreateProblemIntent
     data class ReferenceSolutionChanged(val value: String) : CreateProblemIntent
-    data class JoinUntilChanged(val value: String) : CreateProblemIntent
-    data class SubmitUntilChanged(val value: String) : CreateProblemIntent
+    data class JoinUntilChanged(val value: LocalDate) : CreateProblemIntent
+    data class SubmitUntilChanged(val value: LocalDate) : CreateProblemIntent
     data object AddTest : CreateProblemIntent
     data class ToggleTest(val id: Int) : CreateProblemIntent
     data class RemoveTest(val id: Int) : CreateProblemIntent
@@ -549,22 +549,18 @@ private fun validateCreateProblem(state: CreateProblemState): CreateProblemValid
         null
     }
 
-    val joinRaw = state.joinUntilDate.trim()
-    var joinError: CreateProblemValidationError? = null
-    if (joinRaw.isEmpty()) {
-        joinError = CreateProblemValidationError.Required
-    } else if (!isValidIsoDate(joinRaw)) {
-        joinError = CreateProblemValidationError.InvalidDate
+    val joinDate = state.joinUntilDate
+    val joinError = if (joinDate == null) {
+        CreateProblemValidationError.Required
+    } else {
+        null
     }
 
-    val submitRaw = state.submitUntilDate.trim()
-    var submitError: CreateProblemValidationError? = null
-    if (submitRaw.isEmpty()) {
-        submitError = CreateProblemValidationError.Required
-    } else if (!isValidIsoDate(submitRaw)) {
-        submitError = CreateProblemValidationError.InvalidDate
-    } else if (joinError == null && submitRaw <= joinRaw) {
-        submitError = CreateProblemValidationError.SubmitBeforeJoin
+    val submitDate = state.submitUntilDate
+    val submitError = when {
+        submitDate == null -> CreateProblemValidationError.Required
+        joinDate != null && submitDate <= joinDate -> CreateProblemValidationError.SubmitBeforeJoin
+        else -> null
     }
 
     val testErrors = buildMap<Int, CreateProblemTestValidation> {
@@ -616,8 +612,12 @@ private fun CreateProblemState.toCreateProblemRequest(): CreateProblemRequestDto
         prizeAmount = prize.trim().toLong(),
         entryFeeAmount = entryFee.trim().toLong(),
         requiredParticipants = participants.trim().toInt(),
-        joinUntilDate = joinUntilDate.trim(),
-        submitUntilDate = submitUntilDate.trim(),
+        joinUntilDate = requireNotNull(joinUntilDate) {
+            "joinUntilDate must be set in valid state."
+        },
+        submitUntilDate = requireNotNull(submitUntilDate) {
+            "submitUntilDate must be set in valid state."
+        },
         tests = emptyList(),
         testCases = tests.map { test ->
             CreateProblemTestCaseDto(
@@ -692,29 +692,6 @@ private fun buildCreateProblemValidationSnapshotHash(state: CreateProblemState):
             append('\u0003')
         }
     }
-}
-
-private fun isValidIsoDate(value: String): Boolean {
-    if (value.length != 10 || value[4] != '-' || value[7] != '-') {
-        return false
-    }
-    val year = value.substring(0, 4).toIntOrNull() ?: return false
-    val month = value.substring(5, 7).toIntOrNull() ?: return false
-    val day = value.substring(8, 10).toIntOrNull() ?: return false
-    if (month !in 1..12) {
-        return false
-    }
-    val maxDay = when (month) {
-        1, 3, 5, 7, 8, 10, 12 -> 31
-        4, 6, 9, 11 -> 30
-        2 -> if (isLeapYear(year)) 29 else 28
-        else -> return false
-    }
-    return day in 1..maxDay
-}
-
-private fun isLeapYear(year: Int): Boolean {
-    return year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)
 }
 
 private fun extractReadableErrorMessage(error: Throwable): String? {

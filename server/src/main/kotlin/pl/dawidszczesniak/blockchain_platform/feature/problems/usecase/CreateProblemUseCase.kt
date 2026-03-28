@@ -1,8 +1,7 @@
 package pl.dawidszczesniak.blockchain_platform.feature.problems.usecase
 
 import java.security.MessageDigest
-import java.time.LocalDate
-import java.time.format.DateTimeParseException
+import kotlinx.datetime.toJavaLocalDate
 import org.web3j.utils.Numeric
 import pl.dawidszczesniak.blockchain_platform.db.DashboardMetricsRefresher
 import pl.dawidszczesniak.blockchain_platform.db.DbTransactionRunner
@@ -48,9 +47,9 @@ internal class CreateProblemUseCaseImpl(
             throw CreateProblemValidationException("Required participants must be greater than 0.")
         }
 
-        val joinUntilDate = parseDate(request.joinUntilDate, "joinUntilDate")
-        val submitUntilDate = parseDate(request.submitUntilDate, "submitUntilDate")
-        if (!submitUntilDate.isAfter(joinUntilDate)) {
+        val joinUntilDate = request.joinUntilDate
+        val submitUntilDate = request.submitUntilDate
+        if (submitUntilDate <= joinUntilDate) {
             throw CreateProblemValidationException("submitUntilDate must be later than joinUntilDate.")
         }
 
@@ -134,8 +133,8 @@ internal class CreateProblemUseCaseImpl(
                 prizeAmount = request.prizeAmount,
                 entryFeeAmount = request.entryFeeAmount,
                 requiredParticipants = request.requiredParticipants,
-                joinUntilDate = joinUntilDate,
-                submitUntilDate = submitUntilDate,
+                joinUntilDate = joinUntilDate.toJavaLocalDate(),
+                submitUntilDate = submitUntilDate.toJavaLocalDate(),
                 tests = computedTests,
             )
         )
@@ -143,15 +142,6 @@ internal class CreateProblemUseCaseImpl(
             dashboardMetricsRefresher.refreshTodayMetrics()
         }
         return createdProblemId
-    }
-
-    private fun parseDate(value: String, fieldName: String): LocalDate {
-        val normalized = value.trim()
-        return try {
-            LocalDate.parse(normalized)
-        } catch (_: DateTimeParseException) {
-            throw CreateProblemValidationException("Invalid date in '$fieldName'. Expected format: YYYY-MM-DD.")
-        }
     }
 
     private fun deriveTitle(description: String): String {

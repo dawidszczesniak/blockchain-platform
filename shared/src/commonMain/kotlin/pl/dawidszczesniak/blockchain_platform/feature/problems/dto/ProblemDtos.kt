@@ -1,6 +1,7 @@
 package pl.dawidszczesniak.blockchain_platform.feature.problems.dto
 
 import kotlinx.serialization.Serializable
+import kotlinx.datetime.LocalDate
 
 @Serializable
 data class ProblemSummaryDto(
@@ -70,8 +71,8 @@ data class CreateProblemRequestDto(
     val prizeAmount: Long,
     val entryFeeAmount: Long,
     val requiredParticipants: Int,
-    val joinUntilDate: String,
-    val submitUntilDate: String,
+    val joinUntilDate: LocalDate,
+    val submitUntilDate: LocalDate,
     val tests: List<String> = emptyList(),
     val testCases: List<CreateProblemTestCaseDto> = emptyList(),
 )

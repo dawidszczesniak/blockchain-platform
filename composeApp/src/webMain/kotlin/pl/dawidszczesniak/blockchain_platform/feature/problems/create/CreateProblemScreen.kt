@@ -79,7 +79,6 @@ import blockchain_platform.composeapp.generated.resources.create_problem_tests_t
 import blockchain_platform.composeapp.generated.resources.create_problem_title_label
 import blockchain_platform.composeapp.generated.resources.create_problem_validation_date_order
 import blockchain_platform.composeapp.generated.resources.create_problem_validation_integer
-import blockchain_platform.composeapp.generated.resources.create_problem_validation_invalid_date
 import blockchain_platform.composeapp.generated.resources.create_problem_validation_min_public_tests
 import blockchain_platform.composeapp.generated.resources.create_problem_validation_non_negative
 import blockchain_platform.composeapp.generated.resources.create_problem_validation_positive
@@ -87,6 +86,11 @@ import blockchain_platform.composeapp.generated.resources.create_problem_validat
 import blockchain_platform.composeapp.generated.resources.create_problem_validation_run_required
 import blockchain_platform.composeapp.generated.resources.create_problem_validation_ready
 import kotlinx.browser.window
+import kotlinx.datetime.Instant
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atStartOfDayIn
+import kotlinx.datetime.toLocalDateTime
 import org.jetbrains.compose.resources.stringResource
 import pl.dawidszczesniak.blockchain_platform.di.LocalKoin
 
@@ -191,8 +195,8 @@ private fun CreateProblemForm(
     onTestHiddenChange: (Int, Boolean) -> Unit,
     onRunSingleTest: (Int) -> Unit,
     onRunAllTests: () -> Unit,
-    onJoinUntilChange: (String) -> Unit,
-    onSubmitUntilChange: (String) -> Unit,
+    onJoinUntilChange: (LocalDate) -> Unit,
+    onSubmitUntilChange: (LocalDate) -> Unit,
     onSubmit: () -> Unit,
 ) {
     val validation = state.validation
@@ -496,7 +500,6 @@ private fun validationMessage(
             CreateProblemValidationError.InvalidInteger -> Res.string.create_problem_validation_integer
             CreateProblemValidationError.MustBePositive -> Res.string.create_problem_validation_positive
             CreateProblemValidationError.MustBeNonNegative -> Res.string.create_problem_validation_non_negative
-            CreateProblemValidationError.InvalidDate -> Res.string.create_problem_validation_invalid_date
             CreateProblemValidationError.SubmitBeforeJoin -> Res.string.create_problem_validation_date_order
             CreateProblemValidationError.MinPublicTests -> Res.string.create_problem_validation_min_public_tests
         }
@@ -506,16 +509,16 @@ private fun validationMessage(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun DatePickerField(
-    value: String,
+    value: LocalDate?,
     label: String,
-    onValueChange: (String) -> Unit,
+    onValueChange: (LocalDate) -> Unit,
     errorText: String?,
 ) {
     var isDialogVisible by remember { mutableStateOf(false) }
     val focusManager = LocalFocusManager.current
 
     OutlinedTextField(
-        value = value,
+        value = value?.toString().orEmpty(),
         onValueChange = {},
         label = { Text(text = label) },
         readOnly = true,
@@ -537,7 +540,7 @@ private fun DatePickerField(
 
     if (isDialogVisible) {
         val pickerState = rememberDatePickerState(
-            initialSelectedDateMillis = isoDateToUtcMillis(value)
+            initialSelectedDateMillis = value?.atStartOfDayIn(TimeZone.UTC)?.toEpochMilliseconds()
         )
         DatePickerDialog(
             onDismissRequest = { isDialogVisible = false },
@@ -545,7 +548,7 @@ private fun DatePickerField(
                 TextButton(
                     onClick = {
                         pickerState.selectedDateMillis
-                            ?.let(::utcMillisToIsoDate)
+                            ?.let(::utcMillisToLocalDate)
                             ?.let(onValueChange)
                         isDialogVisible = false
                     }
@@ -564,108 +567,10 @@ private fun DatePickerField(
     }
 }
 
-private const val MILLIS_PER_DAY = 86_400_000L
-private const val DAYS_0000_TO_1970 = 719_528L
-private const val DAYS_PER_CYCLE = 146_097L
-
-private fun isoDateToUtcMillis(value: String): Long? {
-    if (value.length != 10 || value[4] != '-' || value[7] != '-') {
-        return null
-    }
-
-    val year = value.substring(0, 4).toIntOrNull() ?: return null
-    val month = value.substring(5, 7).toIntOrNull() ?: return null
-    val day = value.substring(8, 10).toIntOrNull() ?: return null
-    if (month !in 1..12) {
-        return null
-    }
-
-    val maxDay = when (month) {
-        1, 3, 5, 7, 8, 10, 12 -> 31
-        4, 6, 9, 11 -> 30
-        2 -> if (isLeapYear(year)) 29 else 28
-        else -> return null
-    }
-    if (day !in 1..maxDay) {
-        return null
-    }
-
-    val epochDay = dateToEpochDay(year = year, month = month, day = day)
-    return epochDay * MILLIS_PER_DAY
-}
-
-private fun utcMillisToIsoDate(millis: Long): String {
-    val epochDay = floorDiv(millis, MILLIS_PER_DAY)
-    val (year, month, day) = epochDayToDate(epochDay)
-    val yearText = year.toString().padStart(4, '0')
-    val monthText = month.toString().padStart(2, '0')
-    val dayText = day.toString().padStart(2, '0')
-    return "$yearText-$monthText-$dayText"
-}
-
-private fun isLeapYear(year: Int): Boolean {
-    return year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)
-}
-
-private fun dateToEpochDay(year: Int, month: Int, day: Int): Long {
-    val yearLong = year.toLong()
-    val monthLong = month.toLong()
-
-    var total = 365L * yearLong
-    total += if (yearLong >= 0) {
-        (yearLong + 3) / 4 - (yearLong + 99) / 100 + (yearLong + 399) / 400
-    } else {
-        -(yearLong / -4 - yearLong / -100 + yearLong / -400)
-    }
-    total += (367 * monthLong - 362) / 12
-    total += day - 1L
-
-    if (monthLong > 2) {
-        total--
-        if (!isLeapYear(year)) {
-            total--
-        }
-    }
-
-    return total - DAYS_0000_TO_1970
-}
-
-private fun epochDayToDate(epochDay: Long): Triple<Int, Int, Int> {
-    var zeroDay = epochDay + DAYS_0000_TO_1970
-    zeroDay -= 60
-
-    var yearAdjustment = 0L
-    if (zeroDay < 0) {
-        val adjustCycles = floorDiv(zeroDay + 1, DAYS_PER_CYCLE) - 1
-        yearAdjustment = adjustCycles * 400
-        zeroDay -= adjustCycles * DAYS_PER_CYCLE
-    }
-
-    var estimatedYear = (400 * zeroDay + 591) / DAYS_PER_CYCLE
-    var estimatedDayOfYear =
-        zeroDay - (365 * estimatedYear + estimatedYear / 4 - estimatedYear / 100 + estimatedYear / 400)
-    if (estimatedDayOfYear < 0) {
-        estimatedYear--
-        estimatedDayOfYear =
-            zeroDay - (365 * estimatedYear + estimatedYear / 4 - estimatedYear / 100 + estimatedYear / 400)
-    }
-
-    estimatedYear += yearAdjustment
-    val marchDayOfYear = estimatedDayOfYear.toInt()
-    val marchMonth = (marchDayOfYear * 5 + 2) / 153
-    val month = (marchMonth + 2) % 12 + 1
-    val day = marchDayOfYear - (marchMonth * 306 + 5) / 10 + 1
-    val year = (estimatedYear + marchMonth / 10).toInt()
-
-    return Triple(year, month, day)
-}
-
-private fun floorDiv(dividend: Long, divisor: Long): Long {
-    var quotient = dividend / divisor
-    if ((dividend xor divisor) < 0 && quotient * divisor != dividend) {
-        quotient--
-    }
-    return quotient
+private fun utcMillisToLocalDate(millis: Long): LocalDate {
+    return Instant.fromEpochMilliseconds(millis)
+        .toLocalDateTime(TimeZone.UTC)
+        .date
 }
 
 private fun copyToClipboard(value: String) {
