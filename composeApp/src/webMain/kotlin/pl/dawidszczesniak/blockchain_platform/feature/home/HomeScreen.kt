@@ -55,6 +55,7 @@ import blockchain_platform.composeapp.generated.resources.home_stat_status_title
 import blockchain_platform.composeapp.generated.resources.home_updates_title
 import org.jetbrains.compose.resources.stringResource
 import pl.dawidszczesniak.blockchain_platform.di.LocalKoin
+import pl.dawidszczesniak.blockchain_platform.ui.AppInlineLoader
 import pl.dawidszczesniak.blockchain_platform.ui.AppSurface
 
 @Composable
@@ -199,19 +200,22 @@ private fun StatsSection(state: HomeState) {
                     title = stringResource(Res.string.home_stat_status_title),
                     value = activeChallengesValue,
                     note = stringResource(Res.string.home_stat_status_note),
-                    badge = "S"
+                    badge = "S",
+                    isLoading = state.isLoading,
                 )
                 StatCard(
                     title = stringResource(Res.string.home_stat_nodes_title),
                     value = prizePoolValue,
                     note = stringResource(Res.string.home_stat_nodes_note),
-                    badge = "N"
+                    badge = "N",
+                    isLoading = state.isLoading,
                 )
                 StatCard(
                     title = stringResource(Res.string.home_stat_block_title),
                     value = submissionsTodayValue,
                     note = submissionsTrend,
-                    badge = "#"
+                    badge = "#",
+                    isLoading = state.isLoading,
                 )
             }
         } else {
@@ -221,21 +225,24 @@ private fun StatsSection(state: HomeState) {
                     title = stringResource(Res.string.home_stat_status_title),
                     value = activeChallengesValue,
                     note = stringResource(Res.string.home_stat_status_note),
-                    badge = "S"
+                    badge = "S",
+                    isLoading = state.isLoading,
                 )
                 StatCard(
                     modifier = Modifier.weight(1f),
                     title = stringResource(Res.string.home_stat_nodes_title),
                     value = prizePoolValue,
                     note = stringResource(Res.string.home_stat_nodes_note),
-                    badge = "N"
+                    badge = "N",
+                    isLoading = state.isLoading,
                 )
                 StatCard(
                     modifier = Modifier.weight(1f),
                     title = stringResource(Res.string.home_stat_block_title),
                     value = submissionsTodayValue,
                     note = submissionsTrend,
-                    badge = "#"
+                    badge = "#",
+                    isLoading = state.isLoading,
                 )
             }
         }
@@ -249,6 +256,7 @@ private fun StatCard(
     value: String,
     note: String,
     badge: String,
+    isLoading: Boolean,
 ) {
     AppSurface(
         modifier = modifier.fillMaxWidth(),
@@ -268,10 +276,14 @@ private fun StatCard(
                 )
             }
             Spacer(Modifier.width(12.dp))
-            Column {
-                Text(title, style = MaterialTheme.typography.titleSmall)
-                Text(value, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                Text(note, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (isLoading) {
+                AppInlineLoader()
+            } else {
+                Column {
+                    Text(title, style = MaterialTheme.typography.titleSmall)
+                    Text(value, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                    Text(note, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
         }
     }
@@ -370,7 +382,7 @@ private fun UpdatesList(
         val updates = state.updates
         if (updates.isEmpty()) {
             val emptyMessage = when {
-                state.isLoading -> "Loading updates..."
+                state.isLoading -> null
                 state.errorMessage != null -> "Updates unavailable."
                 else -> "No updates yet."
             }
@@ -378,11 +390,15 @@ private fun UpdatesList(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(20.dp)
             ) {
-                Text(
-                    text = emptyMessage,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                if (state.isLoading) {
+                    AppInlineLoader()
+                } else {
+                    Text(
+                        text = emptyMessage.orEmpty(),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
             return@Column
         }

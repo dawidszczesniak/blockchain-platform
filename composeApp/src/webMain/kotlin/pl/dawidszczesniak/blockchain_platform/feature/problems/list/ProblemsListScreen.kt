@@ -28,6 +28,7 @@ import blockchain_platform.composeapp.generated.resources.participants_summary
 import blockchain_platform.composeapp.generated.resources.problems_empty_action
 import blockchain_platform.composeapp.generated.resources.problems_empty_body
 import blockchain_platform.composeapp.generated.resources.problems_empty_title
+import blockchain_platform.composeapp.generated.resources.nav_problem_list
 import blockchain_platform.composeapp.generated.resources.registration_and_submission
 import blockchain_platform.composeapp.generated.resources.sort_label
 import blockchain_platform.composeapp.generated.resources.sort_option_entry_fee_highest
@@ -49,6 +50,8 @@ import blockchain_platform.composeapp.generated.resources.sort_option_start_soon
 import org.jetbrains.compose.resources.stringResource
 import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.ProblemSummary
 import pl.dawidszczesniak.blockchain_platform.feature.problems.statement.decodeProblemDescription
+import pl.dawidszczesniak.blockchain_platform.ui.AppInlineLoader
+import pl.dawidszczesniak.blockchain_platform.ui.AppPanelLoader
 import pl.dawidszczesniak.blockchain_platform.ui.AppSurface
 import kotlin.math.max
 import kotlin.math.min
@@ -73,83 +76,92 @@ fun ProblemsListScreen(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
-        if (!state.isEmpty) {
-            Row(
+        AppSurface(
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(
+                text = stringResource(Res.string.nav_problem_list),
+                style = MaterialTheme.typography.titleLarge,
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Spacer(Modifier.weight(1f))
-                SortRow(
-                    sortOption = state.sortOption,
-                    onSortChanged = {
-                        viewModel.onIntent(ProblemsIntent.ChangeSort(it))
-                    }
-                )
-            }
-        }
-        when {
-            state.isLoading -> {
-                Box(
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            )
+            Spacer(Modifier.height(18.dp))
+            if (!state.isEmpty) {
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    contentAlignment = Alignment.Center
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(20.dp),
-                        strokeWidth = 2.dp
+                    Spacer(Modifier.weight(1f))
+                    SortRow(
+                        sortOption = state.sortOption,
+                        onSortChanged = {
+                            viewModel.onIntent(ProblemsIntent.ChangeSort(it))
+                        }
                     )
                 }
+                Spacer(Modifier.height(18.dp))
             }
-            state.isEmpty -> {
+
+            if (!state.isLoading && state.isEmpty) {
                 EmptyProblemList(onCreateProblem = onCreateProblem)
-                return@Column
-            }
-        }
-
-        Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(end = 44.dp, bottom = 18.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                items(state.pageItems) { p ->
-                    ProblemCard(problem = p, onOpen = { onOpenProblem(p) })
-                }
-                item {
-                    Spacer(Modifier.height(8.dp))
-                    PaginationRow(
-                        currentPage = state.currentPage,
-                        totalPages = state.totalPages,
-                        onPageSelected = { viewModel.onIntent(ProblemsIntent.ChangePage(it)) }
-                    )
-                    Spacer(Modifier.height(8.dp))
-                }
-            }
-
-            Box(
-                modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .fillMaxHeight()
-                    .padding(end = 6.dp)
-            ) {
-                val shape = RoundedCornerShape(8.dp)
-
+            } else {
                 Box(
                     modifier = Modifier
-                        .fillMaxHeight()
-                        .width(8.dp)
-                        .background(
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
-                            shape = shape
-                        )
-                )
+                        .fillMaxWidth()
+                        .heightIn(min = 260.dp, max = 720.dp)
+                ) {
+                    if (state.isLoading) {
+                        AppPanelLoader(minHeight = 260.dp)
+                    } else {
+                        LazyColumn(
+                            state = listState,
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(end = 44.dp, bottom = 18.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            items(state.pageItems) { p ->
+                                ProblemCard(problem = p, onOpen = { onOpenProblem(p) })
+                            }
+                            item {
+                                Spacer(Modifier.height(8.dp))
+                                PaginationRow(
+                                    currentPage = state.currentPage,
+                                    totalPages = state.totalPages,
+                                    onPageSelected = { viewModel.onIntent(ProblemsIntent.ChangePage(it)) }
+                                )
+                                Spacer(Modifier.height(8.dp))
+                            }
+                        }
+                    }
 
-                VerticalScrollbar(
-                    adapter = rememberScrollbarAdapter(listState),
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .width(8.dp)
-                )
+                    if (!state.isLoading) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.CenterEnd)
+                                .fillMaxHeight()
+                                .padding(end = 6.dp)
+                        ) {
+                            val shape = RoundedCornerShape(8.dp)
+
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxHeight()
+                                    .width(8.dp)
+                                    .background(
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
+                                        shape = shape
+                                    )
+                            )
+
+                            VerticalScrollbar(
+                                adapter = rememberScrollbarAdapter(listState),
+                                modifier = Modifier
+                                    .fillMaxHeight()
+                                    .width(8.dp)
+                            )
+                        }
+                    }
+                }
             }
         }
     }

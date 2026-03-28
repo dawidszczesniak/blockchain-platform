@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
@@ -39,6 +38,7 @@ import kotlin.io.encoding.ExperimentalEncodingApi
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.skia.Image as SkiaImage
 import pl.dawidszczesniak.blockchain_platform.di.LocalKoin
+import pl.dawidszczesniak.blockchain_platform.ui.AppInlineLoader
 import pl.dawidszczesniak.blockchain_platform.ui.AppSurface
 
 @Composable
@@ -74,49 +74,45 @@ fun LoginScreen(onLogin: () -> Unit) {
                 )
 
                 Spacer(Modifier.height(16.dp))
-                Box {
-                    Button(
-                        enabled = !state.isConnectingWallet && !state.isLoadingWallets,
-                        onClick = {
-                            if (state.wallets.isEmpty()) {
-                                viewModel.refreshWallets()
-                            } else {
-                                walletMenuExpanded = true
+                if (state.isLoadingWallets || state.isConnectingWallet) {
+                    AppInlineLoader()
+                } else {
+                    Box {
+                        Button(
+                            enabled = !state.isConnectingWallet && !state.isLoadingWallets,
+                            onClick = {
+                                if (state.wallets.isEmpty()) {
+                                    viewModel.refreshWallets()
+                                } else {
+                                    walletMenuExpanded = true
+                                }
+                            }
+                        ) {
+                            Text(stringResource(Res.string.login_connect_wallet))
+                        }
+                        DropdownMenu(
+                            expanded = walletMenuExpanded,
+                            onDismissRequest = { walletMenuExpanded = false },
+                        ) {
+                            state.wallets.forEach { wallet ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                        ) {
+                                            WalletIcon(wallet)
+                                            Text(wallet.name)
+                                        }
+                                    },
+                                    onClick = {
+                                        walletMenuExpanded = false
+                                        viewModel.connectWallet(wallet.id, onSuccess = onLogin)
+                                    },
+                                )
                             }
                         }
-                    ) {
-                        Text(stringResource(Res.string.login_connect_wallet))
                     }
-                    DropdownMenu(
-                        expanded = walletMenuExpanded,
-                        onDismissRequest = { walletMenuExpanded = false },
-                    ) {
-                        state.wallets.forEach { wallet ->
-                            DropdownMenuItem(
-                                text = {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                    ) {
-                                        WalletIcon(wallet)
-                                        Text(wallet.name)
-                                    }
-                                },
-                                onClick = {
-                                    walletMenuExpanded = false
-                                    viewModel.connectWallet(wallet.id, onSuccess = onLogin)
-                                },
-                            )
-                        }
-                    }
-                }
-
-                if (state.isLoadingWallets) {
-                    Spacer(Modifier.height(10.dp))
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(20.dp),
-                        strokeWidth = 2.dp
-                    )
                 }
                 if (!state.isLoadingWallets && state.wallets.isEmpty()) {
                     Spacer(Modifier.height(10.dp))

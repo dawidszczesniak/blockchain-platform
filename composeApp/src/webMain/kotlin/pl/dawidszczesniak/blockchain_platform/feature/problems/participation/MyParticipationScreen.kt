@@ -32,10 +32,12 @@ import blockchain_platform.composeapp.generated.resources.participation_submissi
 import blockchain_platform.composeapp.generated.resources.participation_submission_pending
 import blockchain_platform.composeapp.generated.resources.participation_submission_sent
 import blockchain_platform.composeapp.generated.resources.participation_time_left
+import blockchain_platform.composeapp.generated.resources.nav_my_participation
 import org.jetbrains.compose.resources.stringResource
 import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.ParticipationProblem
 import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.ParticipationStatus
 import pl.dawidszczesniak.blockchain_platform.di.LocalKoin
+import pl.dawidszczesniak.blockchain_platform.ui.AppPanelLoader
 import pl.dawidszczesniak.blockchain_platform.ui.AppSurface
 
 @Composable
@@ -52,54 +54,63 @@ fun MyParticipationScreen(onBrowseProblems: () -> Unit) {
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
-        if (!state.isEmpty) {
-            Row(
+        AppSurface(
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(
+                text = stringResource(Res.string.nav_my_participation),
+                style = MaterialTheme.typography.titleLarge,
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Spacer(Modifier.weight(1f))
-                MyParticipationFilterRow(
-                    current = state.filter,
-                    onChange = {
-                        viewModel.onIntent(MyParticipationIntent.ChangeFilter(it))
-                    }
-                )
-            }
-        }
-
-        if (state.isLoading) {
-            Box(
-                modifier = Modifier.fillMaxWidth(),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(20.dp),
-                    strokeWidth = 2.dp
-                )
-            }
-        } else if (state.isEmpty) {
-            EmptyMyParticipation(onBrowseProblems = onBrowseProblems)
-            return@Column
-        }
-
-        Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.fillMaxWidth(),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(end = 8.dp, bottom = 18.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                items(state.pageItems) { item ->
-                    MyParticipationCard(problem = item)
-                }
-                item {
-                    Spacer(Modifier.height(8.dp))
-                    PaginationRow(
-                        currentPage = state.currentPage,
-                        totalPages = state.totalPages,
-                        onPageSelected = { viewModel.onIntent(MyParticipationIntent.ChangePage(it)) }
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            )
+            Spacer(Modifier.height(18.dp))
+            if (!state.isEmpty) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Spacer(Modifier.weight(1f))
+                    MyParticipationFilterRow(
+                        current = state.filter,
+                        onChange = {
+                            viewModel.onIntent(MyParticipationIntent.ChangeFilter(it))
+                        }
                     )
-                    Spacer(Modifier.height(8.dp))
+                }
+                Spacer(Modifier.height(18.dp))
+            }
+
+            if (!state.isLoading && state.isEmpty) {
+                EmptyMyParticipation(onBrowseProblems = onBrowseProblems)
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 260.dp, max = 720.dp)
+                ) {
+                    if (state.isLoading) {
+                        AppPanelLoader(minHeight = 260.dp)
+                    } else {
+                        LazyColumn(
+                            state = listState,
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(end = 8.dp, bottom = 18.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            items(state.pageItems) { item ->
+                                MyParticipationCard(problem = item)
+                            }
+                            item {
+                                Spacer(Modifier.height(8.dp))
+                                PaginationRow(
+                                    currentPage = state.currentPage,
+                                    totalPages = state.totalPages,
+                                    onPageSelected = { viewModel.onIntent(MyParticipationIntent.ChangePage(it)) }
+                                )
+                                Spacer(Modifier.height(8.dp))
+                            }
+                        }
+                    }
                 }
             }
         }

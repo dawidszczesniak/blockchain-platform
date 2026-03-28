@@ -40,6 +40,7 @@ fun AppShell(
     currentRoute: Route,
     onNavigate: (Route) -> Unit,
     isLoggedIn: Boolean,
+    isRestoringSession: Boolean,
     onLoginClick: () -> Unit,
     onLogin: () -> Unit,
     onLogout: () -> Unit,
@@ -85,42 +86,52 @@ fun AppShell(
                     .fillMaxSize(),
                 contentPadding = pagePadding
             ) {
-                when (val route = currentRoute) {
-                    Route.Home -> HomeScreen(onNavigateToProblems = { onNavigate(Route.Problems) })
-                    Route.Problems -> {
-                        val problemsListViewModel = remember { koin.get<ProblemsListViewModel>() }
-                        ProblemsListScreen(
-                            viewModel = problemsListViewModel,
-                            onCreateProblem = { onNavigate(Route.CreateProblem) },
-                            onOpenProblem = { onNavigate(Route.ProblemDetails(it)) }
-                        )
+                if (isRestoringSession || backendHealthState.isAvailable == null) {
+                    AppSurface(modifier = Modifier.fillMaxWidth()) {
+                        AppPanelLoader(minHeight = 260.dp)
                     }
-                    is Route.ProblemDetails -> {
-                        ProblemDetailsScreen(
-                            problem = route.problem,
-                            viewModel = problemDetailsViewModel,
-                            isLoggedIn = isLoggedIn,
-                            onRequireLogin = onLoginClick,
-                            onBackToProblems = { onNavigate(Route.Problems) },
-                        )
-                    }
-                    Route.CreateProblem -> CreateProblemScreen()
+                } else {
+                    when (val route = currentRoute) {
+                        Route.Home -> HomeScreen(onNavigateToProblems = { onNavigate(Route.Problems) })
+                        Route.Problems -> {
+                            val problemsListViewModel = remember { koin.get<ProblemsListViewModel>() }
+                            ProblemsListScreen(
+                                viewModel = problemsListViewModel,
+                                onCreateProblem = { onNavigate(Route.CreateProblem) },
+                                onOpenProblem = { onNavigate(Route.ProblemDetails(it)) }
+                            )
+                        }
+                        is Route.ProblemDetails -> {
+                            ProblemDetailsScreen(
+                                problem = route.problem,
+                                viewModel = problemDetailsViewModel,
+                                isLoggedIn = isLoggedIn,
+                                onRequireLogin = onLoginClick,
+                                onBackToProblems = { onNavigate(Route.Problems) },
+                            )
+                        }
+                        Route.CreateProblem -> CreateProblemScreen()
                     Route.MyProblems -> MyProblemsScreen(
                         onCreateProblem = { onNavigate(Route.CreateProblem) },
-                        onOpenProblem = { problemId ->
+                        onOpenProblem = { problemId, onComplete ->
                             scope.launch {
                                 runCatching { problemRepository.fetchProblemById(problemId) }
                                     .onSuccess { problemSummary ->
+                                        onComplete(true)
                                         onNavigate(Route.ProblemDetails(problemSummary))
+                                    }
+                                    .onFailure {
+                                        onComplete(false)
                                     }
                             }
                         }
                     )
-                    Route.MyParticipation -> MyParticipationScreen(
-                        onBrowseProblems = { onNavigate(Route.Problems) }
-                    )
-                    Route.Settings -> SettingsScreen()
-                    Route.Login -> LoginScreen(onLogin = onLogin)
+                        Route.MyParticipation -> MyParticipationScreen(
+                            onBrowseProblems = { onNavigate(Route.Problems) }
+                        )
+                        Route.Settings -> SettingsScreen()
+                        Route.Login -> LoginScreen(onLogin = onLogin)
+                    }
                 }
             }
         }

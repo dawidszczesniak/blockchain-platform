@@ -79,8 +79,20 @@
     <string name="login_wallet_not_found">Nie wykryto kompatybilnego portfela w tej przeglądarce.</string>
 
     <string name="settings_title">Ustawienia</string>
-    <string name="settings_placeholder">Placeholder ustawień.</string>
-    <string name="settings_future">Tu później: adres portfela, RPC, itp.</string>
+    <string name="settings_wallet_section">Portfel</string>
+    <string name="settings_wallet_address">Adres ETH</string>
+    <string name="settings_not_connected">Brak aktywnej sesji</string>
+    <string name="settings_network_section">Sieć i kontrakt</string>
+    <string name="settings_eth_network">Sieć</string>
+    <string name="settings_chain_id">Chain ID</string>
+    <string name="settings_contract_address">Adres kontraktu</string>
+    <string name="settings_not_configured">Nie skonfigurowano</string>
+    <string name="settings_loading">Ładowanie…</string>
+    <string name="settings_unavailable">Niedostępne</string>
+    <string name="settings_disabled">Wyłączone</string>
+    <string name="settings_interface_language">Język interfejsu</string>
+    <string name="settings_language_polish">Polski</string>
+    <string name="settings_language_english">English</string>
 
     <string name="problems_title">Lista problemów</string>
     <string name="problems_mock_info">Mock: %1$d problemów (paginacja + sortowanie).</string>

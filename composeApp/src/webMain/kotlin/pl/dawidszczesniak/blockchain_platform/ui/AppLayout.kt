@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -78,6 +79,25 @@ fun AppSurface(
 }
 
 @Composable
+fun AppScreenSurface(
+    title: String,
+    modifier: Modifier = Modifier,
+    subtitle: String? = null,
+    actions: @Composable RowScope.() -> Unit = {},
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    AppSurface(modifier = modifier.fillMaxWidth()) {
+        AppHeader(
+            title = title,
+            subtitle = subtitle,
+            actions = actions,
+        )
+        Spacer(Modifier.height(18.dp))
+        content()
+    }
+}
+
+@Composable
 fun AppHeader(
     title: String,
     subtitle: String? = null,
@@ -142,5 +162,79 @@ fun BackendStatusBanner(
                 color = colors.onSurfaceVariant
             )
         }
+    }
+}
+
+@Composable
+fun AppScreenLoader(
+    modifier: Modifier = Modifier,
+    label: String? = null,
+) {
+    Box(
+        modifier = modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center,
+    ) {
+        AppSurface(
+            modifier = Modifier.widthIn(min = 220.dp),
+            shape = RoundedCornerShape(20.dp),
+        ) {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                CircularProgressIndicator(
+                    color = MaterialTheme.colorScheme.primary,
+                    strokeWidth = 2.5.dp,
+                )
+                if (!label.isNullOrBlank()) {
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun AppInlineLoader(
+    modifier: Modifier = Modifier,
+    label: String? = null,
+) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        CircularProgressIndicator(
+            color = MaterialTheme.colorScheme.primary,
+            strokeWidth = 2.5.dp,
+        )
+        if (!label.isNullOrBlank()) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+fun AppPanelLoader(
+    modifier: Modifier = Modifier,
+    minHeight: Dp = 260.dp,
+    label: String? = null,
+) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = minHeight),
+        contentAlignment = Alignment.Center,
+    ) {
+        AppInlineLoader(label = label)
     }
 }

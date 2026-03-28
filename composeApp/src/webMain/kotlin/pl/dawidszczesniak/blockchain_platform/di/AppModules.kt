@@ -51,11 +51,13 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.participation.MyP
 import pl.dawidszczesniak.blockchain_platform.feature.problems.created.MyProblemsViewModel
 import pl.dawidszczesniak.blockchain_platform.feature.problems.list.ProblemsListViewModel
 import pl.dawidszczesniak.blockchain_platform.feature.settings.SettingsViewModel
+import pl.dawidszczesniak.blockchain_platform.feature.settings.AppLanguageStore
 import pl.dawidszczesniak.blockchain_platform.network.BrowserHttpTextClient
 import pl.dawidszczesniak.blockchain_platform.network.HttpTextClient
 
 fun appModules() = module {
     single { AppConfigProvider.config }
+    single { AppLanguageStore() }
     single<HttpTextClient> { BrowserHttpTextClient() }
     single<ProblemRemoteDataSource> {
         ProblemRemoteDataSourceImpl(
@@ -100,7 +102,7 @@ fun appModules() = module {
     factory { AppViewModel(get()) }
     factory { HomeViewModel(get(), get(), get()) }
     factory { LoginViewModel(get()) }
-    factory { SettingsViewModel() }
+    factory { SettingsViewModel(get(), get()) }
     factory { BackendHealthViewModel(get()) }
     factory { BackendMaintenanceViewModel() }
     factory { CreateProblemViewModel(get(), get()) }

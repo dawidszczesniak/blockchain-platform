@@ -30,6 +30,7 @@ import pl.dawidszczesniak.blockchain_platform.feature.auth.AuthSessionCookie
 import pl.dawidszczesniak.blockchain_platform.feature.auth.endpoint.authRoutes
 import pl.dawidszczesniak.blockchain_platform.feature.auth.service.Eip1271SignatureVerifier
 import pl.dawidszczesniak.blockchain_platform.feature.dashboard.endpoint.dashboardRoutes
+import pl.dawidszczesniak.blockchain_platform.feature.platform.endpoint.platformRoutes
 import pl.dawidszczesniak.blockchain_platform.feature.problems.anchor.BlockchainAnchorClient
 import pl.dawidszczesniak.blockchain_platform.feature.problems.endpoint.problemRoutes
 
@@ -125,6 +126,7 @@ fun Application.module() {
         authRoutes()
         problemRoutes()
         dashboardRoutes()
+        platformRoutes()
     }
 }
 

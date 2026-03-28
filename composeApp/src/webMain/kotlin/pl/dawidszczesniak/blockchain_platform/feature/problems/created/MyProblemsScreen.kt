@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -26,7 +27,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.LinearProgressIndicator
@@ -64,10 +64,13 @@ import blockchain_platform.composeapp.generated.resources.my_problems_filter_lab
 import blockchain_platform.composeapp.generated.resources.my_problems_started
 import blockchain_platform.composeapp.generated.resources.my_problems_waiting
 import blockchain_platform.composeapp.generated.resources.my_problem_registration_ends
+import blockchain_platform.composeapp.generated.resources.nav_my_problems
 import org.jetbrains.compose.resources.stringResource
 import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.CreatedProblem
 import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.CreatedProblemStatus
 import pl.dawidszczesniak.blockchain_platform.di.LocalKoin
+import pl.dawidszczesniak.blockchain_platform.ui.AppInlineLoader
+import pl.dawidszczesniak.blockchain_platform.ui.AppPanelLoader
 import pl.dawidszczesniak.blockchain_platform.ui.AppSurface
 import kotlin.math.max
 import kotlin.math.min
@@ -75,11 +78,12 @@ import kotlin.math.min
 @Composable
 fun MyProblemsScreen(
     onCreateProblem: () -> Unit,
-    onOpenProblem: (Int) -> Unit,
+    onOpenProblem: (Int, (Boolean) -> Unit) -> Unit,
 ) {
     val koin = LocalKoin.current
     val viewModel = remember { koin.get<MyProblemsViewModel>() }
     val listState = rememberLazyListState()
+    var openingProblemId by remember { mutableStateOf<Int?>(null) }
     DisposableEffect(viewModel) {
         onDispose { viewModel.close() }
     }
@@ -93,87 +97,103 @@ fun MyProblemsScreen(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
-        if (!state.isEmpty) {
-            Row(
+        AppSurface(
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(
+                text = stringResource(Res.string.nav_my_problems),
+                style = MaterialTheme.typography.titleLarge,
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Spacer(Modifier.weight(1f))
-                TypeFilterRow(
-                    current = state.filter,
-                    onChange = {
-                        viewModel.onIntent(MyProblemsIntent.ChangeFilter(it))
-                    }
-                )
-            }
-        }
-
-        when {
-            state.isLoading -> {
-                Box(
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            )
+            Spacer(Modifier.height(18.dp))
+            if (!state.isEmpty) {
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    contentAlignment = Alignment.Center
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(20.dp),
-                        strokeWidth = 2.dp
+                    Spacer(Modifier.weight(1f))
+                    TypeFilterRow(
+                        current = state.filter,
+                        onChange = {
+                            viewModel.onIntent(MyProblemsIntent.ChangeFilter(it))
+                        }
                     )
                 }
+                Spacer(Modifier.height(18.dp))
             }
-            state.isEmpty -> {
+
+            if (!state.isLoading && state.isEmpty) {
                 EmptyMyProblems(onCreateProblem = onCreateProblem)
-                return@Column
-            }
-        }
-
-        Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(end = 44.dp, bottom = 18.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                items(state.pageItems) { problem ->
-                    MyProblemCard(
-                        problem = problem,
-                        onOpenProblem = onOpenProblem,
-                    )
-                }
-                item {
-                    Spacer(Modifier.height(8.dp))
-                    PaginationRow(
-                        currentPage = state.currentPage,
-                        totalPages = state.totalPages,
-                        onPageSelected = { viewModel.onIntent(MyProblemsIntent.ChangePage(it)) }
-                    )
-                    Spacer(Modifier.height(8.dp))
-                }
-            }
-
-            Box(
-                modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .fillMaxHeight()
-                    .padding(end = 6.dp)
-            ) {
-                val shape = RoundedCornerShape(8.dp)
-
+            } else {
                 Box(
                     modifier = Modifier
-                        .fillMaxHeight()
-                        .width(8.dp)
-                        .background(
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
-                            shape = shape
-                        )
-                )
+                        .fillMaxWidth()
+                        .heightIn(min = 260.dp, max = 720.dp)
+                ) {
+                    if (state.isLoading) {
+                        AppPanelLoader(minHeight = 260.dp)
+                    } else {
+                        LazyColumn(
+                            state = listState,
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(end = 44.dp, bottom = 18.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            items(state.pageItems) { problem ->
+                                MyProblemCard(
+                                    problem = problem,
+                                    isOpening = openingProblemId == problem.id,
+                                    onOpenProblem = {
+                                        openingProblemId = problem.id
+                                        onOpenProblem(problem.id) { opened ->
+                                            if (!opened) {
+                                                openingProblemId = null
+                                            }
+                                        }
+                                    },
+                                )
+                            }
+                            item {
+                                Spacer(Modifier.height(8.dp))
+                                PaginationRow(
+                                    currentPage = state.currentPage,
+                                    totalPages = state.totalPages,
+                                    onPageSelected = { viewModel.onIntent(MyProblemsIntent.ChangePage(it)) }
+                                )
+                                Spacer(Modifier.height(8.dp))
+                            }
+                        }
+                    }
 
-                VerticalScrollbar(
-                    adapter = rememberScrollbarAdapter(listState),
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .width(8.dp)
-                )
+                    if (!state.isLoading) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.CenterEnd)
+                                .fillMaxHeight()
+                                .padding(end = 6.dp)
+                        ) {
+                            val shape = RoundedCornerShape(8.dp)
+
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxHeight()
+                                    .width(8.dp)
+                                    .background(
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
+                                        shape = shape
+                                    )
+                            )
+
+                            VerticalScrollbar(
+                                adapter = rememberScrollbarAdapter(listState),
+                                modifier = Modifier
+                                    .fillMaxHeight()
+                                    .width(8.dp)
+                            )
+                        }
+                    }
+                }
             }
         }
     }
@@ -182,7 +202,8 @@ fun MyProblemsScreen(
 @Composable
 private fun MyProblemCard(
     problem: CreatedProblem,
-    onOpenProblem: (Int) -> Unit,
+    isOpening: Boolean,
+    onOpenProblem: () -> Unit,
 ) {
     val required = max(1, problem.requiredParticipants)
     val registered = min(problem.registeredParticipants, required)
@@ -248,9 +269,14 @@ private fun MyProblemCard(
                 horizontalArrangement = Arrangement.End
             ) {
                 Button(
-                    onClick = { onOpenProblem(problem.id) }
+                    onClick = onOpenProblem,
+                    enabled = !isOpening,
                 ) {
-                    Text(stringResource(Res.string.details_action))
+                    if (isOpening) {
+                        AppInlineLoader()
+                    } else {
+                        Text(stringResource(Res.string.details_action))
+                    }
                 }
             }
         }

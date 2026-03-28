@@ -27,10 +27,18 @@ class LoginRepositoryImpl(
         )
     }
 
-    override suspend fun getSessionWallet(): String? {
+    override suspend fun getSession(): LoginSession? {
         return runCatching {
-            remoteDataSource.getSession().walletAddress.trim()
-        }.getOrNull()?.ifBlank { null }
+            remoteDataSource.getSession().let { session ->
+                LoginSession(
+                    walletAddress = session.walletAddress.trim(),
+                )
+            }
+        }.getOrNull()?.takeIf { it.walletAddress.isNotBlank() }
+    }
+
+    override suspend fun getSessionWallet(): String? {
+        return getSession()?.walletAddress
     }
 
     override suspend fun logout() {

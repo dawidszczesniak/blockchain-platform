@@ -79,8 +79,20 @@
     <string name="login_wallet_not_found">No compatible wallet detected in this browser.</string>
 
     <string name="settings_title">Settings</string>
-    <string name="settings_placeholder">Settings placeholder.</string>
-    <string name="settings_future">Later: wallet address, RPC, etc.</string>
+    <string name="settings_wallet_section">Wallet</string>
+    <string name="settings_wallet_address">ETH address</string>
+    <string name="settings_not_connected">No active session</string>
+    <string name="settings_network_section">Network and contract</string>
+    <string name="settings_eth_network">Network</string>
+    <string name="settings_chain_id">Chain ID</string>
+    <string name="settings_contract_address">Contract address</string>
+    <string name="settings_not_configured">Not configured</string>
+    <string name="settings_loading">Loading…</string>
+    <string name="settings_unavailable">Unavailable</string>
+    <string name="settings_disabled">Disabled</string>
+    <string name="settings_interface_language">Interface language</string>
+    <string name="settings_language_polish">Polish</string>
+    <string name="settings_language_english">English</string>
 
     <string name="problems_title">Problem list</string>
     <string name="problems_mock_info">Mock: %1$d problems (pagination + sorting).</string>

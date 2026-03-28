@@ -40,6 +40,7 @@ import pl.dawidszczesniak.blockchain_platform.feature.dashboard.usecase.GetDashb
 import pl.dawidszczesniak.blockchain_platform.feature.dashboard.usecase.GetDashboardMetricsHistoryUseCaseImpl
 import pl.dawidszczesniak.blockchain_platform.feature.dashboard.usecase.GetDashboardUpdatesUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.dashboard.usecase.GetDashboardUpdatesUseCaseImpl
+import pl.dawidszczesniak.blockchain_platform.feature.platform.controller.PlatformController
 import pl.dawidszczesniak.blockchain_platform.feature.problems.controller.ProblemController
 import pl.dawidszczesniak.blockchain_platform.feature.problems.anchor.AnchorConfig
 import pl.dawidszczesniak.blockchain_platform.feature.problems.anchor.BlockchainAnchorClient
@@ -123,4 +124,5 @@ internal fun serverModules() = module {
     factory<GetDashboardMetricsHistoryUseCase> { GetDashboardMetricsHistoryUseCaseImpl(get()) }
     factory<GetDashboardUpdatesUseCase> { GetDashboardUpdatesUseCaseImpl(get()) }
     factory { DashboardController(get(), get()) }
+    factory { PlatformController(get()) }
 }
