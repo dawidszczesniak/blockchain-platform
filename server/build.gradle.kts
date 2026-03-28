@@ -26,7 +26,7 @@ kotlin {
 
 dependencies {
     implementation(platform(libs.jackson.bom))
-    implementation(projects.shared)
+    implementation(project(":shared"))
     implementation(libs.logback)
     implementation(libs.ktor.serverCore)
     implementation(libs.ktor.serverCors)

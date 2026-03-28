@@ -531,11 +531,7 @@ private fun validateCreateProblem(state: CreateProblemState): CreateProblemValid
         }
     }
 
-    val titleError = if (state.title.trim().isEmpty()) {
-        CreateProblemValidationError.Required
-    } else {
-        null
-    }
+    val titleError: CreateProblemValidationError? = null
 
     val descriptionError = if (state.description.trim().isEmpty()) {
         CreateProblemValidationError.Required

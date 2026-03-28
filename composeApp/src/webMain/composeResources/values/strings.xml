@@ -18,7 +18,7 @@
     <string name="create_problem_prize_label">Prize (e.g., wei / USDC)</string>
     <string name="create_problem_participants_label">Number of participants</string>
     <string name="create_problem_entry_fee_label">Entry fee (e.g., wei / USDC)</string>
-    <string name="create_problem_title_label">Problem title</string>
+    <string name="create_problem_title_label">Problem title (optional)</string>
     <string name="create_problem_description_label">Problem description</string>
     <string name="create_problem_constraints_label">Constraints (optional)</string>
     <string name="create_problem_reference_solution_label">Reference solution code (Kotlin)</string>

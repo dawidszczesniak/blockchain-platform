@@ -1,5 +1,4 @@
 rootProject.name = "blockchain_platform"
-enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
 
 pluginManagement {
     repositories {

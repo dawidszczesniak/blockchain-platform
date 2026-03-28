@@ -56,7 +56,7 @@ kotlin {
             implementation(libs.androidx.lifecycle.runtimeCompose)
             implementation(libs.koin.core)
             implementation(libs.kotlinx.serialization.json)
-            implementation(projects.shared)
+            implementation(project(":shared"))
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)

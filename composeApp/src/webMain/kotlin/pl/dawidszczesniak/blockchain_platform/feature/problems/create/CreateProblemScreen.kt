@@ -1,23 +1,38 @@
 package pl.dawidszczesniak.blockchain_platform.feature.problems.create
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.KeyboardArrowDown
+import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material3.Button
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
@@ -25,6 +40,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -38,7 +54,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import blockchain_platform.composeapp.generated.resources.Res
 import blockchain_platform.composeapp.generated.resources.create_problem_action_create
@@ -85,14 +103,28 @@ import blockchain_platform.composeapp.generated.resources.create_problem_validat
 import blockchain_platform.composeapp.generated.resources.create_problem_validation_required
 import blockchain_platform.composeapp.generated.resources.create_problem_validation_run_required
 import blockchain_platform.composeapp.generated.resources.create_problem_validation_ready
-import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.toLocalDateTime
+import kotlin.time.Instant
 import org.jetbrains.compose.resources.stringResource
 import pl.dawidszczesniak.blockchain_platform.di.LocalKoin
 import pl.dawidszczesniak.blockchain_platform.platform.copyTextToClipboard
+
+private object IntelliJCodePalette {
+    val Panel = Color(0xFF2B2D30)
+    val Editor = Color(0xFF1E1F22)
+    val Chrome = Color(0xFF313335)
+    val Border = Color(0xFF43454A)
+    val Gutter = Color(0xFF25262A)
+    val Comment = Color(0xFF7A7E85)
+    val Keyword = Color(0xFFCF8E6D)
+    val Type = Color(0xFF56A8F5)
+    val Identifier = Color(0xFFD7D9DD)
+    val Accent = Color(0xFF4C9BFF)
+    val Success = Color(0xFF6AAB73)
+}
 
 @Composable
 fun CreateProblemScreen() {
@@ -114,7 +146,7 @@ fun CreateProblemScreen() {
 
             if (isCompact) {
                 Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
-                    CreateProblemForm(
+                    CreateProblemWorkspace(
                         state = state,
                         onPrizeChange = { viewModel.onIntent(CreateProblemIntent.PrizeChanged(it)) },
                         onParticipantsChange = { viewModel.onIntent(CreateProblemIntent.ParticipantsChanged(it)) },
@@ -137,45 +169,213 @@ fun CreateProblemScreen() {
                         onJoinUntilChange = { viewModel.onIntent(CreateProblemIntent.JoinUntilChanged(it)) },
                         onSubmitUntilChange = { viewModel.onIntent(CreateProblemIntent.SubmitUntilChanged(it)) },
                         onSubmit = { viewModel.onIntent(CreateProblemIntent.Submit) },
+                        isCompact = true,
                     )
-                    ProfitPanel(state = state)
                 }
             } else {
-                Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+                CreateProblemWorkspace(
+                    state = state,
+                    onPrizeChange = { viewModel.onIntent(CreateProblemIntent.PrizeChanged(it)) },
+                    onParticipantsChange = { viewModel.onIntent(CreateProblemIntent.ParticipantsChanged(it)) },
+                    onEntryFeeChange = { viewModel.onIntent(CreateProblemIntent.EntryFeeChanged(it)) },
+                    onTitleChange = { viewModel.onIntent(CreateProblemIntent.TitleChanged(it)) },
+                    onDescriptionChange = { viewModel.onIntent(CreateProblemIntent.DescriptionChanged(it)) },
+                    onConstraintsChange = { viewModel.onIntent(CreateProblemIntent.ConstraintsChanged(it)) },
+                    onReferenceSolutionChange = { viewModel.onIntent(CreateProblemIntent.ReferenceSolutionChanged(it)) },
+                    onAddTest = { viewModel.onIntent(CreateProblemIntent.AddTest) },
+                    onToggleTest = { id -> viewModel.onIntent(CreateProblemIntent.ToggleTest(id)) },
+                    onRemoveTest = { id -> viewModel.onIntent(CreateProblemIntent.RemoveTest(id)) },
+                    onTestInputChange = { id, value ->
+                        viewModel.onIntent(CreateProblemIntent.TestInputChanged(id, value))
+                    },
+                    onTestHiddenChange = { id, value ->
+                        viewModel.onIntent(CreateProblemIntent.TestHiddenChanged(id, value))
+                    },
+                    onRunSingleTest = { id -> viewModel.onIntent(CreateProblemIntent.RunSingleTest(id)) },
+                    onRunAllTests = { viewModel.onIntent(CreateProblemIntent.RunAllTests) },
+                    onJoinUntilChange = { viewModel.onIntent(CreateProblemIntent.JoinUntilChanged(it)) },
+                    onSubmitUntilChange = { viewModel.onIntent(CreateProblemIntent.SubmitUntilChanged(it)) },
+                    onSubmit = { viewModel.onIntent(CreateProblemIntent.Submit) },
+                    isCompact = false,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun CreateProblemWorkspace(
+    state: CreateProblemState,
+    onPrizeChange: (String) -> Unit,
+    onParticipantsChange: (String) -> Unit,
+    onEntryFeeChange: (String) -> Unit,
+    onTitleChange: (String) -> Unit,
+    onDescriptionChange: (String) -> Unit,
+    onConstraintsChange: (String) -> Unit,
+    onReferenceSolutionChange: (String) -> Unit,
+    onAddTest: () -> Unit,
+    onToggleTest: (Int) -> Unit,
+    onRemoveTest: (Int) -> Unit,
+    onTestInputChange: (Int, String) -> Unit,
+    onTestHiddenChange: (Int, Boolean) -> Unit,
+    onRunSingleTest: (Int) -> Unit,
+    onRunAllTests: () -> Unit,
+    onJoinUntilChange: (LocalDate) -> Unit,
+    onSubmitUntilChange: (LocalDate) -> Unit,
+    onSubmit: () -> Unit,
+    isCompact: Boolean,
+) {
+    if (isCompact) {
+        EditorPane(title = "Create Problem") {
+            CreateProblemForm(
+                state = state,
+                onPrizeChange = onPrizeChange,
+                onParticipantsChange = onParticipantsChange,
+                onEntryFeeChange = onEntryFeeChange,
+                onTitleChange = onTitleChange,
+                onDescriptionChange = onDescriptionChange,
+                onConstraintsChange = onConstraintsChange,
+                onReferenceSolutionChange = onReferenceSolutionChange,
+                onAddTest = onAddTest,
+                onToggleTest = onToggleTest,
+                onRemoveTest = onRemoveTest,
+                onTestInputChange = onTestInputChange,
+                onTestHiddenChange = onTestHiddenChange,
+                onRunSingleTest = onRunSingleTest,
+                onRunAllTests = onRunAllTests,
+                onSubmit = onSubmit,
+            )
+        }
+        EditorPane(title = "Profit Preview") {
+            ProfitPanel(state = state)
+        }
+        EditorPane(title = "Schedule") {
+            SchedulePanel(
+                state = state,
+                onJoinUntilChange = onJoinUntilChange,
+                onSubmitUntilChange = onSubmitUntilChange,
+            )
+        }
+    } else {
+        Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+                Column(
+                    modifier = Modifier.weight(2f),
+                    verticalArrangement = Arrangement.spacedBy(18.dp)
+                ) {
+                    EditorPane(title = "Create Problem") {
                     CreateProblemForm(
-                        modifier = Modifier.weight(2f),
                         state = state,
-                        onPrizeChange = { viewModel.onIntent(CreateProblemIntent.PrizeChanged(it)) },
-                        onParticipantsChange = { viewModel.onIntent(CreateProblemIntent.ParticipantsChanged(it)) },
-                        onEntryFeeChange = { viewModel.onIntent(CreateProblemIntent.EntryFeeChanged(it)) },
-                        onTitleChange = { viewModel.onIntent(CreateProblemIntent.TitleChanged(it)) },
-                        onDescriptionChange = { viewModel.onIntent(CreateProblemIntent.DescriptionChanged(it)) },
-                        onConstraintsChange = { viewModel.onIntent(CreateProblemIntent.ConstraintsChanged(it)) },
-                        onReferenceSolutionChange = { viewModel.onIntent(CreateProblemIntent.ReferenceSolutionChanged(it)) },
-                        onAddTest = { viewModel.onIntent(CreateProblemIntent.AddTest) },
-                        onToggleTest = { id -> viewModel.onIntent(CreateProblemIntent.ToggleTest(id)) },
-                        onRemoveTest = { id -> viewModel.onIntent(CreateProblemIntent.RemoveTest(id)) },
-                        onTestInputChange = { id, value ->
-                            viewModel.onIntent(CreateProblemIntent.TestInputChanged(id, value))
-                        },
-                        onTestHiddenChange = { id, value ->
-                            viewModel.onIntent(CreateProblemIntent.TestHiddenChanged(id, value))
-                        },
-                        onRunSingleTest = { id -> viewModel.onIntent(CreateProblemIntent.RunSingleTest(id)) },
-                        onRunAllTests = { viewModel.onIntent(CreateProblemIntent.RunAllTests) },
-                        onJoinUntilChange = { viewModel.onIntent(CreateProblemIntent.JoinUntilChanged(it)) },
-                        onSubmitUntilChange = { viewModel.onIntent(CreateProblemIntent.SubmitUntilChanged(it)) },
-                        onSubmit = { viewModel.onIntent(CreateProblemIntent.Submit) },
+                        onPrizeChange = onPrizeChange,
+                        onParticipantsChange = onParticipantsChange,
+                        onEntryFeeChange = onEntryFeeChange,
+                        onTitleChange = onTitleChange,
+                        onDescriptionChange = onDescriptionChange,
+                        onConstraintsChange = onConstraintsChange,
+                        onReferenceSolutionChange = onReferenceSolutionChange,
+                        onAddTest = onAddTest,
+                        onToggleTest = onToggleTest,
+                        onRemoveTest = onRemoveTest,
+                        onTestInputChange = onTestInputChange,
+                        onTestHiddenChange = onTestHiddenChange,
+                        onRunSingleTest = onRunSingleTest,
+                        onRunAllTests = onRunAllTests,
+                        onSubmit = onSubmit,
                     )
-                    ProfitPanel(
-                        modifier = Modifier.weight(1f),
-                        state = state
-                    )
+                }
+                }
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(18.dp)
+                ) {
+                    EditorPane(title = "Profit Preview") {
+                        ProfitPanel(state = state)
+                    }
+                    EditorPane(title = "Schedule") {
+                        SchedulePanel(
+                            state = state,
+                            onJoinUntilChange = onJoinUntilChange,
+                            onSubmitUntilChange = onSubmitUntilChange,
+                        )
+                    }
                 }
             }
         }
     }
 }
+
+@Composable
+private fun EditorPane(
+    modifier: Modifier = Modifier,
+    title: String,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    OutlinedCard(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.outlinedCardColors(
+            containerColor = IntelliJCodePalette.Panel
+        ),
+        border = androidx.compose.foundation.BorderStroke(1.dp, IntelliJCodePalette.Border)
+    ) {
+        Column {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(IntelliJCodePalette.Chrome)
+                    .padding(horizontal = 14.dp, vertical = 9.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.labelLarge.copy(fontFamily = FontFamily.Monospace),
+                    color = IntelliJCodePalette.Identifier
+                )
+            }
+            Column(
+                modifier = Modifier.padding(18.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                content()
+            }
+        }
+    }
+}
+
+@Composable
+private fun EditorSection(title: String) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleSmall.copy(fontFamily = FontFamily.Monospace),
+            color = IntelliJCodePalette.Identifier
+        )
+        HorizontalDivider(color = IntelliJCodePalette.Border.copy(alpha = 0.7f))
+    }
+}
+
+@Composable
+private fun editorTextFieldColors() = TextFieldDefaults.colors(
+    focusedTextColor = IntelliJCodePalette.Identifier,
+    unfocusedTextColor = IntelliJCodePalette.Identifier,
+    disabledTextColor = IntelliJCodePalette.Comment,
+    cursorColor = IntelliJCodePalette.Accent,
+    errorTextColor = MaterialTheme.colorScheme.error,
+    focusedContainerColor = IntelliJCodePalette.Editor,
+    unfocusedContainerColor = IntelliJCodePalette.Editor,
+    disabledContainerColor = IntelliJCodePalette.Gutter,
+    errorContainerColor = IntelliJCodePalette.Editor,
+    focusedIndicatorColor = IntelliJCodePalette.Accent,
+    unfocusedIndicatorColor = IntelliJCodePalette.Border,
+    disabledIndicatorColor = IntelliJCodePalette.Border.copy(alpha = 0.6f),
+    errorIndicatorColor = MaterialTheme.colorScheme.error,
+    focusedLabelColor = IntelliJCodePalette.Type,
+    unfocusedLabelColor = IntelliJCodePalette.Comment,
+    errorLabelColor = MaterialTheme.colorScheme.error,
+    focusedSupportingTextColor = IntelliJCodePalette.Comment,
+    unfocusedSupportingTextColor = IntelliJCodePalette.Comment,
+    errorSupportingTextColor = MaterialTheme.colorScheme.error,
+)
 
 @Composable
 private fun CreateProblemForm(
@@ -195,8 +395,6 @@ private fun CreateProblemForm(
     onTestHiddenChange: (Int, Boolean) -> Unit,
     onRunSingleTest: (Int) -> Unit,
     onRunAllTests: () -> Unit,
-    onJoinUntilChange: (LocalDate) -> Unit,
-    onSubmitUntilChange: (LocalDate) -> Unit,
     onSubmit: () -> Unit,
 ) {
     val validation = state.validation
@@ -224,33 +422,29 @@ private fun CreateProblemForm(
         visible = state.submitAttempted,
         error = validation.referenceSolution,
     )
-    val joinUntilError = validationMessage(
-        visible = state.submitAttempted,
-        error = validation.joinUntilDate,
-    )
-    val submitUntilError = validationMessage(
-        visible = state.submitAttempted,
-        error = validation.submitUntilDate,
-    )
     val publicTestsError = validationMessage(
         visible = state.submitAttempted,
         error = validation.publicTests,
     )
-
-    Column(modifier = modifier.fillMaxWidth()) {
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        EditorSection("Problem")
         OutlinedTextField(
             value = state.title,
             onValueChange = onTitleChange,
             label = { Text(stringResource(Res.string.create_problem_title_label)) },
             modifier = Modifier.fillMaxWidth(),
             isError = titleError != null,
+            colors = editorTextFieldColors(),
+            textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
             supportingText = {
                 if (titleError != null) {
                     Text(titleError)
                 }
             },
         )
-        Spacer(Modifier.height(10.dp))
 
         OutlinedTextField(
             value = state.description,
@@ -260,13 +454,14 @@ private fun CreateProblemForm(
             minLines = 4,
             maxLines = 8,
             isError = descriptionError != null,
+            colors = editorTextFieldColors(),
+            textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
             supportingText = {
                 if (descriptionError != null) {
                     Text(descriptionError)
                 }
             },
         )
-        Spacer(Modifier.height(10.dp))
 
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -279,6 +474,8 @@ private fun CreateProblemForm(
                 label = { Text(stringResource(Res.string.create_problem_prize_label)) },
                 modifier = Modifier.weight(1f),
                 isError = prizeError != null,
+                colors = editorTextFieldColors(),
+                textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
                 supportingText = {
                     if (prizeError != null) {
                         Text(prizeError)
@@ -291,6 +488,8 @@ private fun CreateProblemForm(
                 label = { Text(stringResource(Res.string.create_problem_participants_label)) },
                 modifier = Modifier.weight(1f),
                 isError = participantsError != null,
+                colors = editorTextFieldColors(),
+                textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
                 supportingText = {
                     if (participantsError != null) {
                         Text(participantsError)
@@ -303,6 +502,8 @@ private fun CreateProblemForm(
                 label = { Text(stringResource(Res.string.create_problem_entry_fee_label)) },
                 modifier = Modifier.weight(1f),
                 isError = entryFeeError != null,
+                colors = editorTextFieldColors(),
+                textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
                 supportingText = {
                     if (entryFeeError != null) {
                         Text(entryFeeError)
@@ -310,8 +511,20 @@ private fun CreateProblemForm(
                 },
             )
         }
-        Spacer(Modifier.height(10.dp))
 
+        EditorSection(stringResource(Res.string.create_problem_reference_solution_label))
+        CodeEditorField(
+            label = stringResource(Res.string.create_problem_reference_solution_label),
+            value = state.referenceSolutionCode,
+            onValueChange = onReferenceSolutionChange,
+            modifier = Modifier.fillMaxWidth(),
+            minLines = 6,
+            maxLines = 14,
+            isError = referenceSolutionError != null,
+            errorText = referenceSolutionError,
+        )
+
+        EditorSection(stringResource(Res.string.create_problem_constraints_label))
         OutlinedTextField(
             value = state.constraints,
             onValueChange = onConstraintsChange,
@@ -319,25 +532,11 @@ private fun CreateProblemForm(
             modifier = Modifier.fillMaxWidth(),
             minLines = 2,
             maxLines = 6,
+            colors = editorTextFieldColors(),
+            textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
         )
-        Spacer(Modifier.height(10.dp))
 
-        OutlinedTextField(
-            value = state.referenceSolutionCode,
-            onValueChange = onReferenceSolutionChange,
-            label = { Text(stringResource(Res.string.create_problem_reference_solution_label)) },
-            modifier = Modifier.fillMaxWidth(),
-            minLines = 6,
-            maxLines = 14,
-            isError = referenceSolutionError != null,
-            supportingText = {
-                if (referenceSolutionError != null) {
-                    Text(referenceSolutionError)
-                }
-            },
-        )
-        Spacer(Modifier.height(10.dp))
-
+        EditorSection("Tests")
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
@@ -374,14 +573,12 @@ private fun CreateProblemForm(
             }
         }
         if (publicTestsError != null) {
-            Spacer(Modifier.height(6.dp))
             Text(
                 text = publicTestsError,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error,
             )
         }
-        Spacer(Modifier.height(6.dp))
         Text(
             text = stringResource(
                 if (state.isValidationFresh) {
@@ -390,23 +587,19 @@ private fun CreateProblemForm(
                     Res.string.create_problem_validation_run_required
                 }
             ),
-            style = MaterialTheme.typography.bodySmall,
-            color = if (state.isValidationFresh) Color(0xFF33C97A) else MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+            color = if (state.isValidationFresh) IntelliJCodePalette.Success else IntelliJCodePalette.Comment,
         )
         state.runErrorMessage?.let { runErrorMessage ->
-            Spacer(Modifier.height(4.dp))
             Text(
                 text = runErrorMessage,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error,
             )
-            Spacer(Modifier.height(2.dp))
             TextButton(onClick = { copyToClipboard(runErrorMessage) }) {
                 Text(stringResource(Res.string.create_problem_copy_error))
             }
         }
-        Spacer(Modifier.height(8.dp))
-
         state.tests.forEachIndexed { index, test ->
             key(test.id) {
                 TestCaseCard(
@@ -421,34 +614,18 @@ private fun CreateProblemForm(
                     isRunning = state.isRunningAllTests || test.id in state.runningTestIds,
                     runResult = state.testRunResultsById[test.id],
                     validation = if (state.submitAttempted) {
-                        validation.testsById[test.id]
+                        state.validation.testsById[test.id]
                     } else {
                         null
                     }
                 )
             }
             if (index < state.tests.lastIndex) {
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(6.dp))
             }
         }
-        Spacer(Modifier.height(10.dp))
 
-        DatePickerField(
-            value = state.joinUntilDate,
-            label = stringResource(Res.string.create_problem_join_until_label),
-            onValueChange = onJoinUntilChange,
-            errorText = joinUntilError,
-        )
-        Spacer(Modifier.height(10.dp))
-
-        DatePickerField(
-            value = state.submitUntilDate,
-            label = stringResource(Res.string.create_problem_submit_until_label),
-            onValueChange = onSubmitUntilChange,
-            errorText = submitUntilError,
-        )
         if (state.submitFailed) {
-            Spacer(Modifier.height(10.dp))
             Text(
                 text = if (state.requiresFreshValidationForSubmit) {
                     stringResource(Res.string.create_problem_validation_run_required)
@@ -460,18 +637,17 @@ private fun CreateProblemForm(
             )
         }
         if (state.submitSuccessProblemId != null) {
-            Spacer(Modifier.height(10.dp))
             Text(
                 text = stringResource(Res.string.create_problem_submit_success),
                 style = MaterialTheme.typography.bodySmall,
-                color = Color(0xFF33C97A),
+                color = IntelliJCodePalette.Success,
             )
         }
-        Spacer(Modifier.height(16.dp))
 
         Button(
             onClick = onSubmit,
-            enabled = state.canSubmit
+            enabled = state.canSubmit,
+            contentPadding = PaddingValues(horizontal = 18.dp, vertical = 12.dp)
         ) {
             Text(
                 stringResource(
@@ -523,6 +699,8 @@ private fun DatePickerField(
         label = { Text(text = label) },
         readOnly = true,
         isError = errorText != null,
+        colors = editorTextFieldColors(),
+        textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
         supportingText = {
             if (errorText != null) {
                 Text(errorText)
@@ -567,6 +745,34 @@ private fun DatePickerField(
     }
 }
 
+@Composable
+private fun SchedulePanel(
+    state: CreateProblemState,
+    onJoinUntilChange: (LocalDate) -> Unit,
+    onSubmitUntilChange: (LocalDate) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        DatePickerField(
+            value = state.joinUntilDate,
+            label = stringResource(Res.string.create_problem_join_until_label),
+            onValueChange = onJoinUntilChange,
+            errorText = validationMessage(
+                visible = state.submitAttempted,
+                error = state.validation.joinUntilDate,
+            ),
+        )
+        DatePickerField(
+            value = state.submitUntilDate,
+            label = stringResource(Res.string.create_problem_submit_until_label),
+            onValueChange = onSubmitUntilChange,
+            errorText = validationMessage(
+                visible = state.submitAttempted,
+                error = state.validation.submitUntilDate,
+            ),
+        )
+    }
+}
+
 private fun utcMillisToLocalDate(millis: Long): LocalDate {
     return Instant.fromEpochMilliseconds(millis)
         .toLocalDateTime(TimeZone.UTC)
@@ -581,22 +787,119 @@ private fun copyToClipboard(value: String) {
 }
 
 @Composable
+private fun CodeEditorField(
+    label: String,
+    value: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    minLines: Int,
+    maxLines: Int,
+    isError: Boolean = false,
+    errorText: String? = null,
+) {
+    val lineCount = value.count { it == '\n' } + 1
+    val visibleLines = maxOf(minLines, lineCount)
+    val lineHeight = 21.dp
+    val editorVerticalPadding = 10.dp
+    val lineBoxVerticalPadding = 0.dp
+    val editorCodeTextStyle = MaterialTheme.typography.bodyMedium.copy(
+        fontFamily = FontFamily.Monospace,
+        color = IntelliJCodePalette.Identifier
+    )
+    val gutterTextStyle = MaterialTheme.typography.bodyMedium.copy(
+        fontFamily = FontFamily.Monospace,
+        color = IntelliJCodePalette.Comment
+    )
+
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            color = if (isError) MaterialTheme.colorScheme.error else IntelliJCodePalette.Comment
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(IntelliJCodePalette.Editor, RoundedCornerShape(12.dp))
+                .border(1.dp, if (isError) MaterialTheme.colorScheme.error else Color.Transparent, RoundedCornerShape(12.dp))
+                .heightIn(min = (visibleLines * lineHeight.value).dp + (editorVerticalPadding.value * 2).dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .background(IntelliJCodePalette.Gutter)
+                    .width(44.dp)
+                    .fillMaxHeight()
+                    .padding(top = editorVerticalPadding, start = 8.dp, end = 8.dp, bottom = editorVerticalPadding),
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.Top
+            ) {
+                for (line in 1..visibleLines) {
+                    Box(
+                        modifier = Modifier.height(lineHeight),
+                        contentAlignment = Alignment.CenterEnd
+                    ) {
+                        Text(
+                            text = line.toString(),
+                            style = gutterTextStyle,
+                            color = IntelliJCodePalette.Comment
+                        )
+                    }
+                }
+            }
+            Spacer(
+                modifier = Modifier
+                    .width(1.dp)
+                    .fillMaxHeight()
+                    .background(IntelliJCodePalette.Border.copy(alpha = 0.85f))
+            )
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .background(IntelliJCodePalette.Editor)
+                    .padding(horizontal = 12.dp, vertical = editorVerticalPadding)
+            ) {
+                BasicTextField(
+                    value = value,
+                    onValueChange = onValueChange,
+                    modifier = Modifier.fillMaxWidth(),
+                    textStyle = editorCodeTextStyle,
+                    cursorBrush = SolidColor(IntelliJCodePalette.Accent),
+                    minLines = minLines,
+                    maxLines = maxLines,
+                    decorationBox = { innerTextField ->
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 10.dp, vertical = lineBoxVerticalPadding)
+                        ) {
+                            innerTextField()
+                        }
+                    }
+                )
+            }
+        }
+        if (errorText != null) {
+            Text(
+                text = errorText,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error
+            )
+        }
+    }
+}
+
+@Composable
 private fun ProfitPanel(
     modifier: Modifier = Modifier,
     state: CreateProblemState,
 ) {
     val netColor = when {
-        state.netRevenue > 0 -> Color(0xFF33C97A)
+        state.netRevenue > 0 -> IntelliJCodePalette.Success
         state.netRevenue < 0 -> MaterialTheme.colorScheme.error
         else -> MaterialTheme.colorScheme.onSurface
     }
 
     Column(modifier = modifier.fillMaxWidth()) {
-        Text(
-            text = stringResource(Res.string.create_problem_profit_title),
-            style = MaterialTheme.typography.titleLarge
-        )
-        Spacer(Modifier.height(6.dp))
         Text(
             text = stringResource(Res.string.create_problem_profit_note),
             style = MaterialTheme.typography.bodySmall,
@@ -680,8 +983,9 @@ private fun TestCaseCard(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.outlinedCardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
-        )
+            containerColor = IntelliJCodePalette.Editor
+        ),
+        border = androidx.compose.foundation.BorderStroke(1.dp, IntelliJCodePalette.Border)
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
             Row(
@@ -711,34 +1015,36 @@ private fun TestCaseCard(
                 TextButton(onClick = onRemove, enabled = canRemove) {
                     Text(stringResource(Res.string.create_problem_test_remove))
                 }
-                TextButton(onClick = onToggle) {
-                    Text(
-                        stringResource(
+                IconButton(onClick = onToggle) {
+                    Icon(
+                        imageVector = if (test.expanded) {
+                            Icons.Outlined.KeyboardArrowUp
+                        } else {
+                            Icons.Outlined.KeyboardArrowDown
+                        },
+                        contentDescription = stringResource(
                             if (test.expanded) {
                                 Res.string.create_problem_test_collapse
                             } else {
                                 Res.string.create_problem_test_expand
                             }
-                        )
+                        ),
+                        tint = IntelliJCodePalette.Comment,
                     )
                 }
             }
 
             if (test.expanded) {
                 Spacer(Modifier.height(8.dp))
-                OutlinedTextField(
+                CodeEditorField(
+                    label = stringResource(Res.string.create_problem_test_input_label),
                     value = test.input,
                     onValueChange = onInputChange,
-                    label = { Text(stringResource(Res.string.create_problem_test_input_label)) },
                     modifier = Modifier.fillMaxWidth(),
                     minLines = 2,
                     maxLines = 8,
                     isError = inputErrorMessage != null,
-                    supportingText = {
-                        if (inputErrorMessage != null) {
-                            Text(inputErrorMessage)
-                        }
-                    },
+                    errorText = inputErrorMessage,
                 )
                 Spacer(Modifier.height(8.dp))
                 Row(
@@ -763,9 +1069,9 @@ private fun TestCaseCard(
                             result.status,
                             result.executionTimeMs,
                         ),
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
                         color = when (result.status.uppercase()) {
-                            "OK" -> Color(0xFF33C97A)
+                            "OK" -> IntelliJCodePalette.Success
                             "TIMEOUT", "ERROR" -> MaterialTheme.colorScheme.error
                             else -> MaterialTheme.colorScheme.onSurfaceVariant
                         },
@@ -775,8 +1081,8 @@ private fun TestCaseCard(
                             Spacer(Modifier.height(4.dp))
                             Text(
                                 text = stringResource(Res.string.create_problem_run_output, output),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                                color = IntelliJCodePalette.Comment,
                             )
                         }
                     }
