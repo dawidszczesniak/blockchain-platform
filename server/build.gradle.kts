@@ -54,3 +54,37 @@ tasks.withType<JavaExec>().configureEach {
         environment("APP_ENV", appEnv)
     }
 }
+
+val resolvedAppEnvProvider = providers.gradleProperty("appEnv").map { it.trim() }.orElse("local")
+
+val freeLocalBackendPort by tasks.registering(Exec::class) {
+    group = "application"
+    description = "Kills the process listening on port 8080 before a local backend run."
+
+    onlyIf {
+        resolvedAppEnvProvider.get().equals("local", ignoreCase = true)
+    }
+
+    commandLine(
+        "zsh",
+        "-ic",
+        """
+        pids=$(lsof -tiTCP:8080 -sTCP:LISTEN)
+        if [ -n "${'$'}pids" ]; then
+          kill ${'$'}pids
+        fi
+        """.trimIndent(),
+    )
+}
+
+tasks.register<JavaExec>("runLocalForce8080") {
+    group = "application"
+    description = "Frees port 8080 and starts the backend only for local environment."
+
+    dependsOn(freeLocalBackendPort, tasks.named("classes"))
+
+    mainClass.set(application.mainClass)
+    classpath = sourceSets.main.get().runtimeClasspath
+    jvmArgs(application.applicationDefaultJvmArgs)
+    environment("APP_ENV", "local")
+}
