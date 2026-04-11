@@ -22,13 +22,7 @@ internal data class AnchorTransactionResult(
 )
 
 internal interface BlockchainAnchorClient {
-    fun anchorBatch(
-        rootHash: String,
-        batchId: Long,
-        fromSubmissionId: Long,
-        toSubmissionId: Long,
-        leavesCount: Int,
-    ): AnchorTransactionResult
+    fun anchorSubmission(commitmentHash: String, submissionId: Long): AnchorTransactionResult
 
     fun close()
 }
@@ -44,13 +38,7 @@ internal class EthereumBlockchainAnchorClient(
         ?.takeIf { it.isNotBlank() }
         ?.let { Credentials.create(it.removePrefix("0x")) }
 
-    override fun anchorBatch(
-        rootHash: String,
-        batchId: Long,
-        fromSubmissionId: Long,
-        toSubmissionId: Long,
-        leavesCount: Int,
-    ): AnchorTransactionResult {
+    override fun anchorSubmission(commitmentHash: String, submissionId: Long): AnchorTransactionResult {
         if (!anchorConfig.enabled) {
             return AnchorTransactionResult(anchored = false, error = "Ethereum anchoring is disabled.")
         }
@@ -75,11 +63,8 @@ internal class EthereumBlockchainAnchorClient(
             val function = Function(
                 anchorConfig.contractMethodName,
                 listOf(
-                    Bytes32(hexToBytes32(rootHash)),
-                    Uint256(BigInteger.valueOf(batchId)),
-                    Uint256(BigInteger.valueOf(fromSubmissionId)),
-                    Uint256(BigInteger.valueOf(toSubmissionId)),
-                    Uint256(BigInteger.valueOf(leavesCount.toLong())),
+                    Bytes32(hexToBytes32(commitmentHash)),
+                    Uint256(BigInteger.valueOf(submissionId)),
                 ),
                 emptyList(),
             )

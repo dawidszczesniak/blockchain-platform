@@ -152,6 +152,7 @@ data class SubmitProblemResponseDto(
     val total: Int,
     val passed: Int,
     val allPassed: Boolean,
+    val runtimeMs: Int,
     val results: List<RunProblemTestResultDto>,
     val consensusRequired: Int,
     val consensusReached: Int,

@@ -74,6 +74,7 @@ internal object ProblemSubmissionsTable : Table("problem_submissions") {
     val consensusImageHash = varchar("consensus_image_hash", length = 128).nullable()
     val consensusNodes = integer("consensus_nodes")
     val commitmentHash = varchar("commitment_hash", length = 66)
+    val runtimeMs = integer("runtime_ms")
     val anchorStatus = varchar("anchor_status", length = 16)
     val anchorBatchId = long("anchor_batch_id").nullable()
     val anchorMerkleRoot = varchar("anchor_merkle_root", length = 66).nullable()

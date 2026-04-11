@@ -4,6 +4,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -40,6 +41,7 @@ sealed interface MyParticipationIntent {
 
 class MyParticipationViewModel(
     private val getParticipationProblemsUseCase: GetParticipationProblemsUseCase,
+    private val participationSyncStore: ParticipationSyncStore,
     private val pageSize: Int = 20,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -47,7 +49,11 @@ class MyParticipationViewModel(
     val state: StateFlow<MyParticipationState> = _state.asStateFlow()
 
     init {
-        onIntent(MyParticipationIntent.Refresh)
+        scope.launch {
+            participationSyncStore.events.collectLatest {
+                refresh()
+            }
+        }
     }
 
     fun onIntent(intent: MyParticipationIntent) {

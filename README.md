@@ -80,6 +80,7 @@ Local startup:
   - copy hash to env `SANDBOX_IMAGE_HASH` (same value for all 3 nodes)
 - optional: set node attestation secrets for backend verification:
   - `export SANDBOX_NODE_SECRETS="sandbox-node-1=local-dev-sandbox-secret-1,sandbox-node-2=local-dev-sandbox-secret-2,sandbox-node-3=local-dev-sandbox-secret-3"`
+- when `APP_ENV=local` and `SANDBOX_NODE_SECRETS` is not set, backend falls back to the same default local secrets as `docker-compose.yml`
 - start DB + Redis + 3 sandbox nodes:
   - `docker compose up -d postgres redis sandbox-node-1 sandbox-node-2 sandbox-node-3`
   - after changes in `sandbox-runner/runner.py`, rebuild nodes:
@@ -121,8 +122,10 @@ Sandbox execution environment variables (backend):
 - `SANDBOX_REQUEST_TIMEOUT_MS` (default: `20000`)
 - `SANDBOX_CONNECT_TIMEOUT_MS` (default: `2500`)
 - `SANDBOX_IMAGE_HASH` (optional; if set, backend verifies returned sandbox image hash and rejects mismatches)
-- `SANDBOX_CONSENSUS_THRESHOLD` (default: `2`; minimum matching nodes required during `submit`)
-- `SANDBOX_NODE_SECRETS` (comma-separated `nodeId=secret`; backend verifies node HMAC attestations during `submit`)
+- `SANDBOX_CONSENSUS_THRESHOLD` (default: `3`; minimum matching nodes required during `submit`)
+- `SANDBOX_NODE_SECRETS` (comma-separated `nodeId=secret`; backend verifies node HMAC attestations during `submit`; in `APP_ENV=local` it defaults to the same local secrets as `docker-compose.yml`)
+  - backend fails on startup in `staging/prod` when this variable is missing
+  - backend also fails on startup when the value is malformed or when too few secrets are configured to satisfy `SANDBOX_CONSENSUS_THRESHOLD`
 
 Sandbox runner environment variables (each docker node):
 
@@ -138,8 +141,7 @@ Submission anchoring environment variables (backend):
 - `ETH_CHAIN_ID` (required when anchoring enabled)
 - `ETH_ANCHOR_CONTRACT_ADDRESS` (required when anchoring enabled)
 - `ETH_ANCHOR_PRIVATE_KEY` (required when anchoring enabled)
-- `ETH_ANCHOR_METHOD_NAME` (default: `anchorSubmissionBatch`)
-- `ETH_ANCHOR_BATCH_SIZE` (default: `20`)
+- `ETH_ANCHOR_METHOD_NAME` (default: `anchorSubmission`)
 - `ETH_ANCHOR_GAS_LIMIT` (default: `350000`)
 - `ETH_ANCHOR_GAS_PRICE_WEI` (optional; if omitted backend reads `eth_gasPrice`)
 - `ETH_ANCHOR_RECEIPT_TIMEOUT_MS` (default: `90000`)
@@ -149,7 +151,7 @@ Submission anchoring environment variables (backend):
 Submission endpoints:
 
 - `POST /problems/{problemId}/run` - single-node run with failover (preview)
-- `POST /problems/{problemId}/submit` - 3-node attested consensus + DB persistence + Merkle batch anchoring flow
+- `POST /problems/{problemId}/submit` - 3-node attested consensus + DB persistence + direct per-submission anchoring flow
 
 Create problem validation contract (production flow):
 

@@ -14,11 +14,9 @@ import pl.dawidszczesniak.blockchain_platform.db.SubmissionAttestationStatus
 import pl.dawidszczesniak.blockchain_platform.db.SubmissionTestResultStatus
 import pl.dawidszczesniak.blockchain_platform.feature.problems.anchor.AnchorConfig
 import pl.dawidszczesniak.blockchain_platform.feature.problems.anchor.BlockchainAnchorClient
-import pl.dawidszczesniak.blockchain_platform.feature.problems.anchor.MerkleTreeBuilder
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.RunProblemRequestDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.RunProblemTestResultDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.SubmitProblemResponseDto
-import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.PendingSubmissionAnchorRecord
 import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.ProblemExecutionContext
 import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.ProblemExecutionTest
 import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.ProblemWriteRepository
@@ -126,11 +124,14 @@ internal class SubmitProblemCodeUseCaseImpl(
 
         val passedCount = evaluatedTests.count { it.apiResult.passed }
         val allPassed = passedCount == evaluatedTests.size
-        val submissionStatus = if (allPassed) {
-            SubmissionAttemptStatus.Accepted
-        } else {
-            SubmissionAttemptStatus.Rejected
+        if (!allPassed) {
+            val failedCount = evaluatedTests.size - passedCount
+            throw SubmitProblemValidationException(
+                "Submission blocked: $failedCount/${evaluatedTests.size} tests did not pass. Solution was not submitted."
+            )
         }
+        val submissionStatus = SubmissionAttemptStatus.Accepted
+        val runtimeMs = evaluatedTests.maxOfOrNull { it.apiResult.executionTimeMs } ?: 0
         val codeHash = sha256Hex(sourceCode)
         val testsHash = hashExecutionTests(context)
         val commitmentHash = buildCommitmentHash(
@@ -160,6 +161,7 @@ internal class SubmitProblemCodeUseCaseImpl(
                 consensusImageHash = consensusImageHash,
                 consensusNodes = consensusReached,
                 commitmentHash = commitmentHash,
+                runtimeMs = runtimeMs,
                 testResults = evaluatedTests.map { test ->
                     SubmissionPersistedTestResult(
                         problemTestId = test.problemTestId,
@@ -189,7 +191,10 @@ internal class SubmitProblemCodeUseCaseImpl(
         )
 
         val finalAnchor = if (anchorConfig.enabled) {
-            anchorPendingSubmissions(submissionRecord.submissionId)
+            anchorSubmission(
+                submissionId = submissionRecord.submissionId,
+                commitmentHash = commitmentHash,
+            )
         } else {
             initialAnchor
         }
@@ -199,6 +204,7 @@ internal class SubmitProblemCodeUseCaseImpl(
             total = evaluatedTests.size,
             passed = passedCount,
             allPassed = allPassed,
+            runtimeMs = runtimeMs,
             results = evaluatedTests.map { it.apiResult },
             consensusRequired = sandboxConfig.requiredConsensus,
             consensusReached = consensusReached,
@@ -215,33 +221,13 @@ internal class SubmitProblemCodeUseCaseImpl(
         )
     }
 
-    private fun anchorPendingSubmissions(currentSubmissionId: Long): SubmissionAnchorDraft {
-        val pending = repository.fetchPendingSubmissionAnchors(anchorConfig.batchSize)
-        if (pending.isEmpty()) {
-            return SubmissionAnchorDraft(status = SubmissionAnchorStatus.Pending)
-        }
-        val sortedPending = pending.sortedBy { it.submissionId }
-        val currentIncluded = sortedPending.any { it.submissionId == currentSubmissionId }
-        val merkleTree = runCatching {
-            MerkleTreeBuilder.buildFromLeaves(sortedPending.map(PendingSubmissionAnchorRecord::commitmentHash))
-        }.getOrElse { error ->
-            return SubmissionAnchorDraft(
-                status = SubmissionAnchorStatus.Pending,
-                error = error.message?.ifBlank { null } ?: "Failed to build Merkle tree.",
-            )
-        }
-        val proofBySubmissionId = sortedPending.indices.associate { index ->
-            sortedPending[index].submissionId to merkleTree.proofsByIndex[index].orEmpty()
-        }
-        val firstSubmissionId = sortedPending.first().submissionId
-        val lastSubmissionId = sortedPending.last().submissionId
-
-        val txResult = blockchainAnchorClient.anchorBatch(
-            rootHash = merkleTree.rootHash,
-            batchId = lastSubmissionId,
-            fromSubmissionId = firstSubmissionId,
-            toSubmissionId = lastSubmissionId,
-            leavesCount = sortedPending.size,
+    private fun anchorSubmission(
+        submissionId: Long,
+        commitmentHash: String,
+    ): SubmissionAnchorDraft {
+        val txResult = blockchainAnchorClient.anchorSubmission(
+            commitmentHash = commitmentHash,
+            submissionId = submissionId,
         )
         val anchoredAt = if (txResult.anchored) Instant.now() else null
         val batchStatus = if (txResult.anchored) AnchorBatchStatus.Anchored else AnchorBatchStatus.Failed
@@ -251,8 +237,8 @@ internal class SubmitProblemCodeUseCaseImpl(
             SubmissionAnchorStatus.Pending
         }
         val createdBatch = repository.createAnchorBatch(
-            rootHash = merkleTree.rootHash,
-            submissionIds = sortedPending.map { it.submissionId },
+            rootHash = commitmentHash,
+            submissionIds = listOf(submissionId),
             status = batchStatus,
             txHash = txResult.txHash,
             chainId = anchorConfig.chainId,
@@ -265,24 +251,16 @@ internal class SubmitProblemCodeUseCaseImpl(
             status = submissionStatus,
             batchId = createdBatch.batchId,
             merkleRoot = createdBatch.rootHash,
-            proofBySubmission = proofBySubmissionId,
+            proofBySubmission = mapOf(submissionId to emptyList()),
             txHash = txResult.txHash,
             error = txResult.error,
             anchoredAt = anchoredAt,
         )
-
-        if (!currentIncluded) {
-            return SubmissionAnchorDraft(
-                status = SubmissionAnchorStatus.Pending,
-                error = "Submission queued for the next anchor batch.",
-            )
-        }
-        val proof = proofBySubmissionId[currentSubmissionId].orEmpty()
         return SubmissionAnchorDraft(
             status = submissionStatus,
             batchId = createdBatch.batchId,
             merkleRoot = createdBatch.rootHash,
-            merkleProof = proof,
+            merkleProof = emptyList(),
             txHash = txResult.txHash,
             error = txResult.error,
             anchoredAt = anchoredAt,
@@ -611,11 +589,12 @@ private fun buildCommitmentHash(
     return keccakHex(payload)
 }
 
-private fun computeSandboxResultHash(results: List<SandboxRunTestOutput>): String {
+internal fun computeSandboxResultHash(results: List<SandboxRunTestOutput>): String {
     val canonical = results
         .sortedBy { it.order }
         .joinToString("\n") { result ->
-            "${result.id}|${result.order}|${result.status}|${result.output.orEmpty()}|${result.passed ?: false}|${result.executionTimeMs}|${result.message.orEmpty()}"
+            // Consensus must be stable across nodes, so runtime metrics stay outside the hash.
+            "${result.id}|${result.order}|${result.status}|${result.output.orEmpty()}|${result.passed ?: false}|${result.message.orEmpty()}"
         }
     return sha256Hex(canonical)
 }

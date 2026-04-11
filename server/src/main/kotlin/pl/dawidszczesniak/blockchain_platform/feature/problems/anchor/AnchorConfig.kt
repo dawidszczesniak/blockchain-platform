@@ -5,7 +5,6 @@ internal data class AnchorConfig(
     val chainId: Long?,
     val contractAddress: String?,
     val signerPrivateKey: String?,
-    val batchSize: Int,
     val gasLimit: Long,
     val gasPriceWei: Long?,
     val receiptTimeoutMs: Long,
@@ -29,10 +28,6 @@ internal data class AnchorConfig(
                 ?.lowercase()
                 ?.let { value -> value == "1" || value == "true" || value == "yes" }
                 ?: false
-            val batchSize = env["ETH_ANCHOR_BATCH_SIZE"]
-                ?.toIntOrNull()
-                ?.coerceIn(1, 200)
-                ?: DEFAULT_BATCH_SIZE
             val gasLimit = env["ETH_ANCHOR_GAS_LIMIT"]
                 ?.toLongOrNull()
                 ?.coerceIn(80_000L, 5_000_000L)
@@ -89,7 +84,6 @@ internal data class AnchorConfig(
                 chainId = chainId,
                 contractAddress = contractAddress,
                 signerPrivateKey = signerPrivateKey,
-                batchSize = batchSize,
                 gasLimit = gasLimit,
                 gasPriceWei = gasPriceWei,
                 receiptTimeoutMs = receiptTimeoutMs,
@@ -101,10 +95,9 @@ internal data class AnchorConfig(
     }
 }
 
-private const val DEFAULT_BATCH_SIZE = 20
 private const val DEFAULT_GAS_LIMIT = 350_000L
 private const val DEFAULT_RECEIPT_TIMEOUT_MS = 90_000L
 private const val DEFAULT_RECEIPT_POLL_INTERVAL_MS = 2_000L
-private const val DEFAULT_CONTRACT_METHOD_NAME = "anchorSubmissionBatch"
+private const val DEFAULT_CONTRACT_METHOD_NAME = "anchorSubmission"
 private const val ETHEREUM_MAINNET_CHAIN_ID = 1L
 private const val PROD_ENV = "prod"

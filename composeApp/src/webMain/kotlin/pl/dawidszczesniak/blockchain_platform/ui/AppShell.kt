@@ -127,7 +127,19 @@ fun AppShell(
                         }
                     )
                         Route.MyParticipation -> MyParticipationScreen(
-                            onBrowseProblems = { onNavigate(Route.Problems) }
+                            onBrowseProblems = { onNavigate(Route.Problems) },
+                            onOpenProblem = { problemId, onComplete ->
+                                scope.launch {
+                                    runCatching { problemRepository.fetchProblemById(problemId) }
+                                        .onSuccess { problemSummary ->
+                                            onComplete(true)
+                                            onNavigate(Route.ProblemDetails(problemSummary))
+                                        }
+                                        .onFailure {
+                                            onComplete(false)
+                                        }
+                                }
+                            }
                         )
                         Route.Settings -> SettingsScreen()
                         Route.Login -> LoginScreen(onLogin = onLogin)

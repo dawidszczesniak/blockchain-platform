@@ -100,8 +100,13 @@ internal class ProblemDaoImpl : ProblemDao {
     }
 
     override fun fetchParticipationProblemRowsForUser(userId: Long): List<ResultRow> {
-        return (ProblemParticipantsTable innerJoin ProblemsTable)
-            .selectAll()
+        return ProblemParticipantsTable
+            .innerJoin(
+                otherTable = ProblemsTable,
+                onColumn = { ProblemParticipantsTable.problemId },
+                otherColumn = { ProblemsTable.problemId },
+            )
+            .select(ProblemsTable.columns)
             .where { ProblemParticipantsTable.userId eq userId }
             .orderBy(
                 ProblemsTable.createdAt to SortOrder.DESC,

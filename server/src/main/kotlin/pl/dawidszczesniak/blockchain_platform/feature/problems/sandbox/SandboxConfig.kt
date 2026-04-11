@@ -10,6 +10,8 @@ internal data class SandboxConfig(
 ) {
     companion object {
         fun fromEnvironment(env: Map<String, String> = System.getenv()): SandboxConfig {
+            val appEnv = env["APP_ENV"]?.trim()?.lowercase().orEmpty().ifBlank { "local" }
+            val isProductionLike = appEnv == "staging" || appEnv == "prod"
             val nodes = env["SANDBOX_NODES"]
                 ?.split(',')
                 ?.mapNotNull { raw ->
@@ -32,7 +34,24 @@ internal data class SandboxConfig(
                 ?.toIntOrNull()
                 ?.coerceIn(1, nodes.size)
                 ?: DEFAULT_REQUIRED_CONSENSUS.coerceAtMost(nodes.size)
-            val nodeAttestationSecrets = parseNodeSecrets(env["SANDBOX_NODE_SECRETS"])
+            val nodeAttestationSecrets = parseNodeSecrets(env["SANDBOX_NODE_SECRETS"]).ifEmpty {
+                if (appEnv == "local") {
+                    DEFAULT_LOCAL_NODE_ATTESTATION_SECRETS
+                } else {
+                    emptyMap()
+                }
+            }
+
+            if (isProductionLike && nodeAttestationSecrets.isEmpty()) {
+                error("SANDBOX_NODE_SECRETS must be configured in staging/prod.")
+            }
+            if (nodeAttestationSecrets.size < requiredConsensus) {
+                error(
+                    "SANDBOX_NODE_SECRETS must define at least $requiredConsensus node secrets " +
+                        "to satisfy SANDBOX_CONSENSUS_THRESHOLD."
+                )
+            }
+
             return SandboxConfig(
                 nodes = nodes,
                 requestTimeoutMs = requestTimeoutMs,
@@ -53,23 +72,40 @@ private val DEFAULT_LOCAL_NODES = listOf(
 
 private const val DEFAULT_REQUEST_TIMEOUT_MS = 20_000L
 private const val DEFAULT_CONNECT_TIMEOUT_MS = 2_500L
-private const val DEFAULT_REQUIRED_CONSENSUS = 2
+private const val DEFAULT_REQUIRED_CONSENSUS = 3
+private val DEFAULT_LOCAL_NODE_ATTESTATION_SECRETS = mapOf(
+    "sandbox-node-1" to "local-dev-sandbox-secret-1",
+    "sandbox-node-2" to "local-dev-sandbox-secret-2",
+    "sandbox-node-3" to "local-dev-sandbox-secret-3",
+)
 
 private fun parseNodeSecrets(raw: String?): Map<String, String> {
     if (raw.isNullOrBlank()) {
         return emptyMap()
     }
-    return raw.split(',').mapNotNull { entry ->
+    return raw.split(',').map { entry ->
+        val normalizedEntry = entry.trim()
+        if (normalizedEntry.isBlank()) {
+            error("SANDBOX_NODE_SECRETS contains an empty entry.")
+        }
         val parts = entry.split('=', limit = 2)
         if (parts.size != 2) {
-            return@mapNotNull null
+            error("SANDBOX_NODE_SECRETS entry '$normalizedEntry' must use nodeId=secret format.")
         }
         val nodeId = parts[0].trim()
         val secret = parts[1].trim()
         if (nodeId.isBlank() || secret.isBlank()) {
-            null
-        } else {
-            nodeId to secret
+            error("SANDBOX_NODE_SECRETS entry '$normalizedEntry' must have non-empty nodeId and secret.")
+        }
+        nodeId to secret
+    }.also { entries ->
+        val duplicateNodeIds = entries
+            .groupingBy { it.first }
+            .eachCount()
+            .filterValues { it > 1 }
+            .keys
+        if (duplicateNodeIds.isNotEmpty()) {
+            error("SANDBOX_NODE_SECRETS contains duplicate node ids: ${duplicateNodeIds.joinToString(", ")}.")
         }
     }.toMap()
 }

@@ -313,6 +313,7 @@ internal class ProblemReadRepositoryImpl(
                 it[consensusImageHash] = draft.consensusImageHash
                 it[consensusNodes] = draft.consensusNodes
                 it[commitmentHash] = draft.commitmentHash
+                it[runtimeMs] = draft.runtimeMs
                 it[anchorStatus] = draft.anchor.status.dbValue
                 it[anchorBatchId] = draft.anchor.batchId
                 it[anchorMerkleRoot] = draft.anchor.merkleRoot
@@ -356,23 +357,6 @@ internal class ProblemReadRepositoryImpl(
                 submissionId = submissionId,
                 anchorStatus = draft.anchor.status,
             )
-        }
-    }
-
-    override fun fetchPendingSubmissionAnchors(limit: Int): List<PendingSubmissionAnchorRecord> {
-        return transactionRunner.inTransaction {
-            val safeLimit = limit.coerceIn(1, 250)
-            ProblemSubmissionsTable
-                .selectAll()
-                .where { ProblemSubmissionsTable.anchorStatus eq SubmissionAnchorStatus.Pending.dbValue }
-                .orderBy(ProblemSubmissionsTable.submittedAt to SortOrder.ASC)
-                .limit(safeLimit)
-                .map { row ->
-                    PendingSubmissionAnchorRecord(
-                        submissionId = row[ProblemSubmissionsTable.submissionId],
-                        commitmentHash = row[ProblemSubmissionsTable.commitmentHash],
-                    )
-                }
         }
     }
 

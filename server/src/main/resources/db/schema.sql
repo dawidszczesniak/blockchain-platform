@@ -72,6 +72,7 @@ CREATE TABLE IF NOT EXISTS problem_submissions (
     consensus_image_hash VARCHAR(128),
     consensus_nodes INTEGER NOT NULL CHECK (consensus_nodes >= 0),
     commitment_hash VARCHAR(66) NOT NULL,
+    runtime_ms INTEGER NOT NULL DEFAULT 0 CHECK (runtime_ms >= 0),
     anchor_status VARCHAR(16) NOT NULL
         CHECK (anchor_status IN ('pending', 'anchored', 'failed', 'disabled')),
     anchor_batch_id BIGINT,
@@ -239,6 +240,9 @@ ALTER TABLE problem_submissions
     ADD COLUMN IF NOT EXISTS commitment_hash VARCHAR(66);
 
 ALTER TABLE problem_submissions
+    ADD COLUMN IF NOT EXISTS runtime_ms INTEGER;
+
+ALTER TABLE problem_submissions
     ADD COLUMN IF NOT EXISTS anchor_status VARCHAR(16);
 
 ALTER TABLE problem_submissions
@@ -288,6 +292,14 @@ SET commitment_hash = COALESCE(NULLIF(commitment_hash, ''), '0x')
 WHERE commitment_hash IS NULL OR commitment_hash = '';
 
 UPDATE problem_submissions
+SET runtime_ms = COALESCE((
+    SELECT MAX(problem_submission_test_results.execution_time_ms)
+    FROM problem_submission_test_results
+    WHERE problem_submission_test_results.submission_id = problem_submissions.submission_id
+), 0)
+WHERE runtime_ms IS NULL;
+
+UPDATE problem_submissions
 SET anchor_status = COALESCE(NULLIF(anchor_status, ''), 'disabled')
 WHERE anchor_status IS NULL OR anchor_status = '';
 
@@ -317,6 +329,9 @@ ALTER TABLE problem_submissions
     ALTER COLUMN commitment_hash SET DEFAULT '0x';
 
 ALTER TABLE problem_submissions
+    ALTER COLUMN runtime_ms SET DEFAULT 0;
+
+ALTER TABLE problem_submissions
     ALTER COLUMN anchor_status SET DEFAULT 'disabled';
 
 ALTER TABLE problem_submissions
@@ -338,6 +353,9 @@ ALTER TABLE problem_submissions
     ALTER COLUMN commitment_hash SET NOT NULL;
 
 ALTER TABLE problem_submissions
+    ALTER COLUMN runtime_ms SET NOT NULL;
+
+ALTER TABLE problem_submissions
     ALTER COLUMN anchor_status SET NOT NULL;
 
 ALTER TABLE problem_submissions
@@ -357,6 +375,15 @@ BEGIN
     ALTER TABLE problem_submissions
         ADD CONSTRAINT chk_problem_submissions_consensus_nodes_non_negative
         CHECK (consensus_nodes >= 0);
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+    ALTER TABLE problem_submissions
+        ADD CONSTRAINT chk_problem_submissions_runtime_ms_non_negative
+        CHECK (runtime_ms >= 0);
 EXCEPTION
     WHEN duplicate_object THEN NULL;
 END $$;

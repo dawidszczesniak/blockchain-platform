@@ -113,6 +113,7 @@ internal data class SubmissionRecordDraft(
     val consensusImageHash: String?,
     val consensusNodes: Int,
     val commitmentHash: String,
+    val runtimeMs: Int,
     val testResults: List<SubmissionPersistedTestResult>,
     val nodeAttestations: List<SubmissionNodeAttestationDraft>,
     val anchor: SubmissionAnchorDraft,
@@ -121,11 +122,6 @@ internal data class SubmissionRecordDraft(
 internal data class PersistedSubmissionRecord(
     val submissionId: Long,
     val anchorStatus: SubmissionAnchorStatus,
-)
-
-internal data class PendingSubmissionAnchorRecord(
-    val submissionId: Long,
-    val commitmentHash: String,
 )
 
 internal data class SubmissionAnchorBatchRecord(
@@ -139,7 +135,6 @@ internal interface ProblemWriteRepository {
     fun registerUserForProblem(userId: Long, problemId: Int): JoinProblemResult
     fun fetchExecutionContextForUser(userId: Long, problemId: Int): ProblemExecutionContext
     fun createSubmissionRecord(draft: SubmissionRecordDraft): PersistedSubmissionRecord
-    fun fetchPendingSubmissionAnchors(limit: Int): List<PendingSubmissionAnchorRecord>
     fun createAnchorBatch(
         rootHash: String,
         submissionIds: List<Long>,

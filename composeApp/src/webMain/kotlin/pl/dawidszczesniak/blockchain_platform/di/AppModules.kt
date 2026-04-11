@@ -48,6 +48,7 @@ import pl.dawidszczesniak.blockchain_platform.feature.login.WalletProvider
 import pl.dawidszczesniak.blockchain_platform.feature.maintenance.BackendHealthViewModel
 import pl.dawidszczesniak.blockchain_platform.feature.maintenance.BackendMaintenanceViewModel
 import pl.dawidszczesniak.blockchain_platform.feature.problems.participation.MyParticipationViewModel
+import pl.dawidszczesniak.blockchain_platform.feature.problems.participation.ParticipationSyncStore
 import pl.dawidszczesniak.blockchain_platform.feature.problems.created.MyProblemsViewModel
 import pl.dawidszczesniak.blockchain_platform.feature.problems.list.ProblemsListViewModel
 import pl.dawidszczesniak.blockchain_platform.feature.settings.SettingsViewModel
@@ -58,6 +59,7 @@ import pl.dawidszczesniak.blockchain_platform.network.HttpTextClient
 fun appModules() = module {
     single { AppConfigProvider.config }
     single { AppLanguageStore() }
+    single { ParticipationSyncStore() }
     single<HttpTextClient> { BrowserHttpTextClient() }
     single<ProblemRemoteDataSource> {
         ProblemRemoteDataSourceImpl(
@@ -106,8 +108,8 @@ fun appModules() = module {
     factory { BackendHealthViewModel(get()) }
     factory { BackendMaintenanceViewModel() }
     factory { CreateProblemViewModel(get(), get()) }
-    factory { ProblemDetailsViewModel(get(), get(), get(), get()) }
+    factory { ProblemDetailsViewModel(get(), get(), get(), get(), get()) }
     factory { ProblemsListViewModel(get()) }
     factory { MyProblemsViewModel(get()) }
-    factory { MyParticipationViewModel(get()) }
+    factory { MyParticipationViewModel(get(), get()) }
 }

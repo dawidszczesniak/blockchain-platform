@@ -18,6 +18,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.RunProblemResponseDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.SubmitProblemResponseDto
+import pl.dawidszczesniak.blockchain_platform.feature.problems.participation.ParticipationSyncStore
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetParticipationProblemsUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.JoinProblemUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.RunProblemCodeUseCase
@@ -42,6 +43,7 @@ class ProblemDetailsViewModel(
     private val joinProblemUseCase: JoinProblemUseCase,
     private val runProblemCodeUseCase: RunProblemCodeUseCase,
     private val submitProblemCodeUseCase: SubmitProblemCodeUseCase,
+    private val participationSyncStore: ParticipationSyncStore,
 ) {
     private var scope = newScope()
     private val joinedProblemIds = mutableSetOf<Int>()
@@ -108,6 +110,7 @@ class ProblemDetailsViewModel(
                     }
                     if (probedJoinResult != null) {
                         joinedProblemIds.add(problemId)
+                        participationSyncStore.notifyChanged()
                     }
                     _state.update { current ->
                         current.copy(
@@ -131,6 +134,7 @@ class ProblemDetailsViewModel(
                     }
                     if (probedJoinResult != null) {
                         joinedProblemIds.add(problemId)
+                        participationSyncStore.notifyChanged()
                     }
                     _state.update { current ->
                         current.copy(
@@ -160,6 +164,7 @@ class ProblemDetailsViewModel(
             runCatching { joinProblemUseCase(problemId) }
                 .onSuccess { result ->
                     joinedProblemIds.add(problemId)
+                    participationSyncStore.notifyChanged()
                     _state.update { current ->
                         current.copy(
                             isJoining = false,
@@ -256,6 +261,7 @@ class ProblemDetailsViewModel(
         activeScope().launch {
             runCatching { submitProblemCodeUseCase(problemId, sourceCode) }
                 .onSuccess { submitResult ->
+                    participationSyncStore.notifyChanged()
                     _state.update { current ->
                         current.copy(
                             isSubmitting = false,
@@ -310,8 +316,21 @@ private fun extractReadableErrorMessage(error: Throwable): String {
                 ?.trim()
         }.getOrNull()
         if (!parsed.isNullOrEmpty()) {
-            return parsed
+            return humanizeSubmitValidationMessage(parsed)
         }
+    }
+    return humanizeSubmitValidationMessage(raw)
+}
+
+private fun humanizeSubmitValidationMessage(raw: String): String {
+    val blockedMatch = SUBMIT_BLOCKED_PATTERN.matchEntire(raw)
+    if (blockedMatch != null) {
+        val failed = blockedMatch.groupValues[1]
+        val total = blockedMatch.groupValues[2]
+        return "Nie wysłano rozwiązania. Niezaliczone testy: $failed/$total."
     }
     return raw
 }
+
+private val SUBMIT_BLOCKED_PATTERN =
+    Regex("""Submission blocked: (\d+)/(\d+) tests did not pass\. Solution was not submitted\.""")

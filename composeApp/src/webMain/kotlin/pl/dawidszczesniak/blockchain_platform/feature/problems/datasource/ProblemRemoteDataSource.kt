@@ -227,6 +227,7 @@ class ProblemRemoteDataSourceImpl(
             total = obj.requiredInt("total"),
             passed = obj.requiredInt("passed"),
             allPassed = obj.requiredBoolean("allPassed"),
+            runtimeMs = obj.requiredInt("runtimeMs"),
             results = results,
             consensusRequired = obj.requiredInt("consensusRequired"),
             consensusReached = obj.requiredInt("consensusReached"),

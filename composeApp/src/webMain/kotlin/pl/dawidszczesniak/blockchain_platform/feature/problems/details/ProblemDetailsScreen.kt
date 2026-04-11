@@ -1,6 +1,7 @@
 package pl.dawidszczesniak.blockchain_platform.feature.problems.details
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -78,6 +79,7 @@ import blockchain_platform.composeapp.generated.resources.problem_details_submit
 import blockchain_platform.composeapp.generated.resources.problem_details_submit_anchor_tx
 import blockchain_platform.composeapp.generated.resources.problem_details_submit_consensus
 import blockchain_platform.composeapp.generated.resources.problem_details_submit_error_prefix
+import blockchain_platform.composeapp.generated.resources.problem_details_submit_runtime
 import blockchain_platform.composeapp.generated.resources.problem_details_submit_result_title
 import blockchain_platform.composeapp.generated.resources.problem_details_submit_submitting
 import blockchain_platform.composeapp.generated.resources.problem_details_example_input
@@ -378,100 +380,107 @@ private fun CodeEditorPane(
     onJoinRequest: () -> Unit,
 ) {
     val editorBlocked = overlayState.show
+    val paneScroll = rememberScrollState()
 
     Box(modifier = modifier) {
         AppSurface(modifier = Modifier.fillMaxSize()) {
-            val editorModifier = if (fillEditorSpace) {
-                Modifier
+            Column(
+                modifier = Modifier
                     .fillMaxWidth()
-                    .fillMaxHeight(0.76f)
-            } else {
-                Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 260.dp)
-            }
-
-            Text(
-                text = stringResource(Res.string.problem_details_editor_title),
-                style = MaterialTheme.typography.titleMedium,
-            )
-            Spacer(Modifier.height(6.dp))
-            Text(
-                text = stringResource(Res.string.problem_details_editor_language),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.height(10.dp))
-            OutlinedTextField(
-                value = code,
-                onValueChange = onCodeChange,
-                modifier = editorModifier,
-                enabled = !editorBlocked,
-                textStyle = MaterialTheme.typography.bodyMedium.copy(
-                    fontFamily = FontFamily.Monospace,
-                ),
-                minLines = 16,
-                maxLines = 50,
-            )
-            Spacer(Modifier.height(8.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    .verticalScroll(paneScroll),
             ) {
-                OutlinedButton(
-                    onClick = onRun,
-                    enabled = !editorBlocked && !isRunning && !isSubmitting,
-                ) {
-                    Text(stringResource(Res.string.problem_details_editor_run))
+                val editorModifier = if (fillEditorSpace) {
+                    Modifier
+                        .fillMaxWidth()
+                        .fillMaxHeight(0.76f)
+                } else {
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 260.dp)
                 }
-                Button(
-                    onClick = onSubmit,
-                    enabled = !editorBlocked && !isRunning && !isSubmitting,
-                ) {
-                    Text(stringResource(Res.string.problem_details_editor_submit))
-                }
-            }
-            Spacer(Modifier.height(10.dp))
-            if (isRunning || isSubmitting) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.height(16.dp).width(16.dp),
-                        strokeWidth = 2.dp,
-                    )
-                    Text(
-                        text = if (isRunning) {
-                            stringResource(Res.string.problem_details_run_running)
-                        } else {
-                            stringResource(Res.string.problem_details_submit_submitting)
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            } else if (!runErrorMessage.isNullOrBlank()) {
+
                 Text(
-                    text = stringResource(Res.string.problem_details_run_error_console_title),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
+                    text = stringResource(Res.string.problem_details_editor_title),
+                    style = MaterialTheme.typography.titleMedium,
                 )
                 Spacer(Modifier.height(6.dp))
-                ErrorConsoleMessage(
-                    message = runErrorMessage,
-                    isError = true,
-                )
-            } else if (!submitErrorMessage.isNullOrBlank()) {
                 Text(
-                    text = stringResource(Res.string.problem_details_submit_error_prefix, submitErrorMessage),
+                    text = stringResource(Res.string.problem_details_editor_language),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-            } else if (runResult != null) {
-                RunResultsPane(result = runResult)
-            } else if (submitResult != null) {
-                SubmitResultPane(result = submitResult)
+                Spacer(Modifier.height(10.dp))
+                OutlinedTextField(
+                    value = code,
+                    onValueChange = onCodeChange,
+                    modifier = editorModifier,
+                    enabled = !editorBlocked,
+                    textStyle = MaterialTheme.typography.bodyMedium.copy(
+                        fontFamily = FontFamily.Monospace,
+                    ),
+                    minLines = 16,
+                    maxLines = 50,
+                )
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    OutlinedButton(
+                        onClick = onRun,
+                        enabled = !editorBlocked && !isRunning && !isSubmitting,
+                    ) {
+                        Text(stringResource(Res.string.problem_details_editor_run))
+                    }
+                    Button(
+                        onClick = onSubmit,
+                        enabled = !editorBlocked && !isRunning && !isSubmitting,
+                    ) {
+                        Text(stringResource(Res.string.problem_details_editor_submit))
+                    }
+                }
+                Spacer(Modifier.height(10.dp))
+                if (isRunning || isSubmitting) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.height(16.dp).width(16.dp),
+                            strokeWidth = 2.dp,
+                        )
+                        Text(
+                            text = if (isRunning) {
+                                stringResource(Res.string.problem_details_run_running)
+                            } else {
+                                stringResource(Res.string.problem_details_submit_submitting)
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                } else if (!runErrorMessage.isNullOrBlank()) {
+                    Text(
+                        text = stringResource(Res.string.problem_details_run_error_console_title),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    ErrorConsoleMessage(
+                        message = runErrorMessage,
+                        isError = true,
+                    )
+                } else if (!submitErrorMessage.isNullOrBlank()) {
+                    Text(
+                        text = stringResource(Res.string.problem_details_submit_error_prefix, submitErrorMessage),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                } else if (runResult != null) {
+                    RunResultsPane(result = runResult)
+                } else if (submitResult != null) {
+                    SubmitResultPane(result = submitResult)
+                }
             }
         }
 
@@ -591,6 +600,11 @@ private fun SubmitResultPane(result: SubmitProblemResponseDto) {
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
     Text(
+        text = stringResource(Res.string.problem_details_submit_runtime, result.runtimeMs),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Text(
         text = stringResource(Res.string.problem_details_submit_anchor_status, result.anchorStatus),
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -607,7 +621,9 @@ private fun SubmitResultPane(result: SubmitProblemResponseDto) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
-    result.anchorMerkleRoot?.takeIf { it.isNotBlank() }?.let { root ->
+    result.anchorMerkleRoot
+        ?.takeIf { it.isNotBlank() && it != result.commitmentHash }
+        ?.let { root ->
         Text(
             text = stringResource(Res.string.problem_details_submit_anchor_root, root),
             style = MaterialTheme.typography.bodySmall,
@@ -734,7 +750,8 @@ private fun ErrorConsoleMessage(
     message: String,
     isError: Boolean,
 ) {
-    val scrollState = rememberScrollState()
+    val verticalScrollState = rememberScrollState()
+    val horizontalScrollState = rememberScrollState()
     OutlinedCard(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.outlinedCardColors(
@@ -745,20 +762,28 @@ private fun ErrorConsoleMessage(
             modifier = Modifier.padding(10.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            SelectionContainer {
-                Text(
-                    text = message,
-                    style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                    color = if (isError) {
-                        MaterialTheme.colorScheme.error
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 220.dp)
-                        .verticalScroll(scrollState),
-                )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 220.dp)
+                    .verticalScroll(verticalScrollState),
+            ) {
+                Row(
+                    modifier = Modifier.horizontalScroll(horizontalScrollState),
+                ) {
+                    SelectionContainer {
+                        Text(
+                            text = message,
+                            style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                            color = if (isError) {
+                                MaterialTheme.colorScheme.error
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                            softWrap = false,
+                        )
+                    }
+                }
             }
             TextButton(onClick = { copyToClipboard(message) }) {
                 Text(stringResource(Res.string.create_problem_copy_error))

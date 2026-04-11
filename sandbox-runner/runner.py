@@ -144,10 +144,13 @@ def _compute_run_hash(payload: Dict[str, Any]) -> str:
 
 def _compute_result_hash(results: List[Dict[str, Any]]) -> str:
     ordered = sorted(results, key=lambda item: int(item.get("order", 0)))
+    # Execution time is informative but non-deterministic across nodes, so keep it out of consensus.
     canonical = "\n".join(
-        f"{int(item.get('id', 0))}|{int(item.get('order', 0))}|{str(item.get('status', ''))}|"
-        f"{str(item.get('output', '') or '')}|{str(bool(item.get('passed', False))).lower()}|"
-        f"{int(item.get('executionTimeMs', 0))}|{str(item.get('message', '') or '')}"
+        (
+            f"{int(item.get('id', 0))}|{int(item.get('order', 0))}|{str(item.get('status', ''))}|"
+            f"{str(item.get('output', '') or '')}|{str(bool(item.get('passed', False))).lower()}|"
+            f"{str(item.get('message', '') or '')}"
+        )
         for item in ordered
     )
     return "0x" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()
