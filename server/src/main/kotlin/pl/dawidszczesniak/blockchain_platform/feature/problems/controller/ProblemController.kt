@@ -8,17 +8,18 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.Participation
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ProblemSummaryDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.RunProblemRequestDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.RunProblemResponseDto
-import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.SubmitProblemResponseDto
+import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.SubmissionJudgeJobDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ValidateCreateProblemRequestDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ValidateCreateProblemResponseDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.mapper.toDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.CreateProblemUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.EnqueueProblemSubmissionUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetSubmissionJudgeJobUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetCreatedProblemsUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetParticipationProblemsUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetProblemSummariesUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.JoinProblemUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.RunProblemCodeUseCase
-import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.SubmitProblemCodeUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.ValidateCreateProblemUseCase
 
 internal class ProblemController(
@@ -29,7 +30,8 @@ internal class ProblemController(
     private val validateCreateProblemUseCase: ValidateCreateProblemUseCase,
     private val joinProblemUseCase: JoinProblemUseCase,
     private val runProblemCodeUseCase: RunProblemCodeUseCase,
-    private val submitProblemCodeUseCase: SubmitProblemCodeUseCase,
+    private val enqueueProblemSubmissionUseCase: EnqueueProblemSubmissionUseCase,
+    private val getSubmissionJudgeJobUseCase: GetSubmissionJudgeJobUseCase,
 ) {
     fun getProblemSummaries(): List<ProblemSummaryDto> {
         return getProblemSummariesUseCase().map { it.toDto() }
@@ -76,7 +78,14 @@ internal class ProblemController(
         userId: Long,
         problemId: Int,
         request: RunProblemRequestDto,
-    ): SubmitProblemResponseDto {
-        return submitProblemCodeUseCase(userId, problemId, request)
+    ): SubmissionJudgeJobDto {
+        return enqueueProblemSubmissionUseCase(userId, problemId, request)
+    }
+
+    fun getSubmissionJudgeJob(
+        userId: Long,
+        jobId: Long,
+    ): SubmissionJudgeJobDto {
+        return getSubmissionJudgeJobUseCase(userId, jobId)
     }
 }

@@ -43,7 +43,6 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import blockchain_platform.composeapp.generated.resources.Res
-import blockchain_platform.composeapp.generated.resources.create_problem_copy_error
 import blockchain_platform.composeapp.generated.resources.days_count
 import blockchain_platform.composeapp.generated.resources.problem_details_back
 import blockchain_platform.composeapp.generated.resources.problem_details_constraints_title
@@ -104,7 +103,6 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.RunProblemTes
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.SubmitProblemResponseDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.statement.ProblemStatementContent
 import pl.dawidszczesniak.blockchain_platform.feature.problems.statement.decodeProblemDescription
-import pl.dawidszczesniak.blockchain_platform.platform.copyTextToClipboard
 import pl.dawidszczesniak.blockchain_platform.ui.AppSurface
 
 @Composable
@@ -205,10 +203,11 @@ fun ProblemDetailsScreen(
                         runErrorMessage = gateState.runErrorMessage,
                         runResult = gateState.runResult,
                         isSubmitting = gateState.isSubmitting,
+                        submitStatusMessage = gateState.submitStatusMessage,
                         submitErrorMessage = gateState.submitErrorMessage,
                         submitResult = gateState.submitResult,
-                        onRun = { viewModel.run(problem.id, solutionCode) },
-                        onSubmit = { viewModel.submit(problem.id, solutionCode) },
+                        onRun = { viewModel.run(problem.id, solutionCode, "kotlin") },
+                        onSubmit = { viewModel.submit(problem.id, solutionCode, "kotlin") },
                         onJoinRequest = {
                             if (isLoggedIn) {
                                 viewModel.join(problem.id)
@@ -243,10 +242,11 @@ fun ProblemDetailsScreen(
                         runErrorMessage = gateState.runErrorMessage,
                         runResult = gateState.runResult,
                         isSubmitting = gateState.isSubmitting,
+                        submitStatusMessage = gateState.submitStatusMessage,
                         submitErrorMessage = gateState.submitErrorMessage,
                         submitResult = gateState.submitResult,
-                        onRun = { viewModel.run(problem.id, solutionCode) },
-                        onSubmit = { viewModel.submit(problem.id, solutionCode) },
+                        onRun = { viewModel.run(problem.id, solutionCode, "kotlin") },
+                        onSubmit = { viewModel.submit(problem.id, solutionCode, "kotlin") },
                         onJoinRequest = {
                             if (isLoggedIn) {
                                 viewModel.join(problem.id)
@@ -373,6 +373,7 @@ private fun CodeEditorPane(
     runErrorMessage: String?,
     runResult: RunProblemResponseDto?,
     isSubmitting: Boolean,
+    submitStatusMessage: String?,
     submitErrorMessage: String?,
     submitResult: SubmitProblemResponseDto?,
     onRun: () -> Unit,
@@ -405,7 +406,7 @@ private fun CodeEditorPane(
                 )
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    text = stringResource(Res.string.problem_details_editor_language),
+                    text = "${stringResource(Res.string.problem_details_editor_language)}: Kotlin",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -458,6 +459,13 @@ private fun CodeEditorPane(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
+                        submitStatusMessage?.takeIf { it.isNotBlank() }?.let { status ->
+                            Text(
+                                text = status,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
                 } else if (!runErrorMessage.isNullOrBlank()) {
                     Text(
@@ -576,6 +584,7 @@ private fun CodeEditorPane(
 
 @Composable
 private fun SubmitResultPane(result: SubmitProblemResponseDto) {
+    val summaryMemoryUsedKb = result.memoryUsedKb ?: result.results.mapNotNull { it.memoryUsedKb }.maxOrNull()
     Text(
         text = stringResource(Res.string.problem_details_submit_result_title),
         style = MaterialTheme.typography.titleSmall,
@@ -604,6 +613,13 @@ private fun SubmitResultPane(result: SubmitProblemResponseDto) {
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
+    summaryMemoryUsedKb?.let { memoryUsedKb ->
+        Text(
+            text = "Memory: ${memoryUsedKb} KB",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
     Text(
         text = stringResource(Res.string.problem_details_submit_anchor_status, result.anchorStatus),
         style = MaterialTheme.typography.bodySmall,
@@ -662,6 +678,7 @@ private fun SubmitResultPane(result: SubmitProblemResponseDto) {
 
 @Composable
 private fun RunResultsPane(result: RunProblemResponseDto) {
+    val summaryMemoryUsedKb = result.memoryUsedKb ?: result.results.mapNotNull { it.memoryUsedKb }.maxOrNull()
     Text(
         text = stringResource(Res.string.problem_details_run_result_passed, result.passed, result.total),
         style = MaterialTheme.typography.bodyMedium,
@@ -671,6 +688,19 @@ private fun RunResultsPane(result: RunProblemResponseDto) {
             MaterialTheme.colorScheme.onSurface
         },
     )
+    Spacer(Modifier.height(4.dp))
+    Text(
+        text = "Runtime: ${result.runtimeMs} ms",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    summaryMemoryUsedKb?.let { memoryUsedKb ->
+        Text(
+            text = "Memory: ${memoryUsedKb} KB",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
     Spacer(Modifier.height(8.dp))
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         result.results.forEach { testResult ->
@@ -701,6 +731,13 @@ private fun RunResultsPane(result: RunProblemResponseDto) {
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                    testResult.memoryUsedKb?.let { memoryUsedKb ->
+                        Text(
+                            text = "Memory: ${memoryUsedKb} KB",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                     if (testResult.hidden && !testResult.passed && testResult.message.isNullOrBlank()) {
                         Text(
                             text = stringResource(Res.string.problem_details_run_result_hidden_failed),
@@ -785,9 +822,6 @@ private fun ErrorConsoleMessage(
                     }
                 }
             }
-            TextButton(onClick = { copyToClipboard(message) }) {
-                Text(stringResource(Res.string.create_problem_copy_error))
-            }
         }
     }
 }
@@ -831,12 +865,6 @@ private fun defaultSolutionTemplate(problem: ProblemSummary): String {
     """.trimIndent()
 }
 
-private fun copyToClipboard(value: String) {
-    runCatching<Unit> {
-        copyTextToClipboard(value)
-        Unit
-    }
-}
 
 private data class EditorOverlayState(
     val show: Boolean,

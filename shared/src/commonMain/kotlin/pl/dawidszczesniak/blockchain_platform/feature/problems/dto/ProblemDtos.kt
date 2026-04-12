@@ -90,6 +90,7 @@ data class CreateProblemValidationTestResultDto(
     val status: String,
     val output: String? = null,
     val executionTimeMs: Int,
+    val memoryUsedKb: Int? = null,
     val message: String? = null,
 )
 
@@ -129,6 +130,7 @@ data class RunProblemTestResultDto(
     val passed: Boolean,
     val hidden: Boolean,
     val executionTimeMs: Int,
+    val memoryUsedKb: Int? = null,
     val input: String? = null,
     val expectedOutput: String? = null,
     val actualOutput: String? = null,
@@ -140,6 +142,8 @@ data class RunProblemResponseDto(
     val total: Int,
     val passed: Int,
     val allPassed: Boolean,
+    val runtimeMs: Int = 0,
+    val memoryUsedKb: Int? = null,
     val results: List<RunProblemTestResultDto>,
     val sandboxNodeId: String? = null,
     val sandboxImageHash: String? = null,
@@ -153,6 +157,7 @@ data class SubmitProblemResponseDto(
     val passed: Int,
     val allPassed: Boolean,
     val runtimeMs: Int,
+    val memoryUsedKb: Int? = null,
     val results: List<RunProblemTestResultDto>,
     val consensusRequired: Int,
     val consensusReached: Int,
@@ -166,4 +171,16 @@ data class SubmitProblemResponseDto(
     val anchorTxHash: String? = null,
     val anchorExplorerUrl: String? = null,
     val anchorError: String? = null,
+)
+
+@Serializable
+data class SubmissionJudgeJobDto(
+    val jobId: Long,
+    val status: String,
+    val language: String,
+    val queuePosition: Int? = null,
+    val message: String? = null,
+    val submissionId: Long? = null,
+    val runPreview: RunProblemResponseDto? = null,
+    val submissionResult: SubmitProblemResponseDto? = null,
 )

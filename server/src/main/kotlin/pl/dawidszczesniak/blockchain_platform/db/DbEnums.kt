@@ -36,3 +36,11 @@ internal enum class AnchorBatchStatus(val dbValue: String) {
     Anchored("anchored"),
     Failed("failed"),
 }
+
+internal enum class SubmissionJudgeJobStatus(val dbValue: String) {
+    Queued("queued"),
+    Running("running"),
+    Accepted("accepted"),
+    Rejected("rejected"),
+    Error("error"),
+}

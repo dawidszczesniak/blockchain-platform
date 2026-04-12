@@ -17,6 +17,7 @@ internal data class CreateProblemReferenceTestResult(
     val status: CreateProblemReferenceTestStatus,
     val output: String?,
     val executionTimeMs: Int,
+    val memoryUsedKb: Int? = null,
     val message: String?,
 )
 
@@ -156,6 +157,7 @@ internal class CreateProblemReferenceValidationServiceImpl(
         val sandboxResult = runCatching {
             sandboxClient.runSolution(
                 sourceCode = referenceSolutionCode,
+                language = CREATE_PROBLEM_SUPPORTED_LANGUAGE,
                 tests = sandboxInputs,
             )
         }.getOrElse { error ->
@@ -174,6 +176,7 @@ internal class CreateProblemReferenceValidationServiceImpl(
                     status = CreateProblemReferenceTestStatus.Error,
                     output = null,
                     executionTimeMs = 0,
+                    memoryUsedKb = null,
                     message = "Sandbox returned no result for testCases[$humanIndex].",
                 )
 
@@ -183,6 +186,7 @@ internal class CreateProblemReferenceValidationServiceImpl(
                     status = CreateProblemReferenceTestStatus.Ok,
                     output = normalizeCreateProblemOutput(execution.output.orEmpty()),
                     executionTimeMs = execution.executionTimeMs,
+                    memoryUsedKb = execution.memoryUsedKb,
                     message = null,
                 )
 
@@ -191,6 +195,7 @@ internal class CreateProblemReferenceValidationServiceImpl(
                     status = CreateProblemReferenceTestStatus.Timeout,
                     output = null,
                     executionTimeMs = execution.executionTimeMs,
+                    memoryUsedKb = execution.memoryUsedKb,
                     message = execution.message?.ifBlank { null } ?: "Execution timed out.",
                 )
 
@@ -199,6 +204,7 @@ internal class CreateProblemReferenceValidationServiceImpl(
                     status = CreateProblemReferenceTestStatus.Error,
                     output = null,
                     executionTimeMs = execution.executionTimeMs,
+                    memoryUsedKb = execution.memoryUsedKb,
                     message = execution.message?.ifBlank { null } ?: "Execution failed.",
                 )
             }

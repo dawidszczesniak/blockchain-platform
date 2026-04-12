@@ -28,6 +28,7 @@ internal data class SandboxRunOutput(
     val imageHash: String?,
     val runHash: String,
     val resultHash: String?,
+    val suiteExecutionTimeMs: Int?,
     val attestationPayloadHash: String?,
     val attestationSignature: String?,
     val attestationScheme: String?,
@@ -42,6 +43,7 @@ internal data class SandboxRunTestOutput(
     val output: String?,
     val passed: Boolean?,
     val executionTimeMs: Int,
+    val memoryUsedKb: Int? = null,
     val message: String?,
 )
 
@@ -51,6 +53,7 @@ internal data class SandboxNodeRunOutput(
     val imageHash: String?,
     val runHash: String?,
     val resultHash: String?,
+    val suiteExecutionTimeMs: Int?,
     val attestationPayloadHash: String?,
     val attestationSignature: String?,
     val attestationScheme: String?,
@@ -62,11 +65,13 @@ internal data class SandboxNodeRunOutput(
 internal interface SandboxClient {
     fun runSolution(
         sourceCode: String,
+        language: String,
         tests: List<SandboxRunInput>,
     ): SandboxRunOutput
 
     fun runSolutionOnAllNodes(
         sourceCode: String,
+        language: String,
         tests: List<SandboxRunInput>,
     ): List<SandboxNodeRunOutput>
 }
@@ -82,6 +87,7 @@ internal class SandboxHttpClient(
 
     override fun runSolution(
         sourceCode: String,
+        language: String,
         tests: List<SandboxRunInput>,
     ): SandboxRunOutput {
         if (tests.isEmpty()) {
@@ -90,6 +96,7 @@ internal class SandboxHttpClient(
         val payload = json.encodeToString(
             SandboxRunRequest(
                 sourceCode = sourceCode,
+                language = language,
                 tests = tests.map { test ->
                     SandboxRunRequestTest(
                         id = test.id,
@@ -130,6 +137,7 @@ internal class SandboxHttpClient(
                     imageHash = response.imageHash,
                     runHash = response.runHash,
                     resultHash = response.resultHash,
+                    suiteExecutionTimeMs = response.suiteExecutionTimeMs,
                     attestationPayloadHash = response.attestationPayloadHash,
                     attestationSignature = response.attestationSignature,
                     attestationScheme = response.attestationScheme,
@@ -142,6 +150,7 @@ internal class SandboxHttpClient(
                             output = result.output,
                             passed = result.passed,
                             executionTimeMs = result.executionTimeMs,
+                            memoryUsedKb = result.memoryUsedKb,
                             message = result.message,
                         )
                     },
@@ -156,6 +165,7 @@ internal class SandboxHttpClient(
 
     override fun runSolutionOnAllNodes(
         sourceCode: String,
+        language: String,
         tests: List<SandboxRunInput>,
     ): List<SandboxNodeRunOutput> {
         if (tests.isEmpty()) {
@@ -164,6 +174,7 @@ internal class SandboxHttpClient(
         val payload = json.encodeToString(
             SandboxRunRequest(
                 sourceCode = sourceCode,
+                language = language,
                 tests = tests.map { test ->
                     SandboxRunRequestTest(
                         id = test.id,
@@ -193,6 +204,7 @@ internal class SandboxHttpClient(
                             imageHash = response.imageHash,
                             runHash = response.runHash,
                             resultHash = response.resultHash,
+                            suiteExecutionTimeMs = response.suiteExecutionTimeMs,
                             attestationPayloadHash = response.attestationPayloadHash,
                             attestationSignature = response.attestationSignature,
                             attestationScheme = response.attestationScheme,
@@ -207,6 +219,7 @@ internal class SandboxHttpClient(
                             imageHash = response.imageHash,
                             runHash = response.runHash,
                             resultHash = response.resultHash,
+                            suiteExecutionTimeMs = response.suiteExecutionTimeMs,
                             attestationPayloadHash = response.attestationPayloadHash,
                             attestationSignature = response.attestationSignature,
                             attestationScheme = response.attestationScheme,
@@ -219,6 +232,7 @@ internal class SandboxHttpClient(
                                     output = result.output,
                                     passed = result.passed,
                                     executionTimeMs = result.executionTimeMs,
+                                    memoryUsedKb = result.memoryUsedKb,
                                     message = result.message,
                                 )
                             },
@@ -233,6 +247,7 @@ internal class SandboxHttpClient(
                         imageHash = null,
                         runHash = null,
                         resultHash = null,
+                        suiteExecutionTimeMs = null,
                         attestationPayloadHash = null,
                         attestationSignature = null,
                         attestationScheme = null,
@@ -264,6 +279,7 @@ internal class SandboxHttpClient(
 @Serializable
 private data class SandboxRunRequest(
     val sourceCode: String,
+    val language: String,
     val tests: List<SandboxRunRequestTest>,
 )
 
@@ -285,6 +301,7 @@ private data class SandboxRunResponse(
     val imageHash: String? = null,
     val runHash: String,
     val resultHash: String? = null,
+    val suiteExecutionTimeMs: Int? = null,
     val attestationPayloadHash: String? = null,
     val attestationSignature: String? = null,
     val attestationScheme: String? = null,
@@ -300,5 +317,6 @@ private data class SandboxRunResponseTest(
     val output: String? = null,
     val passed: Boolean? = null,
     val executionTimeMs: Int = 0,
+    val memoryUsedKb: Int? = null,
     val message: String? = null,
 )

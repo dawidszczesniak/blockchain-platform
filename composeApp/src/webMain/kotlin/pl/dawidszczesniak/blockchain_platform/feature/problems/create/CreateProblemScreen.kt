@@ -63,7 +63,6 @@ import blockchain_platform.composeapp.generated.resources.create_problem_action_
 import blockchain_platform.composeapp.generated.resources.create_problem_action_creating
 import blockchain_platform.composeapp.generated.resources.create_problem_add_test
 import blockchain_platform.composeapp.generated.resources.create_problem_constraints_label
-import blockchain_platform.composeapp.generated.resources.create_problem_copy_error
 import blockchain_platform.composeapp.generated.resources.create_problem_date_picker_confirm
 import blockchain_platform.composeapp.generated.resources.create_problem_date_picker_dismiss
 import blockchain_platform.composeapp.generated.resources.create_problem_description_label
@@ -71,12 +70,13 @@ import blockchain_platform.composeapp.generated.resources.create_problem_entry_f
 import blockchain_platform.composeapp.generated.resources.create_problem_join_until_label
 import blockchain_platform.composeapp.generated.resources.create_problem_participants_label
 import blockchain_platform.composeapp.generated.resources.create_problem_profit_entry_fee
-import blockchain_platform.composeapp.generated.resources.create_problem_profit_net
+import blockchain_platform.composeapp.generated.resources.create_problem_profit_creator
 import blockchain_platform.composeapp.generated.resources.create_problem_profit_note
 import blockchain_platform.composeapp.generated.resources.create_problem_profit_participants
 import blockchain_platform.composeapp.generated.resources.create_problem_profit_platform_fee
 import blockchain_platform.composeapp.generated.resources.create_problem_profit_prize
 import blockchain_platform.composeapp.generated.resources.create_problem_profit_title
+import blockchain_platform.composeapp.generated.resources.create_problem_profit_winner
 import blockchain_platform.composeapp.generated.resources.create_problem_prize_label
 import blockchain_platform.composeapp.generated.resources.create_problem_reference_solution_label
 import blockchain_platform.composeapp.generated.resources.create_problem_run_all
@@ -110,7 +110,6 @@ import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Instant
 import org.jetbrains.compose.resources.stringResource
 import pl.dawidszczesniak.blockchain_platform.di.LocalKoin
-import pl.dawidszczesniak.blockchain_platform.platform.copyTextToClipboard
 
 private object IntelliJCodePalette {
     val Panel = Color(0xFF2B2D30)
@@ -596,9 +595,6 @@ private fun CreateProblemForm(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error,
             )
-            TextButton(onClick = { copyToClipboard(runErrorMessage) }) {
-                Text(stringResource(Res.string.create_problem_copy_error))
-            }
         }
         state.tests.forEachIndexed { index, test ->
             key(test.id) {
@@ -646,7 +642,7 @@ private fun CreateProblemForm(
 
         Button(
             onClick = onSubmit,
-            enabled = state.canSubmit,
+            enabled = state.canAttemptSubmit,
             contentPadding = PaddingValues(horizontal = 18.dp, vertical = 12.dp)
         ) {
             Text(
@@ -779,13 +775,6 @@ private fun utcMillisToLocalDate(millis: Long): LocalDate {
         .date
 }
 
-private fun copyToClipboard(value: String) {
-    runCatching<Unit> {
-        copyTextToClipboard(value)
-        Unit
-    }
-}
-
 @Composable
 private fun CodeEditorField(
     label: String,
@@ -893,9 +882,14 @@ private fun ProfitPanel(
     modifier: Modifier = Modifier,
     state: CreateProblemState,
 ) {
-    val netColor = when {
-        state.netRevenue > 0 -> IntelliJCodePalette.Success
-        state.netRevenue < 0 -> MaterialTheme.colorScheme.error
+    val creatorProfitColor = when {
+        state.creatorProfit > 0 -> IntelliJCodePalette.Success
+        state.creatorProfit < 0 -> MaterialTheme.colorScheme.error
+        else -> MaterialTheme.colorScheme.onSurface
+    }
+    val winnerProfitColor = when {
+        state.winnerProfit > 0 -> IntelliJCodePalette.Success
+        state.winnerProfit < 0 -> MaterialTheme.colorScheme.error
         else -> MaterialTheme.colorScheme.onSurface
     }
 
@@ -925,10 +919,16 @@ private fun ProfitPanel(
         )
         Spacer(Modifier.height(8.dp))
         ProfitRow(
-            label = stringResource(Res.string.create_problem_profit_net),
-            value = formatAmount(state.netRevenue),
+            label = stringResource(Res.string.create_problem_profit_creator),
+            value = formatAmount(state.creatorProfit),
             highlight = true,
-            valueColor = netColor
+            valueColor = creatorProfitColor
+        )
+        ProfitRow(
+            label = stringResource(Res.string.create_problem_profit_winner),
+            value = formatAmount(state.winnerProfit),
+            highlight = true,
+            valueColor = winnerProfitColor
         )
     }
 }
@@ -1049,13 +1049,14 @@ private fun TestCaseCard(
                 Spacer(Modifier.height(8.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
                         text = stringResource(Res.string.create_problem_test_hidden_label),
                         style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.weight(1f),
                     )
+                    Spacer(Modifier.width(10.dp))
                     Switch(
                         checked = test.isHidden,
                         onCheckedChange = onHiddenChange,
@@ -1076,6 +1077,14 @@ private fun TestCaseCard(
                             else -> MaterialTheme.colorScheme.onSurfaceVariant
                         },
                     )
+                    result.memoryUsedKb?.let { memoryUsedKb ->
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = "Memory: ${memoryUsedKb} KB",
+                            style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                     result.output?.let { output ->
                         if (output.isNotBlank()) {
                             Spacer(Modifier.height(4.dp))
@@ -1093,10 +1102,6 @@ private fun TestCaseCard(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.error,
                         )
-                        Spacer(Modifier.height(2.dp))
-                        TextButton(onClick = { copyToClipboard(message) }) {
-                            Text(stringResource(Res.string.create_problem_copy_error))
-                        }
                     }
                 }
             }

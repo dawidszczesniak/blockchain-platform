@@ -119,6 +119,7 @@ private fun Route.requiresAuthentication(): Boolean {
         Route.MyProblems,
         Route.MyParticipation,
         Route.Settings,
+        is Route.CreatedProblemDetails,
         -> true
 
         Route.Home,

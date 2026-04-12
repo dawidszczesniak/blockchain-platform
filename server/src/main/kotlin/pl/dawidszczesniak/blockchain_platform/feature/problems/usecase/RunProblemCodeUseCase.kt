@@ -3,10 +3,10 @@ package pl.dawidszczesniak.blockchain_platform.feature.problems.usecase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.RunProblemRequestDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.RunProblemResponseDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.RunProblemTestResultDto
+import pl.dawidszczesniak.blockchain_platform.feature.problems.judge.JudgeLanguages
 import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.ProblemExecutionTest
 import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.ProblemWriteRepository
 import pl.dawidszczesniak.blockchain_platform.feature.problems.sandbox.SandboxClient
-import pl.dawidszczesniak.blockchain_platform.feature.problems.sandbox.SandboxRunInput
 
 internal class RunProblemValidationException(
     message: String,
@@ -21,10 +21,10 @@ internal class RunProblemCodeUseCaseImpl(
     private val sandboxClient: SandboxClient,
 ) : RunProblemCodeUseCase {
     override fun invoke(userId: Long, problemId: Int, request: RunProblemRequestDto): RunProblemResponseDto {
-        val language = request.language.trim().lowercase()
-        if (language != SUPPORTED_LANGUAGE) {
-            throw RunProblemValidationException("Only Kotlin language is supported.")
-        }
+        val languageProfile = runCatching { JudgeLanguages.requireSupported(request.language) }
+            .getOrElse { error ->
+                throw RunProblemValidationException(error.message ?: "Unsupported language.")
+            }
         val sourceCode = request.sourceCode.trim()
         if (sourceCode.isBlank()) {
             throw RunProblemValidationException("Source code cannot be empty.")
@@ -46,21 +46,11 @@ internal class RunProblemCodeUseCaseImpl(
             )
         }
 
-        val sandboxInputs = context.tests.map { test ->
-            SandboxRunInput(
-                id = test.id,
-                order = test.order,
-                inputData = test.inputData,
-                expectedOutput = test.expectedOutput,
-                validatorCode = test.validatorCode,
-                validatorLanguage = test.validatorLanguage,
-                timeoutMs = test.timeoutMs,
-                memoryLimitMb = test.memoryLimitMb,
-            )
-        }
+        val sandboxInputs = context.tests.map(languageProfile::applyTo)
         val sandboxResult = runCatching {
             sandboxClient.runSolution(
                 sourceCode = sourceCode,
+                language = languageProfile.id,
                 tests = sandboxInputs,
             )
         }.getOrElse { error ->
@@ -95,6 +85,7 @@ internal class RunProblemCodeUseCaseImpl(
                         status = if (passed) RunStatus.Passed else RunStatus.Failed,
                         passed = passed,
                         executionTimeMs = execution.executionTimeMs,
+                        memoryUsedKb = execution.memoryUsedKb,
                         actualOutput = execution.output,
                         message = if (passed) null else failureMessage,
                     )
@@ -105,6 +96,7 @@ internal class RunProblemCodeUseCaseImpl(
                         status = RunStatus.Timeout,
                         passed = false,
                         executionTimeMs = execution.executionTimeMs,
+                        memoryUsedKb = execution.memoryUsedKb,
                         actualOutput = null,
                         message = execution.message ?: "Execution timed out.",
                     )
@@ -115,6 +107,7 @@ internal class RunProblemCodeUseCaseImpl(
                         status = RunStatus.Error,
                         passed = false,
                         executionTimeMs = execution.executionTimeMs,
+                        memoryUsedKb = execution.memoryUsedKb,
                         actualOutput = null,
                         message = execution.message ?: "Sandbox execution error.",
                     )
@@ -127,6 +120,8 @@ internal class RunProblemCodeUseCaseImpl(
             total = testResults.size,
             passed = passedCount,
             allPassed = passedCount == testResults.size,
+            runtimeMs = sandboxResult.suiteExecutionTimeMs ?: (testResults.maxOfOrNull { it.executionTimeMs } ?: 0),
+            memoryUsedKb = sandboxResult.results.mapNotNull { it.memoryUsedKb }.maxOrNull(),
             results = testResults,
             sandboxNodeId = sandboxResult.nodeId,
             sandboxImageHash = sandboxResult.imageHash,
@@ -147,6 +142,7 @@ private fun ProblemExecutionTest.toMissingSandboxResult(): RunProblemTestResultD
         status = RunStatus.Error,
         passed = false,
         executionTimeMs = 0,
+        memoryUsedKb = null,
         actualOutput = null,
         message = "Sandbox returned no result for this test.",
     )
@@ -156,6 +152,7 @@ private fun ProblemExecutionTest.toDto(
     status: RunStatus,
     passed: Boolean,
     executionTimeMs: Int,
+    memoryUsedKb: Int?,
     actualOutput: String?,
     message: String?,
 ): RunProblemTestResultDto {
@@ -170,6 +167,7 @@ private fun ProblemExecutionTest.toDto(
         passed = passed,
         hidden = isHidden,
         executionTimeMs = executionTimeMs,
+        memoryUsedKb = memoryUsedKb,
         input = if (isHidden) null else inputData,
         expectedOutput = if (isHidden) null else expectedOutputForDisplay,
         actualOutput = if (isHidden) null else actualOutput,
@@ -181,6 +179,5 @@ private fun normalizeOutput(raw: String): String {
     return raw.replace("\r\n", "\n").trimEnd()
 }
 
-private const val SUPPORTED_LANGUAGE = "kotlin"
 private const val MAX_SOURCE_CODE_CHARS = 120_000
 private const val HIDDEN_TEST_FAILED_MESSAGE = "Hidden test failed."

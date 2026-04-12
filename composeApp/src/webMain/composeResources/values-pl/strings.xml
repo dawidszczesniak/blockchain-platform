@@ -15,9 +15,9 @@
     <string name="login">Zaloguj się</string>
 
     <string name="create_problem_title">Utwórz problem</string>
-    <string name="create_problem_prize_label">Nagroda (np. wei / USDC)</string>
+    <string name="create_problem_prize_label">Nagroda dla zwycięzcy (USDC)</string>
     <string name="create_problem_participants_label">Liczba uczestników</string>
-    <string name="create_problem_entry_fee_label">Wejściówka (np. wei / USDC)</string>
+    <string name="create_problem_entry_fee_label">Koszt wzięcia udziału w konkursie (USDC)</string>
     <string name="create_problem_title_label">Tytuł problemu (opcjonalnie)</string>
     <string name="create_problem_description_label">Opis problemu</string>
     <string name="create_problem_constraints_label">Constraints (opcjonalnie)</string>
@@ -44,12 +44,13 @@
     <string name="create_problem_run_running">Uruchamianie...</string>
     <string name="create_problem_run_status">Status: %1$s (%2$d ms)</string>
     <string name="create_problem_run_output">Output: %1$s</string>
-    <string name="create_problem_copy_error">Kopiuj błąd</string>
     <string name="create_problem_profit_title">Szacowany zysk</string>
     <string name="create_problem_profit_note">Wyliczane z nagrody, wejściówki, liczby uczestników i opłaty platformy 2%. Gas dla wpłat/wypłat nie jest pokrywany przez platformę.</string>
+    <string name="create_problem_profit_creator">Zysk twórcy problemu</string>
+    <string name="create_problem_profit_winner">Zysk zwycięzcy</string>
     <string name="create_problem_profit_gross">Suma wejściówek</string>
-    <string name="create_problem_profit_prize">Nagroda</string>
-    <string name="create_problem_profit_entry_fee">Wejściówka</string>
+    <string name="create_problem_profit_prize">Nagroda dla zwycięzcy</string>
+    <string name="create_problem_profit_entry_fee">Koszt wzięcia udziału w konkursie</string>
     <string name="create_problem_profit_participants">Uczestnicy</string>
     <string name="create_problem_profit_platform_fee">Opłata platformy (2%)</string>
     <string name="create_problem_profit_net">Zysk</string>
@@ -204,7 +205,7 @@
     <string name="problem_details_requirement_join">Rejestracja do: %1$s</string>
     <string name="problem_details_requirement_submit">Zgłoszenia do: %1$s</string>
     <string name="problem_details_editor_title">Edytor kodu</string>
-    <string name="problem_details_editor_language">Język: Kotlin</string>
+    <string name="problem_details_editor_language">Język</string>
     <string name="problem_details_editor_run">RUN</string>
     <string name="problem_details_editor_submit">Submit</string>
     <string name="problem_details_editor_locked_loading">Sprawdzanie statusu uczestnictwa...</string>

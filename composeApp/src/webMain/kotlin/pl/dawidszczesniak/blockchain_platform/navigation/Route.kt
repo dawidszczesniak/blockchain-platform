@@ -1,5 +1,6 @@
 package pl.dawidszczesniak.blockchain_platform.navigation
 
+import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.CreatedProblem
 import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.ProblemSummary
 
 sealed interface Route {
@@ -11,4 +12,5 @@ sealed interface Route {
     data object MyParticipation : Route
     data object Settings : Route
     data class ProblemDetails(val problem: ProblemSummary) : Route
+    data class CreatedProblemDetails(val problem: ProblemSummary, val createdProblem: CreatedProblem) : Route
 }

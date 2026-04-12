@@ -29,6 +29,8 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.JoinProbl
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.JoinProblemUseCaseImpl
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.RunProblemCodeUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.RunProblemCodeUseCaseImpl
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetSubmissionJudgeJobUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetSubmissionJudgeJobUseCaseImpl
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.SubmitProblemCodeUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.SubmitProblemCodeUseCaseImpl
 import pl.dawidszczesniak.blockchain_platform.app.AppViewModel
@@ -96,6 +98,7 @@ fun appModules() = module {
     factory<JoinProblemUseCase> { JoinProblemUseCaseImpl(get()) }
     factory<RunProblemCodeUseCase> { RunProblemCodeUseCaseImpl(get()) }
     factory<SubmitProblemCodeUseCase> { SubmitProblemCodeUseCaseImpl(get()) }
+    factory<GetSubmissionJudgeJobUseCase> { GetSubmissionJudgeJobUseCaseImpl(get()) }
     factory<CreateProblemUseCase> { CreateProblemUseCaseImpl(get()) }
     factory<ValidateCreateProblemUseCase> { ValidateCreateProblemUseCaseImpl(get()) }
     factory<GetDashboardMetricsHistoryUseCase> { GetDashboardMetricsHistoryUseCaseImpl(get()) }
@@ -108,7 +111,7 @@ fun appModules() = module {
     factory { BackendHealthViewModel(get()) }
     factory { BackendMaintenanceViewModel() }
     factory { CreateProblemViewModel(get(), get()) }
-    factory { ProblemDetailsViewModel(get(), get(), get(), get(), get()) }
+    factory { ProblemDetailsViewModel(get(), get(), get(), get(), get(), get()) }
     factory { ProblemsListViewModel(get()) }
     factory { MyProblemsViewModel(get()) }
     factory { MyParticipationViewModel(get(), get()) }

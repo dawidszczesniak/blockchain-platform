@@ -75,6 +75,7 @@ internal object ProblemSubmissionsTable : Table("problem_submissions") {
     val consensusNodes = integer("consensus_nodes")
     val commitmentHash = varchar("commitment_hash", length = 66)
     val runtimeMs = integer("runtime_ms")
+    val memoryUsedKb = integer("memory_used_kb").nullable()
     val anchorStatus = varchar("anchor_status", length = 16)
     val anchorBatchId = long("anchor_batch_id").nullable()
     val anchorMerkleRoot = varchar("anchor_merkle_root", length = 66).nullable()
@@ -97,6 +98,24 @@ internal object ProblemSubmissionTestResultsTable : Table("problem_submission_te
     val createdAt = datetime("created_at")
 
     override val primaryKey = PrimaryKey(submissionId, problemTestId)
+}
+
+internal object ProblemSubmissionJudgeJobsTable : Table("problem_submission_judge_jobs") {
+    val jobId = long("job_id").autoIncrement()
+    val problemId = long("problem_id")
+    val userId = long("user_id")
+    val sourceCode = text("source_code")
+    val language = varchar("language", length = 32)
+    val status = varchar("status", length = 16)
+    val statusMessage = text("status_message").nullable()
+    val resultPayloadJson = text("result_payload_json").nullable()
+    val previewPayloadJson = text("preview_payload_json").nullable()
+    val submissionId = long("submission_id").nullable()
+    val requestedAt = datetime("requested_at")
+    val startedAt = datetime("started_at").nullable()
+    val completedAt = datetime("completed_at").nullable()
+
+    override val primaryKey = PrimaryKey(jobId)
 }
 
 internal object ProblemSubmissionAttestationsTable : Table("problem_submission_attestations") {

@@ -23,7 +23,7 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ValidateCreat
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.CreateProblemValidationException
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.JoinProblemValidationException
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.RunProblemValidationException
-import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.SubmitProblemValidationException
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.SubmissionJudgeJobValidationException
 
 internal fun Route.problemRoutes() {
     val controller by inject<ProblemController>()
@@ -213,7 +213,7 @@ internal fun Route.problemRoutes() {
             call.requireTrustedOrigin(authConfig)
             val session = call.requireAuthSession(authConfig, sessionStore)
             val problemId = call.parameters["problemId"]?.toIntOrNull()
-                ?: throw SubmitProblemValidationException("Invalid problem identifier.")
+                ?: throw SubmissionJudgeJobValidationException("Invalid problem identifier.")
             val request = call.receive<RunProblemRequestDto>()
             val result = withContext(Dispatchers.IO) {
                 controller.submitProblemCode(
@@ -222,11 +222,46 @@ internal fun Route.problemRoutes() {
                     request = request,
                 )
             }
-            call.respond(HttpStatusCode.OK, result)
-        } catch (error: SubmitProblemValidationException) {
+            call.respond(HttpStatusCode.Accepted, result)
+        } catch (error: SubmissionJudgeJobValidationException) {
             call.respond(
                 HttpStatusCode.BadRequest,
                 mapOf("message" to (error.message ?: "Cannot submit this solution.")),
+            )
+        } catch (error: AuthRequiredException) {
+            call.respond(
+                HttpStatusCode.Unauthorized,
+                mapOf("message" to (error.message ?: "Login required.")),
+            )
+        } catch (error: AuthCsrfException) {
+            call.respond(
+                HttpStatusCode.Forbidden,
+                mapOf("message" to (error.message ?: "Request origin is not allowed.")),
+            )
+        } catch (error: AuthServiceUnavailableException) {
+            call.respond(
+                HttpStatusCode.ServiceUnavailable,
+                mapOf("message" to (error.message ?: "Authentication service is unavailable.")),
+            )
+        }
+    }
+    get("/problems/submission-jobs/{jobId}") {
+        try {
+            call.requireTrustedOrigin(authConfig)
+            val session = call.requireAuthSession(authConfig, sessionStore)
+            val jobId = call.parameters["jobId"]?.toLongOrNull()
+                ?: throw SubmissionJudgeJobValidationException("Invalid submission judge job identifier.")
+            val result = withContext(Dispatchers.IO) {
+                controller.getSubmissionJudgeJob(
+                    userId = session.userId,
+                    jobId = jobId,
+                )
+            }
+            call.respond(HttpStatusCode.OK, result)
+        } catch (error: SubmissionJudgeJobValidationException) {
+            call.respond(
+                HttpStatusCode.BadRequest,
+                mapOf("message" to (error.message ?: "Cannot load this submission judge job.")),
             )
         } catch (error: AuthRequiredException) {
             call.respond(

@@ -67,8 +67,11 @@ Database schema (3NF):
 - `users`: unique user identities (`registered_at`, `last_login_at`).
 - `problem_participants`: mapping of participants (users) assigned/registered to a specific problem.
 - `problem_tests`: ordered tests per problem (`input_data`, `expected_output`, `validator_code`, visibility flag, runtime limits).
-- `problem_submissions`: submission attempts history (multiple tries per user/problem).
-- `problem_submission_test_results`: verdict per test for each submission (`passed|failed|error|timeout` with runtime metrics).
+- `problem_submissions`: accepted submission history (multiple tries per user/problem).
+- `problem_submission_test_results`: verdict per test for each accepted submission (`passed|failed|error|timeout` with runtime and memory metrics).
+- `problem_submission_judge_jobs`: async judge queue/job state for submits (`queued|running|accepted|rejected|error`) including final payload or rejected preview.
+- `problem_submissions.runtime_ms`: official submission runtime for the whole judge session; tests still run in isolation, but the stored runtime is measured across the full suite execution.
+- `problem_submissions.memory_used_kb`: official submission memory usage (`max` across isolated tests from the consensus node result).
 - `problem_winners`: winner history per problem and winner user (`winner_user_id`, `payout_amount`, `won_at`).
 - `dashboard_daily_metrics`: daily snapshot history (`metric_date`, `active_challenges`, `prize_pool_amount`, `submissions_count`).
 
@@ -151,7 +154,16 @@ Submission anchoring environment variables (backend):
 Submission endpoints:
 
 - `POST /problems/{problemId}/run` - single-node run with failover (preview)
-- `POST /problems/{problemId}/submit` - 3-node attested consensus + DB persistence + direct per-submission anchoring flow
+- `POST /problems/{problemId}/submit` - enqueue async judge job; accepted submissions are persisted only after the worker confirms all tests passed
+- `GET /problems/submission-jobs/{jobId}` - poll async submit status/result
+
+Judge execution model:
+
+- tests run in isolation for correctness and sandbox safety
+- official submission `runtime_ms` is measured across the whole judge suite execution
+- official submission `memory_used_kb` is measured as the highest per-test memory usage
+- solver languages currently supported: `kotlin`, `java`
+- language-specific execution profiles are applied before sending tests to sandbox, so timeout/memory policy can differ per language
 
 Create problem validation contract (production flow):
 

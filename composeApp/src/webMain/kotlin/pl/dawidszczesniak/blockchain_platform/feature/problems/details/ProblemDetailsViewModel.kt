@@ -6,6 +6,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -20,6 +21,7 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.RunProblemRes
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.SubmitProblemResponseDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.participation.ParticipationSyncStore
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetParticipationProblemsUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetSubmissionJudgeJobUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.JoinProblemUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.RunProblemCodeUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.SubmitProblemCodeUseCase
@@ -34,6 +36,7 @@ data class ProblemDetailsGateState(
     val runErrorMessage: String? = null,
     val runResult: RunProblemResponseDto? = null,
     val isSubmitting: Boolean = false,
+    val submitStatusMessage: String? = null,
     val submitErrorMessage: String? = null,
     val submitResult: SubmitProblemResponseDto? = null,
 )
@@ -43,6 +46,7 @@ class ProblemDetailsViewModel(
     private val joinProblemUseCase: JoinProblemUseCase,
     private val runProblemCodeUseCase: RunProblemCodeUseCase,
     private val submitProblemCodeUseCase: SubmitProblemCodeUseCase,
+    private val getSubmissionJudgeJobUseCase: GetSubmissionJudgeJobUseCase,
     private val participationSyncStore: ParticipationSyncStore,
 ) {
     private var scope = newScope()
@@ -79,6 +83,7 @@ class ProblemDetailsViewModel(
                 runErrorMessage = null,
                 runResult = if (isNewProblem) null else current.runResult,
                 isSubmitting = false,
+                submitStatusMessage = null,
                 submitErrorMessage = null,
                 submitResult = if (isNewProblem) null else current.submitResult,
             )
@@ -188,7 +193,7 @@ class ProblemDetailsViewModel(
         }
     }
 
-    fun run(problemId: Int, sourceCode: String) {
+    fun run(problemId: Int, sourceCode: String, language: String) {
         if (_state.value.isRunning) {
             return
         }
@@ -206,12 +211,13 @@ class ProblemDetailsViewModel(
             current.copy(
                 isRunning = true,
                 runErrorMessage = null,
+                submitStatusMessage = null,
                 submitErrorMessage = null,
                 submitResult = null,
             )
         }
         activeScope().launch {
-            runCatching { runProblemCodeUseCase(problemId, sourceCode) }
+            runCatching { runProblemCodeUseCase(problemId, sourceCode, language) }
                 .onSuccess { runResult ->
                     _state.update { current ->
                         current.copy(
@@ -236,7 +242,7 @@ class ProblemDetailsViewModel(
         }
     }
 
-    fun submit(problemId: Int, sourceCode: String) {
+    fun submit(problemId: Int, sourceCode: String, language: String) {
         if (_state.value.isSubmitting) {
             return
         }
@@ -253,22 +259,25 @@ class ProblemDetailsViewModel(
         _state.update { current ->
             current.copy(
                 isSubmitting = true,
+                submitStatusMessage = null,
                 submitErrorMessage = null,
                 runErrorMessage = null,
                 runResult = null,
+                submitResult = null,
             )
         }
         activeScope().launch {
-            runCatching { submitProblemCodeUseCase(problemId, sourceCode) }
-                .onSuccess { submitResult ->
-                    participationSyncStore.notifyChanged()
+            runCatching { submitProblemCodeUseCase(problemId, sourceCode, language) }
+                .onSuccess { job ->
                     _state.update { current ->
                         current.copy(
-                            isSubmitting = false,
+                            isSubmitting = true,
+                            submitStatusMessage = humanizeSubmissionJobStatus(job.status, job.queuePosition),
                             submitErrorMessage = null,
-                            submitResult = submitResult,
+                            submitResult = null,
                         )
                     }
+                    pollSubmissionJudgeJob(job.jobId)
                 }
                 .onFailure { error ->
                     if (error is CancellationException) {
@@ -277,6 +286,7 @@ class ProblemDetailsViewModel(
                     _state.update { current ->
                         current.copy(
                             isSubmitting = false,
+                            submitStatusMessage = null,
                             submitErrorMessage = extractReadableErrorMessage(error),
                             submitResult = null,
                         )
@@ -294,6 +304,88 @@ class ProblemDetailsViewModel(
             scope = newScope()
         }
         return scope
+    }
+
+    private suspend fun pollSubmissionJudgeJob(jobId: Long) {
+        while (activeScope().isActive) {
+            val job = runCatching { getSubmissionJudgeJobUseCase(jobId) }
+                .getOrElse { error ->
+                    _state.update { current ->
+                        current.copy(
+                            isSubmitting = false,
+                            submitStatusMessage = null,
+                            submitErrorMessage = extractReadableErrorMessage(error),
+                            submitResult = null,
+                        )
+                    }
+                    return
+                }
+            when (job.status.trim().lowercase()) {
+                "queued" -> {
+                    _state.update { current ->
+                        current.copy(
+                            isSubmitting = true,
+                            submitStatusMessage = humanizeSubmissionJobStatus(job.status, job.queuePosition),
+                            submitErrorMessage = null,
+                        )
+                    }
+                    delay(SUBMISSION_JOB_POLL_INTERVAL_MS)
+                }
+
+                "running" -> {
+                    _state.update { current ->
+                        current.copy(
+                            isSubmitting = true,
+                            submitStatusMessage = humanizeSubmissionJobStatus(job.status, job.queuePosition),
+                            submitErrorMessage = null,
+                        )
+                    }
+                    delay(SUBMISSION_JOB_POLL_INTERVAL_MS)
+                }
+
+                "accepted" -> {
+                    val result = job.submissionResult
+                        ?: throw IllegalStateException("Judge finished without submission result.")
+                    participationSyncStore.notifyChanged()
+                    _state.update { current ->
+                        current.copy(
+                            isSubmitting = false,
+                            submitStatusMessage = null,
+                            submitErrorMessage = null,
+                            submitResult = result,
+                        )
+                    }
+                    return
+                }
+
+                "rejected" -> {
+                    _state.update { current ->
+                        current.copy(
+                            isSubmitting = false,
+                            submitStatusMessage = null,
+                            submitErrorMessage = humanizeSubmitValidationMessage(
+                                job.message ?: "Nie wysłano rozwiązania.",
+                            ),
+                            runResult = job.runPreview,
+                            submitResult = null,
+                        )
+                    }
+                    return
+                }
+
+                else -> {
+                    _state.update { current ->
+                        current.copy(
+                            isSubmitting = false,
+                            submitStatusMessage = null,
+                            submitErrorMessage = job.message ?: "Judge zakończył się błędem.",
+                            submitResult = null,
+                        )
+                    }
+                    return
+                }
+            }
+        }
     }
 }
 
@@ -332,5 +424,22 @@ private fun humanizeSubmitValidationMessage(raw: String): String {
     return raw
 }
 
+private fun humanizeSubmissionJobStatus(status: String, queuePosition: Int?): String {
+    return when (status.trim().lowercase()) {
+        "queued" -> {
+            if (queuePosition != null && queuePosition > 0) {
+                "Rozwiązanie czeka w kolejce judge. Pozycja: $queuePosition."
+            } else {
+                "Rozwiązanie czeka w kolejce judge."
+            }
+        }
+
+        "running" -> "Judge sprawdza teraz Twoje rozwiązanie."
+        else -> status
+    }
+}
+
 private val SUBMIT_BLOCKED_PATTERN =
     Regex("""Submission blocked: (\d+)/(\d+) tests did not pass\. Solution was not submitted\.""")
+
+private const val SUBMISSION_JOB_POLL_INTERVAL_MS = 1_000L

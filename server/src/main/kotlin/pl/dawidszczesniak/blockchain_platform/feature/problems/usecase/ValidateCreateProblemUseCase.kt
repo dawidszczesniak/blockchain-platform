@@ -24,6 +24,7 @@ internal class ValidateCreateProblemUseCaseImpl(
                 status = test.status.toApiStatus(),
                 output = test.output,
                 executionTimeMs = test.executionTimeMs,
+                memoryUsedKb = test.memoryUsedKb,
                 message = test.message,
             )
         }

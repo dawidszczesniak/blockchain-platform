@@ -32,6 +32,7 @@ import pl.dawidszczesniak.blockchain_platform.feature.auth.service.Eip1271Signat
 import pl.dawidszczesniak.blockchain_platform.feature.dashboard.endpoint.dashboardRoutes
 import pl.dawidszczesniak.blockchain_platform.feature.platform.endpoint.platformRoutes
 import pl.dawidszczesniak.blockchain_platform.feature.problems.anchor.BlockchainAnchorClient
+import pl.dawidszczesniak.blockchain_platform.feature.problems.judge.SubmissionJudgeWorker
 import pl.dawidszczesniak.blockchain_platform.feature.problems.endpoint.problemRoutes
 
 fun main() {
@@ -55,7 +56,10 @@ fun Application.module() {
     val redisClient = get<JedisPooled>()
     val eip1271Verifier = get<Eip1271SignatureVerifier>()
     val blockchainAnchorClient = get<BlockchainAnchorClient>()
+    val submissionJudgeWorker = get<SubmissionJudgeWorker>()
+    submissionJudgeWorker.start()
     monitor.subscribe(ApplicationStopped) {
+        submissionJudgeWorker.close()
         redisClient.close()
         eip1271Verifier.close()
         blockchainAnchorClient.close()

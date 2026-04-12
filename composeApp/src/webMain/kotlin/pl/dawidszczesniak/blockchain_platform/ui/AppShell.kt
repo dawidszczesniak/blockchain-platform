@@ -26,6 +26,7 @@ import pl.dawidszczesniak.blockchain_platform.feature.login.LoginScreen
 import pl.dawidszczesniak.blockchain_platform.feature.maintenance.BackendHealthViewModel
 import pl.dawidszczesniak.blockchain_platform.feature.maintenance.BackendMaintenanceScreen
 import pl.dawidszczesniak.blockchain_platform.feature.problems.participation.MyParticipationScreen
+import pl.dawidszczesniak.blockchain_platform.feature.problems.created.CreatedProblemDetailsScreen
 import pl.dawidszczesniak.blockchain_platform.feature.problems.created.MyProblemsScreen
 import pl.dawidszczesniak.blockchain_platform.feature.problems.details.ProblemDetailsScreen
 import pl.dawidszczesniak.blockchain_platform.feature.problems.details.ProblemDetailsViewModel
@@ -110,15 +111,27 @@ fun AppShell(
                                 onBackToProblems = { onNavigate(Route.Problems) },
                             )
                         }
+                        is Route.CreatedProblemDetails -> {
+                            CreatedProblemDetailsScreen(
+                                problem = route.problem,
+                                createdProblem = route.createdProblem,
+                                onBackToMyProblems = { onNavigate(Route.MyProblems) },
+                            )
+                        }
                         Route.CreateProblem -> CreateProblemScreen()
                     Route.MyProblems -> MyProblemsScreen(
                         onCreateProblem = { onNavigate(Route.CreateProblem) },
-                        onOpenProblem = { problemId, onComplete ->
+                        onOpenProblem = { createdProblem, onComplete ->
                             scope.launch {
-                                runCatching { problemRepository.fetchProblemById(problemId) }
+                                runCatching { problemRepository.fetchProblemById(createdProblem.id) }
                                     .onSuccess { problemSummary ->
                                         onComplete(true)
-                                        onNavigate(Route.ProblemDetails(problemSummary))
+                                        onNavigate(
+                                            Route.CreatedProblemDetails(
+                                                problem = problemSummary,
+                                                createdProblem = createdProblem,
+                                            )
+                                        )
                                     }
                                     .onFailure {
                                         onComplete(false)

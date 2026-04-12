@@ -5,7 +5,7 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ValidateCreat
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ValidateCreateProblemResponseDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.JoinProblemResponseDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.RunProblemResponseDto
-import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.SubmitProblemResponseDto
+import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.SubmissionJudgeJobDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.CreatedProblem
 import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.ParticipationProblem
 import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.ProblemSummary
@@ -18,6 +18,7 @@ interface ProblemRepository {
     suspend fun createProblem(request: CreateProblemRequestDto): Int
     suspend fun validateCreateProblem(request: ValidateCreateProblemRequestDto): ValidateCreateProblemResponseDto
     suspend fun joinProblem(problemId: Int): JoinProblemResponseDto
-    suspend fun runProblemCode(problemId: Int, sourceCode: String): RunProblemResponseDto
-    suspend fun submitProblemCode(problemId: Int, sourceCode: String): SubmitProblemResponseDto
+    suspend fun runProblemCode(problemId: Int, sourceCode: String, language: String): RunProblemResponseDto
+    suspend fun submitProblemCode(problemId: Int, sourceCode: String, language: String): SubmissionJudgeJobDto
+    suspend fun fetchSubmissionJudgeJob(jobId: Long): SubmissionJudgeJobDto
 }

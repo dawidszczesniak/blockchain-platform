@@ -47,6 +47,12 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.anchor.Blockchain
 import pl.dawidszczesniak.blockchain_platform.feature.problems.anchor.EthereumBlockchainAnchorClient
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dao.ProblemDao
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dao.ProblemDaoImpl
+import pl.dawidszczesniak.blockchain_platform.feature.problems.judge.RedisSubmissionJudgeQueue
+import pl.dawidszczesniak.blockchain_platform.feature.problems.judge.SubmissionJudgeJobMapper
+import pl.dawidszczesniak.blockchain_platform.feature.problems.judge.SubmissionJudgeJobRepository
+import pl.dawidszczesniak.blockchain_platform.feature.problems.judge.SubmissionJudgeJobRepositoryImpl
+import pl.dawidszczesniak.blockchain_platform.feature.problems.judge.SubmissionJudgeQueue
+import pl.dawidszczesniak.blockchain_platform.feature.problems.judge.SubmissionJudgeWorker
 import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.ProblemReadRepository
 import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.ProblemReadRepositoryImpl
 import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.ProblemWriteRepository
@@ -55,6 +61,10 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.sandbox.SandboxCo
 import pl.dawidszczesniak.blockchain_platform.feature.problems.sandbox.SandboxHttpClient
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.CreateProblemUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.CreateProblemUseCaseImpl
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.EnqueueProblemSubmissionUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.EnqueueProblemSubmissionUseCaseImpl
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetSubmissionJudgeJobUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetSubmissionJudgeJobUseCaseImpl
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetCreatedProblemsUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetCreatedProblemsUseCaseImpl
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetParticipationProblemsUseCase
@@ -65,6 +75,7 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.JoinProbl
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.JoinProblemUseCaseImpl
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.RunProblemCodeUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.RunProblemCodeUseCaseImpl
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.SubmissionJudgeService
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.SubmitProblemCodeUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.SubmitProblemCodeUseCaseImpl
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.ValidateCreateProblemUseCase
@@ -107,6 +118,9 @@ internal fun serverModules() = module {
     single { SandboxConfig.fromEnvironment() }
     single { AnchorConfig.fromEnvironment() }
     single<SandboxClient> { SandboxHttpClient(get()) }
+    single<SubmissionJudgeJobRepository> { SubmissionJudgeJobRepositoryImpl(get()) }
+    single<SubmissionJudgeQueue> { RedisSubmissionJudgeQueue(get()) }
+    single { SubmissionJudgeJobMapper() }
     single<CreateProblemReferenceValidationService> { CreateProblemReferenceValidationServiceImpl(get()) }
     single<BlockchainAnchorClient> { EthereumBlockchainAnchorClient(get(), get()) }
     factory<CreateProblemUseCase> { CreateProblemUseCaseImpl(get(), get(), get(), get()) }
@@ -116,8 +130,13 @@ internal fun serverModules() = module {
     factory<GetParticipationProblemsUseCase> { GetParticipationProblemsUseCaseImpl(get()) }
     factory<JoinProblemUseCase> { JoinProblemUseCaseImpl(get()) }
     factory<RunProblemCodeUseCase> { RunProblemCodeUseCaseImpl(get(), get()) }
-    factory<SubmitProblemCodeUseCase> { SubmitProblemCodeUseCaseImpl(get(), get(), get(), get(), get()) }
-    factory { ProblemController(get(), get(), get(), get(), get(), get(), get(), get()) }
+    single { SubmitProblemCodeUseCaseImpl(get(), get(), get(), get(), get()) }
+    single<SubmitProblemCodeUseCase> { get<SubmitProblemCodeUseCaseImpl>() }
+    single<SubmissionJudgeService> { get<SubmitProblemCodeUseCaseImpl>() }
+    single<EnqueueProblemSubmissionUseCase> { EnqueueProblemSubmissionUseCaseImpl(get(), get(), get()) }
+    single<GetSubmissionJudgeJobUseCase> { GetSubmissionJudgeJobUseCaseImpl(get(), get(), get()) }
+    single { SubmissionJudgeWorker(get(), get(), get()) }
+    factory { ProblemController(get(), get(), get(), get(), get(), get(), get(), get(), get()) }
 
     single<DashboardDao> { DashboardDaoImpl(get()) }
     single<DashboardReadRepository> { DashboardReadRepositoryImpl(get(), get()) }

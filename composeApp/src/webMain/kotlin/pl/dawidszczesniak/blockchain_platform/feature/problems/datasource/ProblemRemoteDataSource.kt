@@ -9,6 +9,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import pl.dawidszczesniak.blockchain_platform.network.HttpTextClient
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.CreateProblemRequestDto
@@ -21,6 +22,7 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ProblemSummar
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.RunProblemRequestDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.RunProblemResponseDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.RunProblemTestResultDto
+import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.SubmissionJudgeJobDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.SubmitProblemResponseDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ValidateCreateProblemRequestDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ValidateCreateProblemResponseDto
@@ -34,7 +36,8 @@ interface ProblemRemoteDataSource {
     suspend fun validateCreateProblem(request: ValidateCreateProblemRequestDto): ValidateCreateProblemResponseDto
     suspend fun joinProblem(problemId: Int): JoinProblemResponseDto
     suspend fun runProblemCode(problemId: Int, request: RunProblemRequestDto): RunProblemResponseDto
-    suspend fun submitProblemCode(problemId: Int, request: RunProblemRequestDto): SubmitProblemResponseDto
+    suspend fun submitProblemCode(problemId: Int, request: RunProblemRequestDto): SubmissionJudgeJobDto
+    suspend fun fetchSubmissionJudgeJob(jobId: Long): SubmissionJudgeJobDto
 }
 
 class ProblemRemoteDataSourceImpl(
@@ -133,6 +136,7 @@ class ProblemRemoteDataSourceImpl(
                 status = resultObj.requiredString("status"),
                 output = resultObj.optionalString("output"),
                 executionTimeMs = resultObj.requiredInt("executionTimeMs"),
+                memoryUsedKb = resultObj.optionalInt("memoryUsedKb"),
                 message = resultObj.optionalString("message"),
             )
         }
@@ -180,6 +184,7 @@ class ProblemRemoteDataSourceImpl(
                 passed = resultObj.requiredBoolean("passed"),
                 hidden = resultObj.requiredBoolean("hidden"),
                 executionTimeMs = resultObj.requiredInt("executionTimeMs"),
+                memoryUsedKb = resultObj.optionalInt("memoryUsedKb"),
                 input = resultObj.optionalString("input"),
                 expectedOutput = resultObj.optionalString("expectedOutput"),
                 actualOutput = resultObj.optionalString("actualOutput"),
@@ -190,6 +195,8 @@ class ProblemRemoteDataSourceImpl(
             total = obj.requiredInt("total"),
             passed = obj.requiredInt("passed"),
             allPassed = obj.requiredBoolean("allPassed"),
+            runtimeMs = obj.optionalInt("runtimeMs") ?: 0,
+            memoryUsedKb = obj.optionalInt("memoryUsedKb"),
             results = results,
             sandboxNodeId = obj.optionalString("sandboxNodeId"),
             sandboxImageHash = obj.optionalString("sandboxImageHash"),
@@ -200,50 +207,22 @@ class ProblemRemoteDataSourceImpl(
     override suspend fun submitProblemCode(
         problemId: Int,
         request: RunProblemRequestDto,
-    ): SubmitProblemResponseDto {
+    ): SubmissionJudgeJobDto {
         val json = Json { ignoreUnknownKeys = true }
         val body = json.encodeToString(RunProblemRequestDto.serializer(), request)
         val payload = httpTextClient.postJson(
             endpoint(apiBaseUrl, "/problems/$problemId/submit"),
             body,
         )
-        val obj = json.parseToJsonElement(payload).jsonObject
-        val results = obj.optionalArray("results").map { item ->
-            val resultObj = item.jsonObject
-            RunProblemTestResultDto(
-                index = resultObj.requiredInt("index"),
-                status = resultObj.requiredString("status"),
-                passed = resultObj.requiredBoolean("passed"),
-                hidden = resultObj.requiredBoolean("hidden"),
-                executionTimeMs = resultObj.requiredInt("executionTimeMs"),
-                input = resultObj.optionalString("input"),
-                expectedOutput = resultObj.optionalString("expectedOutput"),
-                actualOutput = resultObj.optionalString("actualOutput"),
-                message = resultObj.optionalString("message"),
-            )
-        }
-        return SubmitProblemResponseDto(
-            submissionId = obj.requiredLong("submissionId"),
-            total = obj.requiredInt("total"),
-            passed = obj.requiredInt("passed"),
-            allPassed = obj.requiredBoolean("allPassed"),
-            runtimeMs = obj.requiredInt("runtimeMs"),
-            results = results,
-            consensusRequired = obj.requiredInt("consensusRequired"),
-            consensusReached = obj.requiredInt("consensusReached"),
-            sandboxImageHash = obj.optionalString("sandboxImageHash"),
-            sandboxResultHash = obj.requiredString("sandboxResultHash"),
-            commitmentHash = obj.requiredString("commitmentHash"),
-            anchorStatus = obj.requiredString("anchorStatus"),
-            anchorBatchId = obj.optionalLong("anchorBatchId"),
-            anchorMerkleRoot = obj.optionalString("anchorMerkleRoot"),
-            anchorProof = obj.optionalArray("anchorProof").mapNotNull { proofItem ->
-                proofItem.jsonPrimitive.contentOrNull
-            },
-            anchorTxHash = obj.optionalString("anchorTxHash"),
-            anchorExplorerUrl = obj.optionalString("anchorExplorerUrl"),
-            anchorError = obj.optionalString("anchorError"),
+        return json.decodeFromString(SubmissionJudgeJobDto.serializer(), payload)
+    }
+
+    override suspend fun fetchSubmissionJudgeJob(jobId: Long): SubmissionJudgeJobDto {
+        val json = Json { ignoreUnknownKeys = true }
+        val payload = httpTextClient.get(
+            endpoint(apiBaseUrl, "/problems/submission-jobs/$jobId"),
         )
+        return json.decodeFromString(SubmissionJudgeJobDto.serializer(), payload)
     }
 }
 
@@ -281,6 +260,10 @@ private fun JsonObject.requiredLong(name: String): Long {
 
 private fun JsonObject.optionalLong(name: String): Long? {
     return this[name]?.jsonPrimitive?.longOrNull
+}
+
+private fun JsonObject.optionalInt(name: String): Int? {
+    return this[name]?.jsonPrimitive?.intOrNull
 }
 
 private fun JsonObject.requiredBoolean(name: String): Boolean {

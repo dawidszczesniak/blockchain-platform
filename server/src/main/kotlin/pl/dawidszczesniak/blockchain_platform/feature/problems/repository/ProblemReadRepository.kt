@@ -314,6 +314,7 @@ internal class ProblemReadRepositoryImpl(
                 it[consensusNodes] = draft.consensusNodes
                 it[commitmentHash] = draft.commitmentHash
                 it[runtimeMs] = draft.runtimeMs
+                it[memoryUsedKb] = draft.memoryUsedKb
                 it[anchorStatus] = draft.anchor.status.dbValue
                 it[anchorBatchId] = draft.anchor.batchId
                 it[anchorMerkleRoot] = draft.anchor.merkleRoot
@@ -330,7 +331,7 @@ internal class ProblemReadRepositoryImpl(
                     it[problemTestId] = test.problemTestId
                     it[resultStatus] = test.status.dbValue
                     it[executionTimeMs] = test.executionTimeMs
-                    it[memoryUsedKb] = null
+                    it[memoryUsedKb] = test.memoryUsedKb
                     it[message] = test.message
                 }
             }

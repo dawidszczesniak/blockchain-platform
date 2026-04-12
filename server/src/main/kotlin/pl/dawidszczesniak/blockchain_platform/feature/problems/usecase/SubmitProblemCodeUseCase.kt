@@ -15,8 +15,10 @@ import pl.dawidszczesniak.blockchain_platform.db.SubmissionTestResultStatus
 import pl.dawidszczesniak.blockchain_platform.feature.problems.anchor.AnchorConfig
 import pl.dawidszczesniak.blockchain_platform.feature.problems.anchor.BlockchainAnchorClient
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.RunProblemRequestDto
+import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.RunProblemResponseDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.RunProblemTestResultDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.SubmitProblemResponseDto
+import pl.dawidszczesniak.blockchain_platform.feature.problems.judge.JudgeLanguages
 import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.ProblemExecutionContext
 import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.ProblemExecutionTest
 import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.ProblemWriteRepository
@@ -27,7 +29,6 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.Submis
 import pl.dawidszczesniak.blockchain_platform.feature.problems.sandbox.SandboxClient
 import pl.dawidszczesniak.blockchain_platform.feature.problems.sandbox.SandboxConfig
 import pl.dawidszczesniak.blockchain_platform.feature.problems.sandbox.SandboxNodeRunOutput
-import pl.dawidszczesniak.blockchain_platform.feature.problems.sandbox.SandboxRunInput
 import pl.dawidszczesniak.blockchain_platform.feature.problems.sandbox.SandboxRunTestOutput
 
 internal class SubmitProblemValidationException(
@@ -38,18 +39,38 @@ internal interface SubmitProblemCodeUseCase {
     operator fun invoke(userId: Long, problemId: Int, request: RunProblemRequestDto): SubmitProblemResponseDto
 }
 
+internal sealed interface SubmissionJudgeOutcome {
+    data class Accepted(val response: SubmitProblemResponseDto) : SubmissionJudgeOutcome
+
+    data class Rejected(
+        val preview: RunProblemResponseDto,
+        val message: String,
+    ) : SubmissionJudgeOutcome
+}
+
+internal interface SubmissionJudgeService {
+    fun judge(userId: Long, problemId: Int, request: RunProblemRequestDto): SubmissionJudgeOutcome
+}
+
 internal class SubmitProblemCodeUseCaseImpl(
     private val repository: ProblemWriteRepository,
     private val sandboxClient: SandboxClient,
     private val sandboxConfig: SandboxConfig,
     private val anchorConfig: AnchorConfig,
     private val blockchainAnchorClient: BlockchainAnchorClient,
-) : SubmitProblemCodeUseCase {
+) : SubmitProblemCodeUseCase, SubmissionJudgeService {
     override fun invoke(userId: Long, problemId: Int, request: RunProblemRequestDto): SubmitProblemResponseDto {
-        val language = request.language.trim().lowercase()
-        if (language != SUPPORTED_LANGUAGE) {
-            throw SubmitProblemValidationException("Only Kotlin language is supported.")
+        return when (val outcome = judge(userId, problemId, request)) {
+            is SubmissionJudgeOutcome.Accepted -> outcome.response
+            is SubmissionJudgeOutcome.Rejected -> throw SubmitProblemValidationException(outcome.message)
         }
+    }
+
+    override fun judge(userId: Long, problemId: Int, request: RunProblemRequestDto): SubmissionJudgeOutcome {
+        val languageProfile = runCatching { JudgeLanguages.requireSupported(request.language) }
+            .getOrElse { error ->
+                throw SubmitProblemValidationException(error.message ?: "Unsupported language.")
+            }
         val sourceCode = request.sourceCode.trim()
         if (sourceCode.isBlank()) {
             throw SubmitProblemValidationException("Source code cannot be empty.")
@@ -71,20 +92,10 @@ internal class SubmitProblemCodeUseCaseImpl(
             )
         }
 
-        val sandboxInputs = context.tests.map { test ->
-            SandboxRunInput(
-                id = test.id,
-                order = test.order,
-                inputData = test.inputData,
-                expectedOutput = test.expectedOutput,
-                validatorCode = test.validatorCode,
-                validatorLanguage = test.validatorLanguage,
-                timeoutMs = test.timeoutMs,
-                memoryLimitMb = test.memoryLimitMb,
-            )
-        }
+        val sandboxInputs = context.tests.map(languageProfile::applyTo)
         val nodeRuns = sandboxClient.runSolutionOnAllNodes(
             sourceCode = sourceCode,
+            language = languageProfile.id,
             tests = sandboxInputs,
         )
         if (nodeRuns.isEmpty()) {
@@ -124,14 +135,33 @@ internal class SubmitProblemCodeUseCaseImpl(
 
         val passedCount = evaluatedTests.count { it.apiResult.passed }
         val allPassed = passedCount == evaluatedTests.size
+        // Official runtime is measured for the whole isolated test suite on the sandbox node.
+        val runtimeMs = consensusEntry.value
+            .mapNotNull { it.suiteExecutionTimeMs }
+            .maxOrNull()
+            ?: (evaluatedTests.maxOfOrNull { it.apiResult.executionTimeMs } ?: 0)
+        val memoryUsedKb = consensusEntry.value
+            .flatMap { it.results }
+            .mapNotNull { it.memoryUsedKb }
+            .maxOrNull()
         if (!allPassed) {
             val failedCount = evaluatedTests.size - passedCount
-            throw SubmitProblemValidationException(
-                "Submission blocked: $failedCount/${evaluatedTests.size} tests did not pass. Solution was not submitted."
+            return SubmissionJudgeOutcome.Rejected(
+                preview = RunProblemResponseDto(
+                    total = evaluatedTests.size,
+                    passed = passedCount,
+                    allPassed = false,
+                    runtimeMs = runtimeMs,
+                    memoryUsedKb = memoryUsedKb,
+                    results = evaluatedTests.map { it.apiResult },
+                    sandboxNodeId = consensusNode.nodeId,
+                    sandboxImageHash = consensusNode.imageHash,
+                    sandboxRunHash = consensusNode.runHash,
+                ),
+                message = "Submission blocked: $failedCount/${evaluatedTests.size} tests did not pass. Solution was not submitted.",
             )
         }
         val submissionStatus = SubmissionAttemptStatus.Accepted
-        val runtimeMs = evaluatedTests.maxOfOrNull { it.apiResult.executionTimeMs } ?: 0
         val codeHash = sha256Hex(sourceCode)
         val testsHash = hashExecutionTests(context)
         val commitmentHash = buildCommitmentHash(
@@ -154,7 +184,7 @@ internal class SubmitProblemCodeUseCaseImpl(
                 userId = userId,
                 status = submissionStatus,
                 sourceCode = sourceCode,
-                language = language,
+                language = languageProfile.id,
                 codeHash = codeHash,
                 testsHash = testsHash,
                 resultHash = consensusResultHash,
@@ -162,11 +192,13 @@ internal class SubmitProblemCodeUseCaseImpl(
                 consensusNodes = consensusReached,
                 commitmentHash = commitmentHash,
                 runtimeMs = runtimeMs,
+                memoryUsedKb = memoryUsedKb,
                 testResults = evaluatedTests.map { test ->
                     SubmissionPersistedTestResult(
                         problemTestId = test.problemTestId,
                         status = test.dbStatus,
                         executionTimeMs = test.apiResult.executionTimeMs,
+                        memoryUsedKb = test.apiResult.memoryUsedKb,
                         message = test.apiResult.message,
                     )
                 },
@@ -199,25 +231,28 @@ internal class SubmitProblemCodeUseCaseImpl(
             initialAnchor
         }
 
-        return SubmitProblemResponseDto(
-            submissionId = submissionRecord.submissionId,
-            total = evaluatedTests.size,
-            passed = passedCount,
-            allPassed = allPassed,
-            runtimeMs = runtimeMs,
-            results = evaluatedTests.map { it.apiResult },
-            consensusRequired = sandboxConfig.requiredConsensus,
-            consensusReached = consensusReached,
-            sandboxImageHash = consensusImageHash,
-            sandboxResultHash = consensusResultHash,
-            commitmentHash = commitmentHash,
-            anchorStatus = finalAnchor.status.name,
-            anchorBatchId = finalAnchor.batchId,
-            anchorMerkleRoot = finalAnchor.merkleRoot,
-            anchorProof = finalAnchor.merkleProof,
-            anchorTxHash = finalAnchor.txHash,
-            anchorExplorerUrl = anchorConfig.explorerTxUrl(finalAnchor.txHash),
-            anchorError = finalAnchor.error,
+        return SubmissionJudgeOutcome.Accepted(
+            response = SubmitProblemResponseDto(
+                submissionId = submissionRecord.submissionId,
+                total = evaluatedTests.size,
+                passed = passedCount,
+                allPassed = allPassed,
+                runtimeMs = runtimeMs,
+                memoryUsedKb = memoryUsedKb,
+                results = evaluatedTests.map { it.apiResult },
+                consensusRequired = sandboxConfig.requiredConsensus,
+                consensusReached = consensusReached,
+                sandboxImageHash = consensusImageHash,
+                sandboxResultHash = consensusResultHash,
+                commitmentHash = commitmentHash,
+                anchorStatus = finalAnchor.status.name,
+                anchorBatchId = finalAnchor.batchId,
+                anchorMerkleRoot = finalAnchor.merkleRoot,
+                anchorProof = finalAnchor.merkleProof,
+                anchorTxHash = finalAnchor.txHash,
+                anchorExplorerUrl = anchorConfig.explorerTxUrl(finalAnchor.txHash),
+                anchorError = finalAnchor.error,
+            )
         )
     }
 
@@ -276,6 +311,7 @@ internal class SubmitProblemCodeUseCaseImpl(
                 imageHash = node.imageHash,
                 runHash = node.runHash,
                 resultHash = node.resultHash,
+                suiteExecutionTimeMs = node.suiteExecutionTimeMs,
                 attestationPayloadHash = node.attestationPayloadHash,
                 attestationSignature = node.attestationSignature,
                 attestationScheme = node.attestationScheme,
@@ -293,6 +329,7 @@ internal class SubmitProblemCodeUseCaseImpl(
                 imageHash = node.imageHash,
                 runHash = node.runHash,
                 resultHash = node.resultHash,
+                suiteExecutionTimeMs = node.suiteExecutionTimeMs,
                 attestationPayloadHash = node.attestationPayloadHash,
                 attestationSignature = node.attestationSignature,
                 attestationScheme = node.attestationScheme,
@@ -313,6 +350,7 @@ internal class SubmitProblemCodeUseCaseImpl(
                 imageHash = node.imageHash,
                 runHash = node.runHash,
                 resultHash = computedResultHash,
+                suiteExecutionTimeMs = node.suiteExecutionTimeMs,
                 attestationPayloadHash = node.attestationPayloadHash,
                 attestationSignature = node.attestationSignature,
                 attestationScheme = node.attestationScheme,
@@ -331,6 +369,7 @@ internal class SubmitProblemCodeUseCaseImpl(
                 imageHash = node.imageHash,
                 runHash = node.runHash,
                 resultHash = computedResultHash,
+                suiteExecutionTimeMs = node.suiteExecutionTimeMs,
                 attestationPayloadHash = node.attestationPayloadHash,
                 attestationSignature = node.attestationSignature,
                 attestationScheme = node.attestationScheme,
@@ -349,6 +388,7 @@ internal class SubmitProblemCodeUseCaseImpl(
                 imageHash = node.imageHash,
                 runHash = node.runHash,
                 resultHash = computedResultHash,
+                suiteExecutionTimeMs = node.suiteExecutionTimeMs,
                 attestationPayloadHash = node.attestationPayloadHash,
                 attestationSignature = node.attestationSignature,
                 attestationScheme = node.attestationScheme,
@@ -373,6 +413,7 @@ internal class SubmitProblemCodeUseCaseImpl(
                 imageHash = node.imageHash,
                 runHash = node.runHash,
                 resultHash = computedResultHash,
+                suiteExecutionTimeMs = node.suiteExecutionTimeMs,
                 attestationPayloadHash = node.attestationPayloadHash,
                 attestationSignature = node.attestationSignature,
                 attestationScheme = node.attestationScheme,
@@ -394,6 +435,7 @@ internal class SubmitProblemCodeUseCaseImpl(
                 imageHash = node.imageHash,
                 runHash = node.runHash,
                 resultHash = computedResultHash,
+                suiteExecutionTimeMs = node.suiteExecutionTimeMs,
                 attestationPayloadHash = node.attestationPayloadHash,
                 attestationSignature = node.attestationSignature,
                 attestationScheme = node.attestationScheme,
@@ -410,6 +452,7 @@ internal class SubmitProblemCodeUseCaseImpl(
             imageHash = node.imageHash,
             runHash = node.runHash,
             resultHash = computedResultHash,
+            suiteExecutionTimeMs = node.suiteExecutionTimeMs,
             attestationPayloadHash = node.attestationPayloadHash,
             attestationSignature = node.attestationSignature,
             attestationScheme = node.attestationScheme,
@@ -427,6 +470,7 @@ private data class EvaluatedNodeRun(
     val imageHash: String?,
     val runHash: String?,
     val resultHash: String?,
+    val suiteExecutionTimeMs: Int? = null,
     val attestationPayloadHash: String?,
     val attestationSignature: String?,
     val attestationScheme: String?,
@@ -454,6 +498,7 @@ private fun ProblemExecutionTest.toMissingSubmissionResult(): EvaluatedSubmissio
         status = SubmitRunStatus.Error,
         passed = false,
         executionTimeMs = 0,
+        memoryUsedKb = null,
         actualOutput = null,
         message = "Consensus result does not contain this test.",
     )
@@ -482,6 +527,7 @@ private fun ProblemExecutionTest.evaluateSubmissionTest(
                 status = if (passed) SubmitRunStatus.Passed else SubmitRunStatus.Failed,
                 passed = passed,
                 executionTimeMs = execution.executionTimeMs,
+                memoryUsedKb = execution.memoryUsedKb,
                 actualOutput = execution.output,
                 message = if (passed) null else failureMessage,
             )
@@ -492,6 +538,7 @@ private fun ProblemExecutionTest.evaluateSubmissionTest(
                 status = SubmitRunStatus.Timeout,
                 passed = false,
                 executionTimeMs = execution.executionTimeMs,
+                memoryUsedKb = execution.memoryUsedKb,
                 actualOutput = null,
                 message = execution.message ?: "Execution timed out.",
             )
@@ -502,6 +549,7 @@ private fun ProblemExecutionTest.evaluateSubmissionTest(
                 status = SubmitRunStatus.Error,
                 passed = false,
                 executionTimeMs = execution.executionTimeMs,
+                memoryUsedKb = execution.memoryUsedKb,
                 actualOutput = null,
                 message = execution.message ?: "Sandbox execution error.",
             )
@@ -513,6 +561,7 @@ private fun ProblemExecutionTest.toSubmissionResult(
     status: SubmitRunStatus,
     passed: Boolean,
     executionTimeMs: Int,
+    memoryUsedKb: Int?,
     actualOutput: String?,
     message: String?,
 ): EvaluatedSubmissionTest {
@@ -527,6 +576,7 @@ private fun ProblemExecutionTest.toSubmissionResult(
         passed = passed,
         hidden = isHidden,
         executionTimeMs = executionTimeMs,
+        memoryUsedKb = memoryUsedKb,
         input = if (isHidden) null else inputData,
         expectedOutput = if (isHidden) null else expectedOutputForDisplay,
         actualOutput = if (isHidden) null else actualOutput,
@@ -639,7 +689,6 @@ private fun normalizeHashHex(raw: String): String {
 }
 
 private val secureRandom = SecureRandom()
-private const val SUPPORTED_LANGUAGE = "kotlin"
 private const val MAX_SOURCE_CODE_CHARS = 120_000
 private const val HIDDEN_TEST_FAILED_MESSAGE = "Hidden test failed."
 private const val DEFAULT_ATTESTATION_SCHEME = "hmac-sha256"

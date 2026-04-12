@@ -73,6 +73,7 @@ internal data class SubmissionPersistedTestResult(
     val problemTestId: Long,
     val status: SubmissionTestResultStatus,
     val executionTimeMs: Int,
+    val memoryUsedKb: Int? = null,
     val message: String? = null,
 )
 
@@ -114,6 +115,7 @@ internal data class SubmissionRecordDraft(
     val consensusNodes: Int,
     val commitmentHash: String,
     val runtimeMs: Int,
+    val memoryUsedKb: Int? = null,
     val testResults: List<SubmissionPersistedTestResult>,
     val nodeAttestations: List<SubmissionNodeAttestationDraft>,
     val anchor: SubmissionAnchorDraft,

@@ -39,15 +39,18 @@ class ProblemRepositoryImpl(
     override suspend fun joinProblem(problemId: Int) =
         remoteDataSource.joinProblem(problemId)
 
-    override suspend fun runProblemCode(problemId: Int, sourceCode: String) =
+    override suspend fun runProblemCode(problemId: Int, sourceCode: String, language: String) =
         remoteDataSource.runProblemCode(
             problemId = problemId,
-            request = RunProblemRequestDto(sourceCode = sourceCode),
+            request = RunProblemRequestDto(sourceCode = sourceCode, language = language),
         )
 
-    override suspend fun submitProblemCode(problemId: Int, sourceCode: String) =
+    override suspend fun submitProblemCode(problemId: Int, sourceCode: String, language: String) =
         remoteDataSource.submitProblemCode(
             problemId = problemId,
-            request = RunProblemRequestDto(sourceCode = sourceCode),
+            request = RunProblemRequestDto(sourceCode = sourceCode, language = language),
         )
+
+    override suspend fun fetchSubmissionJudgeJob(jobId: Long) =
+        remoteDataSource.fetchSubmissionJudgeJob(jobId)
 }

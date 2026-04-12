@@ -73,6 +73,7 @@ CREATE TABLE IF NOT EXISTS problem_submissions (
     consensus_nodes INTEGER NOT NULL CHECK (consensus_nodes >= 0),
     commitment_hash VARCHAR(66) NOT NULL,
     runtime_ms INTEGER NOT NULL DEFAULT 0 CHECK (runtime_ms >= 0),
+    memory_used_kb INTEGER CHECK (memory_used_kb >= 0),
     anchor_status VARCHAR(16) NOT NULL
         CHECK (anchor_status IN ('pending', 'anchored', 'failed', 'disabled')),
     anchor_batch_id BIGINT,
@@ -97,6 +98,23 @@ CREATE TABLE IF NOT EXISTS problem_submission_test_results (
     message TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (submission_id, problem_test_id)
+);
+
+CREATE TABLE IF NOT EXISTS problem_submission_judge_jobs (
+    job_id BIGSERIAL PRIMARY KEY,
+    problem_id BIGINT NOT NULL REFERENCES problems(problem_id) ON DELETE CASCADE,
+    user_id BIGINT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    source_code TEXT NOT NULL,
+    language VARCHAR(32) NOT NULL,
+    status VARCHAR(16) NOT NULL
+        CHECK (status IN ('queued', 'running', 'accepted', 'rejected', 'error')),
+    status_message TEXT,
+    result_payload_json TEXT,
+    preview_payload_json TEXT,
+    submission_id BIGINT REFERENCES problem_submissions(submission_id) ON DELETE SET NULL,
+    requested_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    started_at TIMESTAMPTZ,
+    completed_at TIMESTAMPTZ
 );
 
 CREATE TABLE IF NOT EXISTS problem_submission_attestations (
@@ -243,6 +261,9 @@ ALTER TABLE problem_submissions
     ADD COLUMN IF NOT EXISTS runtime_ms INTEGER;
 
 ALTER TABLE problem_submissions
+    ADD COLUMN IF NOT EXISTS memory_used_kb INTEGER;
+
+ALTER TABLE problem_submissions
     ADD COLUMN IF NOT EXISTS anchor_status VARCHAR(16);
 
 ALTER TABLE problem_submissions
@@ -298,6 +319,14 @@ SET runtime_ms = COALESCE((
     WHERE problem_submission_test_results.submission_id = problem_submissions.submission_id
 ), 0)
 WHERE runtime_ms IS NULL;
+
+UPDATE problem_submissions
+SET memory_used_kb = (
+    SELECT MAX(problem_submission_test_results.memory_used_kb)
+    FROM problem_submission_test_results
+    WHERE problem_submission_test_results.submission_id = problem_submissions.submission_id
+)
+WHERE memory_used_kb IS NULL;
 
 UPDATE problem_submissions
 SET anchor_status = COALESCE(NULLIF(anchor_status, ''), 'disabled')
@@ -384,6 +413,15 @@ BEGIN
     ALTER TABLE problem_submissions
         ADD CONSTRAINT chk_problem_submissions_runtime_ms_non_negative
         CHECK (runtime_ms >= 0);
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+    ALTER TABLE problem_submissions
+        ADD CONSTRAINT chk_problem_submissions_memory_used_kb_non_negative
+        CHECK (memory_used_kb IS NULL OR memory_used_kb >= 0);
 EXCEPTION
     WHEN duplicate_object THEN NULL;
 END $$;
@@ -509,6 +547,12 @@ CREATE INDEX IF NOT EXISTS idx_problem_submissions_problem_user
 
 CREATE INDEX IF NOT EXISTS idx_problem_submissions_anchor_status
     ON problem_submissions(anchor_status, submitted_at);
+
+CREATE INDEX IF NOT EXISTS idx_problem_submission_judge_jobs_status_requested_at
+    ON problem_submission_judge_jobs(status, requested_at);
+
+CREATE INDEX IF NOT EXISTS idx_problem_submission_judge_jobs_user_id
+    ON problem_submission_judge_jobs(user_id, requested_at);
 
 CREATE INDEX IF NOT EXISTS idx_problem_submission_attestations_submission_id
     ON problem_submission_attestations(submission_id);

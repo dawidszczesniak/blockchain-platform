@@ -40,6 +40,7 @@ data class CreateProblemTestRunResult(
     val status: String,
     val output: String?,
     val executionTimeMs: Int,
+    val memoryUsedKb: Int? = null,
     val message: String?,
 )
 
@@ -123,8 +124,14 @@ data class CreateProblemState(
     val platformFee: Double
         get() = grossRevenue * 0.02
 
-    val netRevenue: Double
+    val creatorProfit: Double
         get() = grossRevenue - prizeValue - platformFee
+
+    val winnerProfit: Double
+        get() = prizeValue - entryFeeValue
+
+    val netRevenue: Double
+        get() = creatorProfit
 
     val canAddTest: Boolean
         get() = tests.size < MAX_CREATE_PROBLEM_TESTS
@@ -135,11 +142,14 @@ data class CreateProblemState(
     val isValidationFresh: Boolean
         get() = validatedSnapshotHash != null && validatedSnapshotHash == validationSnapshotHash
 
+    val canAttemptSubmit: Boolean
+        get() = !isSubmitting &&
+            !isRunningAllTests &&
+            runningTestIds.isEmpty()
+
     val canSubmit: Boolean
         get() = !validation.hasErrors &&
-            !isSubmitting &&
-            !isRunningAllTests &&
-            runningTestIds.isEmpty() &&
+            canAttemptSubmit &&
             isValidationFresh
 
     val validation: CreateProblemValidation
@@ -653,6 +663,7 @@ private fun CreateProblemValidationTestResultDto.toUiResult(): CreateProblemTest
         status = status,
         output = output,
         executionTimeMs = executionTimeMs,
+        memoryUsedKb = memoryUsedKb,
         message = message,
     )
 }

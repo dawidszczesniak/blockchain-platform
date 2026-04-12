@@ -104,6 +104,7 @@ class SubmitProblemCodeUseCaseTest {
                     nodeUrl = "http://sandbox-node-1",
                     secret = secret,
                     results = results,
+                    suiteExecutionTimeMs = 24,
                 )
             )
         )
@@ -144,7 +145,112 @@ class SubmitProblemCodeUseCaseTest {
     }
 
     @Test
-    fun `stores max test execution time as submission runtime`() {
+    fun `stores suite execution time as submission runtime`() {
+        val repository = FakeProblemWriteRepository(
+            executionContext = ProblemExecutionContext(
+                problemId = 7,
+                requiredParticipants = 1,
+                registeredParticipants = 1,
+                submitUntilDate = LocalDate.of(2026, 4, 30),
+                tests = listOf(
+                    ProblemExecutionTest(
+                        id = 101,
+                        order = 1,
+                        inputData = "2 2",
+                        expectedOutput = "4",
+                        validatorCode = "",
+                        validatorLanguage = "kotlin",
+                        isHidden = false,
+                        timeoutMs = 1_000,
+                        memoryLimitMb = 256,
+                    ),
+                    ProblemExecutionTest(
+                        id = 102,
+                        order = 2,
+                        inputData = "5 7",
+                        expectedOutput = "12",
+                        validatorCode = "",
+                        validatorLanguage = "kotlin",
+                        isHidden = false,
+                        timeoutMs = 1_000,
+                        memoryLimitMb = 256,
+                    ),
+                ),
+            )
+        )
+        val secret = "sandbox-secret"
+        val sandboxConfig = SandboxConfig(
+            nodes = listOf("http://sandbox-node-1"),
+            requestTimeoutMs = 20_000,
+            connectTimeoutMs = 2_500,
+            expectedImageHash = null,
+            requiredConsensus = 1,
+            nodeAttestationSecrets = mapOf("sandbox-node-1" to secret),
+        )
+        val results = listOf(
+            SandboxRunTestOutput(
+                id = 101,
+                order = 1,
+                status = "OK",
+                output = "4",
+                passed = true,
+                executionTimeMs = 11,
+                message = null,
+            ),
+            SandboxRunTestOutput(
+                id = 102,
+                order = 2,
+                status = "OK",
+                output = "12",
+                passed = true,
+                executionTimeMs = 19,
+                message = null,
+            ),
+        )
+        val sandboxClient = FakeSandboxClient(
+            nodeRuns = listOf(
+                validNodeRun(
+                    nodeId = "sandbox-node-1",
+                    nodeUrl = "http://sandbox-node-1",
+                    secret = secret,
+                    results = results,
+                    suiteExecutionTimeMs = 24,
+                )
+            )
+        )
+        val useCase = SubmitProblemCodeUseCaseImpl(
+            repository = repository,
+            sandboxClient = sandboxClient,
+            sandboxConfig = sandboxConfig,
+            anchorConfig = AnchorConfig(
+                enabled = false,
+                chainId = null,
+                contractAddress = null,
+                signerPrivateKey = null,
+                gasLimit = 350_000L,
+                gasPriceWei = null,
+                receiptTimeoutMs = 90_000L,
+                receiptPollIntervalMs = 2_000L,
+                explorerTxBaseUrl = null,
+                contractMethodName = "anchorSubmission",
+            ),
+            blockchainAnchorClient = FakeBlockchainAnchorClient(),
+        )
+
+        val result = useCase(
+            userId = 42,
+            problemId = 7,
+            request = RunProblemRequestDto(
+                sourceCode = "fun solve(input: String): String = input",
+            ),
+        )
+
+        assertEquals(24, result.runtimeMs)
+        assertEquals(24, assertNotNull(repository.lastSubmissionDraft).runtimeMs)
+    }
+
+    @Test
+    fun `falls back to max test execution time when suite runtime is unavailable`() {
         val repository = FakeProblemWriteRepository(
             executionContext = ProblemExecutionContext(
                 problemId = 7,
@@ -300,11 +406,12 @@ private class FakeProblemWriteRepository(
 private class FakeSandboxClient(
     private val nodeRuns: List<SandboxNodeRunOutput>,
 ) : SandboxClient {
-    override fun runSolution(sourceCode: String, tests: List<SandboxRunInput>): SandboxRunOutput =
+    override fun runSolution(sourceCode: String, language: String, tests: List<SandboxRunInput>): SandboxRunOutput =
         error("Not used in this test.")
 
     override fun runSolutionOnAllNodes(
         sourceCode: String,
+        language: String,
         tests: List<SandboxRunInput>,
     ): List<SandboxNodeRunOutput> = nodeRuns
 }
@@ -321,6 +428,7 @@ private fun validNodeRun(
     nodeUrl: String,
     secret: String,
     results: List<SandboxRunTestOutput>,
+    suiteExecutionTimeMs: Int? = null,
 ): SandboxNodeRunOutput {
     val imageHash = "local-image"
     val runHash = "0xrunhash"
@@ -334,6 +442,7 @@ private fun validNodeRun(
         imageHash = imageHash,
         runHash = runHash,
         resultHash = resultHash,
+        suiteExecutionTimeMs = suiteExecutionTimeMs,
         attestationPayloadHash = payloadHash,
         attestationSignature = signature,
         attestationScheme = "hmac-sha256",

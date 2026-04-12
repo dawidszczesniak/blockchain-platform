@@ -78,7 +78,7 @@ import kotlin.math.min
 @Composable
 fun MyProblemsScreen(
     onCreateProblem: () -> Unit,
-    onOpenProblem: (Int, (Boolean) -> Unit) -> Unit,
+    onOpenProblem: (CreatedProblem, (Boolean) -> Unit) -> Unit,
 ) {
     val koin = LocalKoin.current
     val viewModel = remember { koin.get<MyProblemsViewModel>() }
@@ -146,7 +146,7 @@ fun MyProblemsScreen(
                                     isOpening = openingProblemId == problem.id,
                                     onOpenProblem = {
                                         openingProblemId = problem.id
-                                        onOpenProblem(problem.id) { opened ->
+                                        onOpenProblem(problem) { opened ->
                                             if (!opened) {
                                                 openingProblemId = null
                                             }

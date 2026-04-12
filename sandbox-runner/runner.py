@@ -6,6 +6,7 @@ import json
 import os
 import subprocess
 import tempfile
+import threading
 import time
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -70,6 +71,54 @@ fun main() {
 
     System.err.println("No supported entrypoint found. Provide solve(input: String): String or main().")
     exitProcess(1)
+}
+"""
+
+JAVA_HARNESS_CODE = """\
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.lang.reflect.Method;
+import java.util.stream.Collectors;
+
+public class Harness {
+    public static void main(String[] args) throws Exception {
+        Class<?> entryClass = Class.forName("Solution");
+
+        Method solveMethod = null;
+        for (Method method : entryClass.getMethods()) {
+            if (
+                method.getName().equals("solve") &&
+                method.getParameterCount() == 1 &&
+                method.getParameterTypes()[0] == String.class
+            ) {
+                solveMethod = method;
+                break;
+            }
+        }
+        if (solveMethod != null) {
+            BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
+            String input = reader.lines().collect(Collectors.joining("\\n"));
+            Object output = solveMethod.invoke(null, input);
+            System.out.print(output == null ? "" : output.toString());
+            return;
+        }
+
+        try {
+            Method mainWithArray = entryClass.getMethod("main", String[].class);
+            mainWithArray.invoke(null, (Object) new String[0]);
+            return;
+        } catch (NoSuchMethodException ignored) {
+        }
+
+        try {
+            Method mainNoArgs = entryClass.getMethod("main");
+            mainNoArgs.invoke(null);
+            return;
+        } catch (NoSuchMethodException ignored) {
+        }
+
+        throw new IllegalStateException("No supported entrypoint found. Provide solve(String): String or main().");
+    }
 }
 """
 
@@ -172,25 +221,56 @@ def _sign_attestation(payload_hash: str) -> str | None:
     return "0x" + signature
 
 
-def _compile_solution(workdir: Path, source_code: str) -> Dict[str, Any]:
-    source_path = workdir / "Solution.kt"
-    harness_path = workdir / "Harness.kt"
+def _compile_solution(workdir: Path, source_code: str, language: str) -> Dict[str, Any]:
+    normalized_language = language.strip().lower()
     classes_path = workdir / "classes"
-    source_path.write_text(source_code, encoding="utf-8")
-    harness_path.write_text(HARNESS_CODE, encoding="utf-8")
     classes_path.mkdir(parents=True, exist_ok=True)
 
-    process = subprocess.run(
-        ["kotlinc", str(source_path), str(harness_path), "-d", str(classes_path)],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        cwd=str(workdir),
-    )
-    if process.returncode != 0:
-        message = (process.stderr or process.stdout or "Compilation failed.").strip()
-        return {"ok": False, "message": message}
-    return {"ok": True, "classes_path": str(classes_path), "entrypoint": "HarnessKt"}
+    if normalized_language == "kotlin":
+        source_path = workdir / "Solution.kt"
+        harness_path = workdir / "Harness.kt"
+        source_path.write_text(source_code, encoding="utf-8")
+        harness_path.write_text(HARNESS_CODE, encoding="utf-8")
+        process = subprocess.run(
+            ["kotlinc", str(source_path), str(harness_path), "-d", str(classes_path)],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            cwd=str(workdir),
+        )
+        if process.returncode != 0:
+            message = (process.stderr or process.stdout or "Compilation failed.").strip()
+            return {"ok": False, "message": message}
+        return {
+            "ok": True,
+            "classes_path": str(classes_path),
+            "entrypoint": "HarnessKt",
+            "command": ["kotlin", "-classpath", str(classes_path), "HarnessKt"],
+        }
+
+    if normalized_language == "java":
+        source_path = workdir / "Solution.java"
+        harness_path = workdir / "Harness.java"
+        source_path.write_text(source_code, encoding="utf-8")
+        harness_path.write_text(JAVA_HARNESS_CODE, encoding="utf-8")
+        process = subprocess.run(
+            ["javac", "-d", str(classes_path), str(source_path), str(harness_path)],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            cwd=str(workdir),
+        )
+        if process.returncode != 0:
+            message = (process.stderr or process.stdout or "Compilation failed.").strip()
+            return {"ok": False, "message": message}
+        return {
+            "ok": True,
+            "classes_path": str(classes_path),
+            "entrypoint": "Harness",
+            "command": ["java", "-cp", str(classes_path), "Harness"],
+        }
+
+    return {"ok": False, "message": f"Unsupported language '{language}'."}
 
 
 def _compile_validator(workdir: Path, validator_code: str, validator_language: str, validator_hash: str) -> Dict[str, Any]:
@@ -216,59 +296,143 @@ def _compile_validator(workdir: Path, validator_code: str, validator_language: s
     return {"ok": True, "jar_path": str(validator_jar)}
 
 
-def _execute_test(classes_path: str, entrypoint: str, test: Dict[str, Any]) -> Dict[str, Any]:
+def _read_process_memory_kb(pid: int) -> int | None:
+    status_path = Path(f"/proc/{pid}/status")
+    try:
+        lines = status_path.read_text(encoding="utf-8").splitlines()
+    except Exception:
+        return None
+    current_kb = None
+    peak_kb = None
+    for line in lines:
+        if line.startswith("VmRSS:"):
+            parts = line.split()
+            if len(parts) >= 2 and parts[1].isdigit():
+                current_kb = int(parts[1])
+        elif line.startswith("VmHWM:"):
+            parts = line.split()
+            if len(parts) >= 2 and parts[1].isdigit():
+                peak_kb = int(parts[1])
+    return peak_kb or current_kb
+
+
+def _communicate_with_metrics(
+    command: List[str],
+    input_text: str,
+    cwd: str,
+    timeout_seconds: float,
+) -> Dict[str, Any]:
+    started = time.perf_counter()
+    process = subprocess.Popen(
+        command,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        cwd=cwd,
+    )
+    peak_memory_kb = 0
+    stop_sampling = threading.Event()
+    initial_sample = _read_process_memory_kb(process.pid)
+    if initial_sample is not None:
+        peak_memory_kb = max(peak_memory_kb, initial_sample)
+
+    def sample_memory() -> None:
+        nonlocal peak_memory_kb
+        while not stop_sampling.is_set():
+            sampled = _read_process_memory_kb(process.pid)
+            if sampled is not None:
+                peak_memory_kb = max(peak_memory_kb, sampled)
+            if process.poll() is not None:
+                break
+            time.sleep(0.01)
+        sampled = _read_process_memory_kb(process.pid)
+        if sampled is not None:
+            peak_memory_kb = max(peak_memory_kb, sampled)
+
+    sampler = threading.Thread(target=sample_memory, daemon=True)
+    sampler.start()
+    try:
+        stdout, stderr = process.communicate(input=input_text, timeout=timeout_seconds)
+        timed_out = False
+        returncode = process.returncode
+    except subprocess.TimeoutExpired:
+        process.kill()
+        stdout, stderr = process.communicate()
+        timed_out = True
+        returncode = process.returncode
+    finally:
+        stop_sampling.set()
+        sampler.join(timeout=0.2)
+
+    return {
+        "timed_out": timed_out,
+        "returncode": returncode,
+        "stdout": stdout,
+        "stderr": stderr,
+        "executionTimeMs": int((time.perf_counter() - started) * 1000),
+        "memoryUsedKb": peak_memory_kb or None,
+    }
+
+
+def _execute_test(command: List[str], test: Dict[str, Any], workdir: str) -> Dict[str, Any]:
     timeout_ms = _normalize_timeout_ms(test.get("timeoutMs"))
     memory_limit_mb = _normalize_memory_limit_mb(test.get("memoryLimitMb"))
-    started = time.perf_counter()
+    base_command = list(command)
+    if base_command and base_command[0] == "kotlin":
+        base_command.insert(1, f"-J-Xmx{memory_limit_mb}m")
+    elif base_command and base_command[0] == "java":
+        base_command.insert(1, f"-Xmx{memory_limit_mb}m")
     try:
-        result = subprocess.run(
-            ["kotlin", f"-J-Xmx{memory_limit_mb}m", "-classpath", classes_path, entrypoint],
-            input=str(test.get("inputData", "")),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            timeout=timeout_ms / 1000.0,
+        execution = _communicate_with_metrics(
+            command=base_command,
+            input_text=str(test.get("inputData", "")),
+            cwd=workdir,
+            timeout_seconds=timeout_ms / 1000.0,
         )
-        elapsed_ms = int((time.perf_counter() - started) * 1000)
-        if result.returncode != 0:
+        if execution["timed_out"]:
+            return {
+                "id": int(test["id"]),
+                "order": int(test["order"]),
+                "status": "TIMEOUT",
+                "output": None,
+                "passed": False,
+                "executionTimeMs": execution["executionTimeMs"],
+                "memoryUsedKb": execution["memoryUsedKb"],
+                "message": "Execution timed out.",
+            }
+        if execution["returncode"] != 0:
             return {
                 "id": int(test["id"]),
                 "order": int(test["order"]),
                 "status": "ERROR",
                 "output": None,
                 "passed": False,
-                "executionTimeMs": elapsed_ms,
-                "message": (result.stderr or result.stdout or f"Process exited with code {result.returncode}").strip(),
+                "executionTimeMs": execution["executionTimeMs"],
+                "memoryUsedKb": execution["memoryUsedKb"],
+                "message": (
+                    execution["stderr"] or execution["stdout"] or f"Process exited with code {execution['returncode']}"
+                ).strip(),
             }
         return {
             "id": int(test["id"]),
             "order": int(test["order"]),
             "status": "OK",
-            "output": result.stdout,
+            "output": execution["stdout"],
             "passed": False,
-            "executionTimeMs": elapsed_ms,
+            "executionTimeMs": execution["executionTimeMs"],
+            "memoryUsedKb": execution["memoryUsedKb"],
             "message": None,
         }
-    except subprocess.TimeoutExpired:
-        elapsed_ms = int((time.perf_counter() - started) * 1000)
-        return {
-            "id": int(test["id"]),
-            "order": int(test["order"]),
-            "status": "TIMEOUT",
-            "output": None,
-            "passed": False,
-            "executionTimeMs": elapsed_ms,
-            "message": "Execution timed out.",
-        }
     except Exception as exc:
-        elapsed_ms = int((time.perf_counter() - started) * 1000)
         return {
             "id": int(test["id"]),
             "order": int(test["order"]),
             "status": "ERROR",
             "output": None,
             "passed": False,
-            "executionTimeMs": elapsed_ms,
+            "executionTimeMs": 0,
+            "memoryUsedKb": None,
             "message": str(exc),
         }
 
@@ -373,6 +537,7 @@ def _run_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
     source_code = str(payload.get("sourceCode", "")).strip()
     if not source_code:
         raise ValueError("sourceCode is required.")
+    language = str(payload.get("language", "kotlin")).strip().lower() or "kotlin"
 
     tests = payload.get("tests")
     if not isinstance(tests, list) or not tests:
@@ -411,11 +576,12 @@ def _run_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
             }
         )
 
-    run_hash = _compute_run_hash({"sourceCode": source_code, "tests": normalized_tests})
+    run_hash = _compute_run_hash({"sourceCode": source_code, "language": language, "tests": normalized_tests})
 
     with tempfile.TemporaryDirectory(prefix="sandbox_run_") as tmp:
         workdir = Path(tmp)
-        compiled = _compile_solution(workdir, source_code)
+        compiled = _compile_solution(workdir, source_code, language)
+        suite_execution_time_ms = 0
         if not compiled["ok"]:
             results = [
                 {
@@ -425,6 +591,7 @@ def _run_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
                     "output": None,
                     "passed": False,
                     "executionTimeMs": 0,
+                    "memoryUsedKb": None,
                     "message": compiled["message"],
                 }
                 for test in normalized_tests
@@ -456,9 +623,16 @@ def _run_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
                 else:
                     validator_compile_errors[key] = str(compiled_validator["message"])
 
-            classes_path = str(compiled["classes_path"])
-            entrypoint = str(compiled["entrypoint"])
-            raw_results = [_execute_test(classes_path, entrypoint, test) for test in normalized_tests]
+            suite_started = time.perf_counter()
+            raw_results = [
+                _execute_test(
+                    command=list(compiled["command"]),
+                    test=test,
+                    workdir=str(workdir),
+                )
+                for test in normalized_tests
+            ]
+            suite_execution_time_ms = int((time.perf_counter() - suite_started) * 1000)
             results = [
                 _judge_test_result(
                     execution=execution,
@@ -485,6 +659,7 @@ def _run_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
         "imageHash": IMAGE_HASH,
         "runHash": run_hash,
         "resultHash": result_hash,
+        "suiteExecutionTimeMs": suite_execution_time_ms,
         "executedAt": executed_at,
         "attestationPayloadHash": attestation_payload_hash,
         "attestationSignature": attestation_signature,
