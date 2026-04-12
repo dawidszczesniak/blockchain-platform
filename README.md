@@ -1,20 +1,18 @@
 ### Architecture (MVI + Clean Architecture)
 
 - `shared`:
-  domain layer (`model`, `repository` interfaces, `usecase`).
-- `data`:
-  data layer (`ProblemRepository` implementation and data configuration).
+  shared DTO/domain models used by frontend and backend.
 - `composeApp`:
-  presentation/UI layer (MVI stores, Compose screens, routing shell, DI composition root).
+  web frontend module: Compose UI, navigation shell, feature-level `datasource` / `repository` / `usecase` / `ViewModel` code, DI composition root.
 - `server`:
-  backend module (Ktor API).
+  backend module: Ktor API, auth, PostgreSQL/Redis access, sandbox judge orchestration, blockchain anchoring.
 
 Rules:
 
-- UI talks only to presentation stores.
-- stores talk to use cases.
-- use cases talk to repository interfaces from `shared`.
-- concrete repositories are provided by `data` in DI.
+- UI talks to feature ViewModels/state stores.
+- frontend ViewModels use feature use cases/repositories inside `composeApp`.
+- `shared` carries API DTOs and shared domain models; there is no separate `data` module in the current codebase.
+- backend wiring lives in `server` Koin modules.
 
 ### Environments (local / staging / prod)
 
@@ -35,16 +33,22 @@ Run backend + frontend together (two terminals):
 - prod backend: `./gradlew :server:run -PappEnv=prod`
 - prod frontend: `./gradlew :composeApp:jsBrowserProductionWebpack -PappEnv=prod -PapiBaseUrl=https://api.your-domain.com`
 
+Local frontend guardrail:
+
+- `composeApp` refuses custom `-PapiBaseUrl` in `local`; local frontend can call only `http://localhost:8080`
+
 ### PostgreSQL (3NF)
 
 Backend endpoint `/problems` is now read from PostgreSQL.
 `/problems` returns only rows with `problem_status = 'open'`.
 Additional read-only endpoints:
 
-- `/problems/created`
-- `/problems/participation`
+- `/problems/created` (auth required)
+- `/problems/participation` (auth required)
 - `/dashboard/metrics?limit=30`
 - `/dashboard/updates?limit=3` (latest problems from `problems`, ordered by `created_at DESC`)
+- `/platform/meta`
+- `/health`
 
 Authentication endpoints:
 
@@ -67,11 +71,13 @@ Database schema (3NF):
 - `users`: unique user identities (`registered_at`, `last_login_at`).
 - `problem_participants`: mapping of participants (users) assigned/registered to a specific problem.
 - `problem_tests`: ordered tests per problem (`input_data`, `expected_output`, `validator_code`, visibility flag, runtime limits).
-- `problem_submissions`: accepted submission history (multiple tries per user/problem).
-- `problem_submission_test_results`: verdict per test for each accepted submission (`passed|failed|error|timeout` with runtime and memory metrics).
+- `problem_submissions`: persisted official submission records. Current production flow persists only accepted submits; rejected/error submit attempts stay in async judge jobs.
+- `problem_submission_test_results`: per-test runtime/memory details stored for persisted submissions. Schema supports `passed|failed|error|timeout`, but with the current submit flow persisted rows are created only for accepted submissions.
 - `problem_submission_judge_jobs`: async judge queue/job state for submits (`queued|running|accepted|rejected|error`) including final payload or rejected preview.
+- `problem_submission_attestations`: per-node sandbox attestation evidence collected during `submit` (`node_id`, `run_hash`, `result_hash`, signature validity, consensus flag, message).
 - `problem_submissions.runtime_ms`: official submission runtime for the whole judge session; tests still run in isolation, but the stored runtime is measured across the full suite execution.
-- `problem_submissions.memory_used_kb`: official submission memory usage (`max` across isolated tests from the consensus node result).
+- `problem_submissions.memory_used_kb`: official submission memory usage (`max` across isolated tests from the matching consensus nodes).
+- `submission_anchor_batches`: local anchoring audit trail. Current on-chain flow anchors one submission hash per tx, so each batch row currently has `leaves_count = 1` and root = submission hash.
 - `problem_winners`: winner history per problem and winner user (`winner_user_id`, `payout_amount`, `won_at`).
 - `dashboard_daily_metrics`: daily snapshot history (`metric_date`, `active_challenges`, `prize_pool_amount`, `submissions_count`).
 
@@ -90,6 +96,7 @@ Local startup:
     - `docker compose build sandbox-node-1 sandbox-node-2 sandbox-node-3`
     - `docker compose up -d sandbox-node-1 sandbox-node-2 sandbox-node-3`
 - start backend: `./gradlew :server:run -PappEnv=local`
+  - helper if port `8080` is already occupied: `./gradlew :server:runLocalForce8080`
 
 Backend auth startup requirement:
 
@@ -117,7 +124,7 @@ Redis environment variables:
 - `REDIS_PASSWORD` (optional)
 - `REDIS_DATABASE` (default: `0`)
 - `REDIS_SSL` (`true|false`, default: `false`; ignored when `REDIS_URL` is set)
-- in `staging/prod`: Redis password is required
+- in `staging/prod`: Redis password is required and Redis host cannot point to `localhost`
 
 Sandbox execution environment variables (backend):
 
@@ -164,7 +171,7 @@ Judge execution model:
 - create-problem validation (`POST /problems/create/validate`) uses one sandbox node; displayed per-test runtime and memory come from that node
 - participant `RUN` (`POST /problems/{problemId}/run`) also uses one sandbox node; displayed runtime and memory come from that node
 - `SUBMIT` executes on all configured sandbox nodes
-- `SUBMIT` consensus is based on identical `resultHash` + `imageHash`, not on averages; with the current default `SANDBOX_CONSENSUS_THRESHOLD=3`, this means strict `3/3` agreement for the local 3-node cluster
+- `SUBMIT` consensus is based on valid node attestations plus identical `resultHash` + `imageHash`, not on averages; with the current default `SANDBOX_CONSENSUS_THRESHOLD=3`, this means strict `3/3` agreement for the local 3-node cluster
 - official submission `runtime_ms` is measured conservatively as the highest suite runtime reported by the matching consensus nodes
 - official submission `memory_used_kb` is measured conservatively as the highest per-test memory usage reported by the matching consensus nodes
 - accepted submit test-by-test details shown to the user are taken from the first node inside the winning consensus group; official runtime/memory still use the conservative aggregation above
@@ -175,6 +182,7 @@ Create problem validation contract (production flow):
 
 - `testCases` are the only source of cases for judge.
 - at least `1` test must be public (`isHidden=false`).
+- only Kotlin reference solutions are currently supported during create (`referenceSolutionLanguage = "kotlin"`).
 - `referenceSolutionCode` is required and is executed in sandbox during create.
 - backend computes `expectedOutput` for every test directly from `referenceSolutionCode`.
 - Problem is persisted only if reference solution passes:
@@ -230,6 +238,8 @@ fun solve(input: String): String {
 Reference contract:
 
 - `contracts/SubmissionAnchorRegistry.sol`
+- current contract stores one anchored submission hash per `submissionId`
+- backend still writes a local anchor-batch audit row, but current flow is `1 submit = 1 anchored hash`
 
 Auth environment variables:
 
@@ -247,10 +257,12 @@ Auth environment variables:
 - `AUTH_RATE_LIMIT_CHALLENGE_PER_MIN` (default: `40`)
 - `AUTH_RATE_LIMIT_VERIFY_PER_MIN` (default: `80`)
 - `AUTH_RATE_LIMIT_SESSION_PER_MIN` (default: `120`)
+- in `staging/prod`: backend fails fast unless cookie is secure, `AUTH_SESSION_SIGN_KEY` is strong (`>= 32` chars), `AUTH_DOMAIN` is not localhost, and `AUTH_URI` / `AUTH_TRUSTED_ORIGINS` use `https://`
 
 Blockchain environment variables:
 
 - `ETH_RPC_URL` (required in `staging/prod`; enables smart-contract wallet signature verification via EIP-1271)
+- in `staging/prod`: `ETH_RPC_URL` must use `https://`
 - chain policy is environment-bound:
   - `APP_ENV=prod` => mainnet only (`chainId=1`)
   - `APP_ENV=local|staging` => testnet only (`chainId != 1`)
