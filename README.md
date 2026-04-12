@@ -151,24 +151,30 @@ Submission anchoring environment variables (backend):
 - `ETH_ANCHOR_RECEIPT_POLL_INTERVAL_MS` (default: `2000`)
 - `ETH_ANCHOR_EXPLORER_TX_BASE_URL` (optional, e.g. `https://sepolia.etherscan.io/tx`)
 
-Submission endpoints:
+Execution endpoints:
 
+- `POST /problems/create/validate` - create-problem reference validation used by `Uruchom test` / `Uruchom wszystkie`; runs on a single sandbox node with failover
 - `POST /problems/{problemId}/run` - single-node run with failover (preview)
 - `POST /problems/{problemId}/submit` - enqueue async judge job; accepted submissions are persisted only after the worker confirms all tests passed
 - `GET /problems/submission-jobs/{jobId}` - poll async submit status/result
 
 Judge execution model:
 
-- tests run in isolation for correctness and sandbox safety
-- official submission `runtime_ms` is measured across the whole judge suite execution
-- official submission `memory_used_kb` is measured as the highest per-test memory usage
-- solver languages currently supported: `kotlin`, `java`
+- tests always run in isolation for correctness and sandbox safety
+- create-problem validation (`POST /problems/create/validate`) uses one sandbox node; displayed per-test runtime and memory come from that node
+- participant `RUN` (`POST /problems/{problemId}/run`) also uses one sandbox node; displayed runtime and memory come from that node
+- `SUBMIT` executes on all configured sandbox nodes
+- `SUBMIT` consensus is based on identical `resultHash` + `imageHash`, not on averages; with the current default `SANDBOX_CONSENSUS_THRESHOLD=3`, this means strict `3/3` agreement for the local 3-node cluster
+- official submission `runtime_ms` is measured conservatively as the highest suite runtime reported by the matching consensus nodes
+- official submission `memory_used_kb` is measured conservatively as the highest per-test memory usage reported by the matching consensus nodes
+- accepted submit test-by-test details shown to the user are taken from the first node inside the winning consensus group; official runtime/memory still use the conservative aggregation above
+- current web solver UI submits `kotlin`; backend judge profiles also define `java`
 - language-specific execution profiles are applied before sending tests to sandbox, so timeout/memory policy can differ per language
 
 Create problem validation contract (production flow):
 
 - `testCases` are the only source of cases for judge.
-- at least `3` tests must be public (`isHidden=false`).
+- at least `1` test must be public (`isHidden=false`).
 - `referenceSolutionCode` is required and is executed in sandbox during create.
 - backend computes `expectedOutput` for every test directly from `referenceSolutionCode`.
 - Problem is persisted only if reference solution passes:
