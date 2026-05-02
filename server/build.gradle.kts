@@ -26,8 +26,10 @@ kotlin {
 
 dependencies {
     implementation(platform(libs.jackson.bom))
+    implementation(platform(libs.google.cloud.libraries.bom))
     implementation(project(":shared"))
     implementation(libs.logback)
+    implementation(libs.google.cloud.secretmanager)
     implementation(libs.ktor.serverCore)
     implementation(libs.ktor.serverCors)
     implementation(libs.ktor.serverContentNegotiation)
@@ -48,22 +50,9 @@ dependencies {
     testImplementation(libs.kotlin.testJunit)
 }
 
-tasks.withType<JavaExec>().configureEach {
-    val appEnv = (project.findProperty("appEnv") as String?)?.trim()
-    if (!appEnv.isNullOrEmpty()) {
-        environment("APP_ENV", appEnv)
-    }
-}
-
-val resolvedAppEnvProvider = providers.gradleProperty("appEnv").map { it.trim() }.orElse("local")
-
 val freeLocalBackendPort by tasks.registering(Exec::class) {
     group = "application"
     description = "Kills the process listening on port 8080 before a local backend run."
-
-    onlyIf {
-        resolvedAppEnvProvider.get().equals("local", ignoreCase = true)
-    }
 
     commandLine(
         "zsh",
@@ -77,6 +66,10 @@ val freeLocalBackendPort by tasks.registering(Exec::class) {
     )
 }
 
+tasks.named<JavaExec>("run") {
+    dependsOn(freeLocalBackendPort)
+}
+
 tasks.register<JavaExec>("runLocalForce8080") {
     group = "application"
     description = "Frees port 8080 and starts the backend only for local environment."
@@ -86,5 +79,4 @@ tasks.register<JavaExec>("runLocalForce8080") {
     mainClass.set(application.mainClass)
     classpath = sourceSets.main.get().runtimeClasspath
     jvmArgs(application.applicationDefaultJvmArgs)
-    environment("APP_ENV", "local")
 }

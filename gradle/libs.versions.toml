@@ -15,6 +15,7 @@ jackson = "2.18.6"
 exposed = "0.57.0"
 web3j = "4.12.3"
 jedis = "5.2.0"
+googleCloudLibrariesBom = "26.72.0"
 
 [libraries]
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
@@ -57,6 +58,8 @@ koin-core = { module = "io.insert-koin:koin-core", version.ref = "koin" }
 koin-ktor = { module = "io.insert-koin:koin-ktor", version.ref = "koin" }
 jackson-bom = { module = "com.fasterxml.jackson:jackson-bom", version.ref = "jackson" }
 jedis = { module = "redis.clients:jedis", version.ref = "jedis" }
+google-cloud-libraries-bom = { module = "com.google.cloud:libraries-bom", version.ref = "googleCloudLibrariesBom" }
+google-cloud-secretmanager = { module = "com.google.cloud:google-cloud-secretmanager" }
 
 [plugins]
 composeMultiplatform = { id = "org.jetbrains.compose", version.ref = "composeMultiplatform" }

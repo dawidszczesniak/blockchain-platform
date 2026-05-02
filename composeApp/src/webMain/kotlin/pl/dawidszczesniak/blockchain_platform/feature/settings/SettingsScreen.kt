@@ -21,9 +21,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import blockchain_platform.composeapp.generated.resources.Res
+import blockchain_platform.composeapp.generated.resources.settings_proxy_address
 import blockchain_platform.composeapp.generated.resources.settings_interface_language
+import blockchain_platform.composeapp.generated.resources.settings_eth_network
 import blockchain_platform.composeapp.generated.resources.settings_language_english
 import blockchain_platform.composeapp.generated.resources.settings_language_polish
+import blockchain_platform.composeapp.generated.resources.settings_network_section
+import blockchain_platform.composeapp.generated.resources.settings_not_configured
 import blockchain_platform.composeapp.generated.resources.settings_not_connected
 import blockchain_platform.composeapp.generated.resources.settings_title
 import blockchain_platform.composeapp.generated.resources.settings_wallet_address
@@ -65,6 +69,26 @@ fun SettingsScreen() {
                 WalletAddressRow(
                     label = stringResource(Res.string.settings_wallet_address),
                     value = state.walletAddress ?: stringResource(Res.string.settings_not_connected),
+                )
+            }
+
+            Spacer(Modifier.height(18.dp))
+            Text(
+                text = stringResource(Res.string.settings_network_section),
+                style = MaterialTheme.typography.titleMedium
+            )
+            Spacer(Modifier.height(12.dp))
+            if (state.isPlatformLoading) {
+                AppPanelLoader(minHeight = 72.dp)
+            } else {
+                WalletAddressRow(
+                    label = stringResource(Res.string.settings_eth_network),
+                    value = state.networkLabel ?: stringResource(Res.string.settings_not_configured),
+                )
+                Spacer(Modifier.height(10.dp))
+                WalletAddressRow(
+                    label = stringResource(Res.string.settings_proxy_address),
+                    value = state.proxyAddress ?: stringResource(Res.string.settings_not_configured),
                 )
             }
 

@@ -9,16 +9,14 @@ internal data class SandboxConfig(
     val nodeAttestationSecrets: Map<String, String>,
 ) {
     companion object {
-        fun fromEnvironment(env: Map<String, String> = System.getenv()): SandboxConfig {
-            val appEnv = env["APP_ENV"]?.trim()?.lowercase().orEmpty().ifBlank { "local" }
-            val isProductionLike = appEnv == "staging" || appEnv == "prod"
+        fun fromEnvironment(env: Map<String, String>): SandboxConfig {
             val nodes = env["SANDBOX_NODES"]
                 ?.split(',')
                 ?.mapNotNull { raw ->
                     raw.trim().takeIf { it.isNotBlank() }?.removeSuffix("/")
                 }
                 ?.takeIf { it.isNotEmpty() }
-                ?: DEFAULT_LOCAL_NODES
+                ?: error("SANDBOX_NODES must be configured.")
             val requestTimeoutMs = env["SANDBOX_REQUEST_TIMEOUT_MS"]
                 ?.toLongOrNull()
                 ?.coerceIn(1_000L, 120_000L)
@@ -30,20 +28,17 @@ internal data class SandboxConfig(
             val expectedImageHash = env["SANDBOX_IMAGE_HASH"]
                 ?.trim()
                 ?.takeIf { it.isNotBlank() }
+                ?: error("SANDBOX_IMAGE_HASH must be configured.")
             val requiredConsensus = env["SANDBOX_CONSENSUS_THRESHOLD"]
                 ?.toIntOrNull()
                 ?.coerceIn(1, nodes.size)
                 ?: DEFAULT_REQUIRED_CONSENSUS.coerceAtMost(nodes.size)
             val nodeAttestationSecrets = parseNodeSecrets(env["SANDBOX_NODE_SECRETS"]).ifEmpty {
-                if (appEnv == "local") {
-                    DEFAULT_LOCAL_NODE_ATTESTATION_SECRETS
-                } else {
-                    emptyMap()
-                }
+                parseIndexedNodeSecrets(env)
             }
 
-            if (isProductionLike && nodeAttestationSecrets.isEmpty()) {
-                error("SANDBOX_NODE_SECRETS must be configured in staging/prod.")
+            if (nodeAttestationSecrets.isEmpty()) {
+                error("SANDBOX_NODE_SECRETS or SANDBOX_NODE_<N>_SECRET must be configured.")
             }
             if (nodeAttestationSecrets.size < requiredConsensus) {
                 error(
@@ -64,20 +59,9 @@ internal data class SandboxConfig(
     }
 }
 
-private val DEFAULT_LOCAL_NODES = listOf(
-    "http://127.0.0.1:8091",
-    "http://127.0.0.1:8092",
-    "http://127.0.0.1:8093",
-)
-
 private const val DEFAULT_REQUEST_TIMEOUT_MS = 20_000L
 private const val DEFAULT_CONNECT_TIMEOUT_MS = 2_500L
 private const val DEFAULT_REQUIRED_CONSENSUS = 3
-private val DEFAULT_LOCAL_NODE_ATTESTATION_SECRETS = mapOf(
-    "sandbox-node-1" to "local-dev-sandbox-secret-1",
-    "sandbox-node-2" to "local-dev-sandbox-secret-2",
-    "sandbox-node-3" to "local-dev-sandbox-secret-3",
-)
 
 private fun parseNodeSecrets(raw: String?): Map<String, String> {
     if (raw.isNullOrBlank()) {
@@ -109,3 +93,18 @@ private fun parseNodeSecrets(raw: String?): Map<String, String> {
         }
     }.toMap()
 }
+
+private fun parseIndexedNodeSecrets(env: Map<String, String>): Map<String, String> {
+    return env.entries.mapNotNull { (key, value) ->
+        val match = LOCAL_NODE_SECRET_KEY_PATTERN.matchEntire(key) ?: return@mapNotNull null
+        val nodeIndex = match.groupValues[1].toIntOrNull() ?: return@mapNotNull null
+        val secret = value.trim()
+        if (secret.isBlank()) {
+            error("$key must not be blank.")
+        }
+        nodeIndex to secret
+    }.sortedBy { it.first }
+        .associate { (nodeIndex, secret) -> "sandbox-node-$nodeIndex" to secret }
+}
+
+private val LOCAL_NODE_SECRET_KEY_PATTERN = Regex("""SANDBOX_NODE_(\d+)_SECRET""")

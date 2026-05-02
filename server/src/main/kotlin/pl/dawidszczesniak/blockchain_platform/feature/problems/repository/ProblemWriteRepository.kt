@@ -2,11 +2,10 @@ package pl.dawidszczesniak.blockchain_platform.feature.problems.repository
 
 import java.time.Instant
 import java.time.LocalDate
-import pl.dawidszczesniak.blockchain_platform.db.AnchorBatchStatus
-import pl.dawidszczesniak.blockchain_platform.db.SubmissionAnchorStatus
 import pl.dawidszczesniak.blockchain_platform.db.SubmissionAttemptStatus
 import pl.dawidszczesniak.blockchain_platform.db.SubmissionAttestationStatus
 import pl.dawidszczesniak.blockchain_platform.db.SubmissionTestResultStatus
+import pl.dawidszczesniak.blockchain_platform.feature.platform.dto.PaymentAssetDto
 
 internal data class NewProblemTestDraft(
     val inputData: String,
@@ -35,18 +34,56 @@ internal data class NewProblemDraft(
     val validationResultHash: String?,
     val validationImageHash: String?,
     val validatedAt: Instant,
-    val prizeAmount: Long,
-    val entryFeeAmount: Long,
+    val paymentAssetCode: String,
+    val prizeAmountAtomic: String,
+    val entryFeeAmountAtomic: String,
     val requiredParticipants: Int,
     val joinUntilDate: LocalDate,
     val submitUntilDate: LocalDate,
     val tests: List<NewProblemTestDraft>,
+    val onchainCompetitionId: Long? = null,
+    val onchainContractAddress: String? = null,
+    val onchainCreationKey: String? = null,
+    val onchainCreationTxHash: String? = null,
+    val onchainCreationConfirmedAt: Instant? = null,
 )
 
 internal data class JoinProblemResult(
     val joined: Boolean,
     val registeredParticipants: Int,
     val requiredParticipants: Int,
+)
+
+internal data class OnchainJoinContext(
+    val problemId: Int,
+    val competitionId: Long,
+    val paymentAsset: PaymentAssetDto,
+    val entryFeeAmountAtomic: String,
+    val requiredParticipants: Int,
+    val registeredParticipants: Int,
+    val joinUntilDate: LocalDate,
+)
+
+internal data class OnchainCompetitionSummary(
+    val problemId: Int,
+    val title: String,
+    val competitionId: Long,
+    val paymentAsset: PaymentAssetDto,
+    val prizeAmountAtomic: String,
+    val joinUntilDate: LocalDate,
+    val submitUntilDate: LocalDate,
+    val requiredParticipants: Int,
+    val registeredParticipants: Int,
+    val settlementStatus: String,
+)
+
+internal data class ProblemSettlementCandidate(
+    val submissionId: Long,
+    val userId: Long,
+    val walletAddress: String,
+    val runtimeMs: Int,
+    val memoryUsedKb: Int?,
+    val submittedAt: Instant,
 )
 
 internal data class ProblemExecutionTest(
@@ -63,6 +100,8 @@ internal data class ProblemExecutionTest(
 
 internal data class ProblemExecutionContext(
     val problemId: Int,
+    val onchainCompetitionId: Long,
+    val participantWalletAddress: String,
     val requiredParticipants: Int,
     val registeredParticipants: Int,
     val submitUntilDate: LocalDate,
@@ -92,16 +131,6 @@ internal data class SubmissionNodeAttestationDraft(
     val message: String? = null,
 )
 
-internal data class SubmissionAnchorDraft(
-    val status: SubmissionAnchorStatus,
-    val batchId: Long? = null,
-    val merkleRoot: String? = null,
-    val merkleProof: List<String> = emptyList(),
-    val txHash: String? = null,
-    val error: String? = null,
-    val anchoredAt: Instant? = null,
-)
-
 internal data class SubmissionRecordDraft(
     val problemId: Int,
     val userId: Long,
@@ -118,43 +147,30 @@ internal data class SubmissionRecordDraft(
     val memoryUsedKb: Int? = null,
     val testResults: List<SubmissionPersistedTestResult>,
     val nodeAttestations: List<SubmissionNodeAttestationDraft>,
-    val anchor: SubmissionAnchorDraft,
 )
 
 internal data class PersistedSubmissionRecord(
     val submissionId: Long,
-    val anchorStatus: SubmissionAnchorStatus,
-)
-
-internal data class SubmissionAnchorBatchRecord(
-    val batchId: Long,
-    val rootHash: String,
-    val submissionIds: List<Long>,
 )
 
 internal interface ProblemWriteRepository {
+    fun findProblemIdByOnchainCreationTxHash(txHash: String): Int?
     fun createProblemForUser(userId: Long, draft: NewProblemDraft): Int
     fun registerUserForProblem(userId: Long, problemId: Int): JoinProblemResult
+    fun registerUserForProblemOnChain(userId: Long, problemId: Int, txHash: String, joinedAt: Instant): JoinProblemResult
+    fun fetchOnchainJoinContext(problemId: Int): OnchainJoinContext
     fun fetchExecutionContextForUser(userId: Long, problemId: Int): ProblemExecutionContext
     fun createSubmissionRecord(draft: SubmissionRecordDraft): PersistedSubmissionRecord
-    fun createAnchorBatch(
-        rootHash: String,
-        submissionIds: List<Long>,
-        status: AnchorBatchStatus,
-        txHash: String?,
-        chainId: Long?,
-        contractAddress: String?,
-        failureReason: String?,
-        anchoredAt: Instant?,
-    ): SubmissionAnchorBatchRecord
-    fun updateSubmissionAnchors(
-        submissionIds: List<Long>,
-        status: SubmissionAnchorStatus,
-        batchId: Long,
-        merkleRoot: String,
-        proofBySubmission: Map<Long, List<String>>,
-        txHash: String?,
-        error: String?,
-        anchoredAt: Instant?,
+    fun markSubmissionResultRecorded(
+        submissionId: Long,
+        proxyAddress: String,
+        txHash: String,
+        recordedAt: Instant,
     )
+    fun markSubmissionResultFailed(submissionId: Long, error: String)
+    fun fetchCompetitionsPendingSettlement(now: Instant): List<OnchainCompetitionSummary>
+    fun fetchBestSettlementCandidate(problemId: Int): ProblemSettlementCandidate?
+    fun recordSettledWinner(problemId: Int, winnerUserId: Long, payoutAmountAtomic: String, txHash: String, settledAt: Instant)
+    fun markCompetitionSettlementCancelled(problemId: Int, txHash: String, settledAt: Instant)
+    fun markCompetitionSettlementFailed(problemId: Int, error: String)
 }

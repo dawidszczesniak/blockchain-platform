@@ -1,0 +1,153 @@
+sequenceDiagram
+    autonumber
+
+    actor U as User
+    participant FE as Frontend UI
+    participant WP as WalletProvider
+    participant W as Wallet
+    participant API as Ktor Backend
+    participant R as Redis
+    participant DB as PostgreSQL
+    participant S as Sandbox Cluster
+    participant J as SubmissionJudgeWorker
+    participant SW as CompetitionSettlementWorker
+    participant CHAIN as BlockchainTestContract
+
+    Note over FE,API: 1. Platform metadata and login
+    U->>FE: Open app / click Login
+    FE->>API: GET /platform/meta
+    API-->>FE: chainId, network, contract addresses
+    FE->>API: POST /auth/challenge
+    API->>R: store auth challenge
+    API-->>FE: challenge payload
+    FE->>WP: request wallet login
+    WP->>W: request accounts + sign challenge
+    W-->>WP: walletAddress + signature
+    WP-->>FE: signed login payload
+    FE->>API: POST /auth/verify
+    API->>DB: create/load user
+    API->>R: store auth session
+    API-->>FE: authenticated session
+
+    Note over FE,S: 2. Create problem validation preview
+    U->>FE: Click Run test / Run all on create screen
+    FE->>API: POST /problems/create/validate
+    API->>S: run reference solution on one sandbox node
+    S-->>API: expected output + runtime + memory
+    API-->>FE: validation result
+
+    Note over FE,CHAIN: 3. Create problem on-chain
+    U->>FE: Click Create problem
+    FE->>API: POST /problems/create/prepare
+    API->>R: store short-lived create intent
+    API->>CHAIN: prepare createCompetition calldata and value
+    API-->>FE: tx target + calldata + value (+ optional approve)
+    alt ERC-20 payment asset
+        FE->>WP: send approve transaction
+        WP->>W: eth_sendTransaction
+        W->>CHAIN: approve(proxy, amount)
+        CHAIN-->>W: tx hash
+        W-->>WP: tx hash
+        WP-->>FE: tx hash
+    end
+    FE->>WP: send create transaction
+    WP->>W: eth_sendTransaction
+    W->>CHAIN: createCompetition + prize deposit or ERC-20 pull
+    CHAIN-->>W: tx hash
+    W-->>WP: tx hash
+    WP-->>FE: tx hash
+    FE->>WP: wait for receipt
+    WP->>W: eth_getTransactionReceipt polling
+    W-->>WP: receipt
+    WP-->>FE: confirmed receipt
+    FE->>API: POST /problems/create/confirm
+    API->>R: load and consume create intent
+    API->>CHAIN: verify tx receipt and on-chain event
+    API->>DB: insert problem + tests + on-chain metadata
+    API-->>FE: created problem details
+
+    Note over FE,CHAIN: 4. Join competition on-chain
+    U->>FE: Click Join
+    FE->>API: POST /problems/{id}/join/prepare
+    API->>DB: load problem on-chain context
+    API->>R: store short-lived join intent
+    API->>CHAIN: prepare joinCompetition calldata and value
+    API-->>FE: tx target + calldata + value (+ optional approve)
+    alt ERC-20 payment asset
+        FE->>WP: send approve transaction
+        WP->>W: eth_sendTransaction
+        W->>CHAIN: approve(proxy, amount)
+        CHAIN-->>W: tx hash
+        W-->>WP: tx hash
+        WP-->>FE: tx hash
+    end
+    FE->>WP: send join transaction
+    WP->>W: eth_sendTransaction
+    W->>CHAIN: joinCompetition + entry fee deposit or ERC-20 pull
+    CHAIN-->>W: tx hash
+    W-->>WP: tx hash
+    WP-->>FE: tx hash
+    FE->>WP: wait for receipt
+    WP->>W: eth_getTransactionReceipt polling
+    W-->>WP: receipt
+    WP-->>FE: confirmed receipt
+    FE->>API: POST /problems/{id}/join/confirm
+    API->>R: load and consume join intent
+    API->>CHAIN: verify tx receipt and on-chain event
+    API->>DB: insert participant + join tx metadata
+    API-->>FE: joined
+
+    Note over FE,S: 5. Run code preview
+    U->>FE: Click Run
+    FE->>API: POST /problems/{id}/run
+    API->>DB: load problem tests and limits
+    API->>S: run on one sandbox node
+    S-->>API: test results + runtime + memory
+    API-->>FE: preview result
+
+    Note over FE,J: 6. Submit code and async judge
+    U->>FE: Click Submit
+    FE->>API: POST /problems/{id}/submit
+    API->>DB: create problem_submission_judge_job
+    API->>R: enqueue judge job id
+    API-->>FE: jobId
+
+    loop Poll job status
+        FE->>API: GET /problems/submission-jobs/{jobId}
+        API->>DB: read job status / preview / final result
+        API-->>FE: queued / running / accepted / rejected / failed
+    end
+
+    J->>R: dequeue next job id
+    J->>DB: load queued job
+    J->>DB: load problem tests and submission context
+    J->>S: run on all sandbox nodes
+    S-->>J: outputs + suite runtime + memory + attestations
+    J->>J: verify consensus and node attestations
+
+    alt All tests passed and consensus reached
+        J->>DB: insert submission + test results + attestations
+        J->>CHAIN: recordSubmissionResult(hashes, runtime, memory, sandboxImageHash)
+        CHAIN-->>J: result tx receipt
+        J->>DB: save on-chain record tx
+        J->>DB: mark judge job accepted
+    else Tests failed
+        J->>DB: mark judge job rejected + save preview test results
+    else Consensus, registry, or infra error
+        J->>DB: mark judge job failed
+    end
+
+    Note over SW,CHAIN: 7. Automatic competition settlement after deadline
+    SW->>DB: fetch competitions pending settlement
+    SW->>DB: fetch best accepted submission candidate
+    alt Winner exists
+        SW->>CHAIN: settleCompetition(competitionId)
+        CHAIN-->>SW: settlement tx hash
+        SW->>DB: save winner + settlement status
+    else No valid winner or cancellation condition
+        SW->>CHAIN: cancelCompetition(competitionId)
+        CHAIN-->>SW: cancellation tx hash
+        SW->>DB: save cancelled settlement status
+    end
+
+    Note over CHAIN,U: BlockchainTestContract keeps prize, entry fees, accepted result hashes, runtime, memory, payout/refund logic, and ETH/ERC-20 settlement rules on-chain.

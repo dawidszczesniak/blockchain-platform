@@ -6,6 +6,8 @@ import pl.dawidszczesniak.blockchain_platform.db.tables.ProblemsTable
 import pl.dawidszczesniak.blockchain_platform.feature.dashboard.dao.DashboardDao
 import pl.dawidszczesniak.blockchain_platform.feature.dashboard.domain.DashboardMetric
 import pl.dawidszczesniak.blockchain_platform.feature.dashboard.domain.DashboardUpdate
+import pl.dawidszczesniak.blockchain_platform.feature.platform.PaymentAssetCatalog
+import pl.dawidszczesniak.blockchain_platform.feature.platform.formatAtomicAmountDisplay
 
 internal interface DashboardReadRepository {
     fun fetchMetricsHistory(limit: Int): List<DashboardMetric>
@@ -15,6 +17,7 @@ internal interface DashboardReadRepository {
 internal class DashboardReadRepositoryImpl(
     private val dashboardDao: DashboardDao,
     private val transactionRunner: DbTransactionRunner,
+    private val paymentAssetCatalog: PaymentAssetCatalog,
 ) : DashboardReadRepository {
     override fun fetchMetricsHistory(limit: Int): List<DashboardMetric> {
         return transactionRunner.inTransaction {
@@ -24,7 +27,7 @@ internal class DashboardReadRepositoryImpl(
                 DashboardMetric(
                     metricDate = row[DashboardDailyMetricsTable.metricDate].toString(),
                     activeChallenges = row[DashboardDailyMetricsTable.activeChallenges],
-                    prizePoolAmount = row[DashboardDailyMetricsTable.prizePoolAmount],
+                    prizePoolLabel = row[DashboardDailyMetricsTable.prizePoolLabel],
                     submissionsCount = row[DashboardDailyMetricsTable.submissionsCount],
                 )
             }
@@ -39,7 +42,8 @@ internal class DashboardReadRepositoryImpl(
                     title = row[ProblemsTable.title],
                     body = problemUpdateBody(
                         description = row[ProblemsTable.description],
-                        prizeAmount = row[ProblemsTable.prizeAmount],
+                        paymentAssetCode = row[ProblemsTable.paymentAssetCode],
+                        prizeAmountAtomic = row[ProblemsTable.prizeAmountAtomic],
                     ),
                     createdAt = row[ProblemsTable.createdAt].toString(),
                 )
@@ -47,7 +51,13 @@ internal class DashboardReadRepositoryImpl(
         }
     }
 
-    private fun problemUpdateBody(description: String, prizeAmount: Long): String {
-        return "$description Prize: $prizeAmount USDC."
+    private fun problemUpdateBody(
+        description: String,
+        paymentAssetCode: String,
+        prizeAmountAtomic: String,
+    ): String {
+        val paymentAsset = paymentAssetCatalog.requireByCode(paymentAssetCode)
+        val displayAmount = formatAtomicAmountDisplay(paymentAsset, prizeAmountAtomic)
+        return "$description Prize: $displayAmount ${paymentAsset.symbol}."
     }
 }

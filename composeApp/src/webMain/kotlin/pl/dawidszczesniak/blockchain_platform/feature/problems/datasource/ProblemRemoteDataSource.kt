@@ -12,11 +12,16 @@ import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import pl.dawidszczesniak.blockchain_platform.network.HttpTextClient
+import pl.dawidszczesniak.blockchain_platform.feature.platform.dto.PaymentAssetDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.CreateProblemRequestDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.CreateProblemResponseDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.CreatedProblemDto
+import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ConfirmCreateProblemRequestDto
+import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ConfirmJoinProblemRequestDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.JoinProblemResponseDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ParticipationProblemDto
+import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.PrepareCreateProblemResponseDto
+import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.PrepareJoinProblemResponseDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ProblemExampleDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ProblemSummaryDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.RunProblemRequestDto
@@ -32,9 +37,11 @@ interface ProblemRemoteDataSource {
     suspend fun fetchProblems(): List<ProblemSummaryDto>
     suspend fun fetchCreatedProblems(): List<CreatedProblemDto>
     suspend fun fetchParticipationProblems(): List<ParticipationProblemDto>
-    suspend fun createProblem(request: CreateProblemRequestDto): CreateProblemResponseDto
+    suspend fun prepareCreateProblemOnChain(request: CreateProblemRequestDto): PrepareCreateProblemResponseDto
+    suspend fun confirmCreateProblemOnChain(request: ConfirmCreateProblemRequestDto): CreateProblemResponseDto
     suspend fun validateCreateProblem(request: ValidateCreateProblemRequestDto): ValidateCreateProblemResponseDto
-    suspend fun joinProblem(problemId: Int): JoinProblemResponseDto
+    suspend fun prepareJoinProblemOnChain(problemId: Int): PrepareJoinProblemResponseDto
+    suspend fun confirmJoinProblemOnChain(problemId: Int, request: ConfirmJoinProblemRequestDto): JoinProblemResponseDto
     suspend fun runProblemCode(problemId: Int, request: RunProblemRequestDto): RunProblemResponseDto
     suspend fun submitProblemCode(problemId: Int, request: RunProblemRequestDto): SubmissionJudgeJobDto
     suspend fun fetchSubmissionJudgeJob(jobId: Long): SubmissionJudgeJobDto
@@ -63,8 +70,12 @@ class ProblemRemoteDataSourceImpl(
                         explanation = exampleObj.requiredString("explanation"),
                     )
                 },
-                prizeAmount = obj.requiredLong("prizeAmount"),
-                entryFeeAmount = obj.requiredLong("entryFeeAmount"),
+                paymentAsset = json.decodeFromJsonElement(
+                    PaymentAssetDto.serializer(),
+                    obj.requiredObject("paymentAsset"),
+                ),
+                prizeAmountAtomic = obj.requiredString("prizeAmountAtomic"),
+                entryFeeAmountAtomic = obj.requiredString("entryFeeAmountAtomic"),
                 requiredParticipants = obj.requiredInt("requiredParticipants"),
                 registeredParticipants = obj.requiredInt("registeredParticipants"),
                 daysToStart = obj.requiredInt("daysToStart"),
@@ -114,14 +125,18 @@ class ProblemRemoteDataSourceImpl(
         }
     }
 
-    override suspend fun createProblem(request: CreateProblemRequestDto): CreateProblemResponseDto {
+    override suspend fun prepareCreateProblemOnChain(request: CreateProblemRequestDto): PrepareCreateProblemResponseDto {
         val json = Json { ignoreUnknownKeys = true }
         val body = json.encodeToString(CreateProblemRequestDto.serializer(), request)
-        val payload = httpTextClient.postJson(endpoint(apiBaseUrl, "/problems"), body)
-        val obj = json.parseToJsonElement(payload).jsonObject
-        return CreateProblemResponseDto(
-            id = obj.requiredInt("id"),
-        )
+        val payload = httpTextClient.postJson(endpoint(apiBaseUrl, "/problems/create/prepare"), body)
+        return json.decodeFromString(PrepareCreateProblemResponseDto.serializer(), payload)
+    }
+
+    override suspend fun confirmCreateProblemOnChain(request: ConfirmCreateProblemRequestDto): CreateProblemResponseDto {
+        val json = Json { ignoreUnknownKeys = true }
+        val body = json.encodeToString(ConfirmCreateProblemRequestDto.serializer(), request)
+        val payload = httpTextClient.postJson(endpoint(apiBaseUrl, "/problems/create/confirm"), body)
+        return json.decodeFromString(CreateProblemResponseDto.serializer(), payload)
     }
 
     override suspend fun validateCreateProblem(request: ValidateCreateProblemRequestDto): ValidateCreateProblemResponseDto {
@@ -151,18 +166,26 @@ class ProblemRemoteDataSourceImpl(
         )
     }
 
-    override suspend fun joinProblem(problemId: Int): JoinProblemResponseDto {
+    override suspend fun prepareJoinProblemOnChain(problemId: Int): PrepareJoinProblemResponseDto {
         val json = Json { ignoreUnknownKeys = true }
         val payload = httpTextClient.postJson(
-            endpoint(apiBaseUrl, "/problems/$problemId/join"),
+            endpoint(apiBaseUrl, "/problems/$problemId/join/prepare"),
             "{}",
         )
-        val obj = json.parseToJsonElement(payload).jsonObject
-        return JoinProblemResponseDto(
-            joined = obj.requiredBoolean("joined"),
-            registeredParticipants = obj.requiredInt("registeredParticipants"),
-            requiredParticipants = obj.requiredInt("requiredParticipants"),
+        return json.decodeFromString(PrepareJoinProblemResponseDto.serializer(), payload)
+    }
+
+    override suspend fun confirmJoinProblemOnChain(
+        problemId: Int,
+        request: ConfirmJoinProblemRequestDto,
+    ): JoinProblemResponseDto {
+        val json = Json { ignoreUnknownKeys = true }
+        val body = json.encodeToString(ConfirmJoinProblemRequestDto.serializer(), request)
+        val payload = httpTextClient.postJson(
+            endpoint(apiBaseUrl, "/problems/$problemId/join/confirm"),
+            body,
         )
+        return json.decodeFromString(JoinProblemResponseDto.serializer(), payload)
     }
 
     override suspend fun runProblemCode(
@@ -246,6 +269,11 @@ private fun JsonObject.optionalString(name: String): String? {
 
 private fun JsonObject.optionalArray(name: String): List<JsonElement> {
     return this[name]?.jsonArray ?: emptyList()
+}
+
+private fun JsonObject.requiredObject(name: String): JsonObject {
+    return this[name]?.jsonObject
+        ?: error("Missing or invalid '$name' in backend response.")
 }
 
 private fun JsonObject.requiredInt(name: String): Int {

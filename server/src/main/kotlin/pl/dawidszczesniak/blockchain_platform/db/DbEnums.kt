@@ -18,23 +18,18 @@ internal enum class SubmissionTestResultStatus(val dbValue: String) {
     Timeout("timeout"),
 }
 
-internal enum class SubmissionAnchorStatus(val dbValue: String) {
-    Pending("pending"),
-    Anchored("anchored"),
-    Failed("failed"),
-    Disabled("disabled"),
-}
-
 internal enum class SubmissionAttestationStatus(val dbValue: String) {
     Ok("ok"),
     Error("error"),
     Invalid("invalid"),
 }
 
-internal enum class AnchorBatchStatus(val dbValue: String) {
+internal enum class CompetitionSettlementStatus(val dbValue: String) {
     Pending("pending"),
-    Anchored("anchored"),
+    Settled("settled"),
+    Cancelled("cancelled"),
     Failed("failed"),
+    Disabled("disabled"),
 }
 
 internal enum class SubmissionJudgeJobStatus(val dbValue: String) {

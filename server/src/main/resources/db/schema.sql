@@ -29,9 +29,20 @@ CREATE TABLE IF NOT EXISTS problems (
     validation_result_hash VARCHAR(66),
     validation_image_hash VARCHAR(128),
     validated_at TIMESTAMPTZ,
-    prize_amount BIGINT NOT NULL CHECK (prize_amount >= 0),
-    entry_fee_amount BIGINT NOT NULL CHECK (entry_fee_amount >= 0),
+    payment_asset_code VARCHAR(32) NOT NULL DEFAULT 'ETH',
+    prize_amount TEXT NOT NULL,
+    entry_fee_amount TEXT NOT NULL,
     required_participants INTEGER NOT NULL CHECK (required_participants > 0),
+    onchain_competition_id BIGINT UNIQUE,
+    onchain_creation_key VARCHAR(66),
+    onchain_contract_address VARCHAR(66),
+    onchain_creation_tx_hash VARCHAR(128) UNIQUE,
+    onchain_creation_confirmed_at TIMESTAMPTZ,
+    onchain_settlement_status VARCHAR(16) NOT NULL DEFAULT 'disabled'
+        CHECK (onchain_settlement_status IN ('pending', 'settled', 'cancelled', 'failed', 'disabled')),
+    onchain_settlement_tx_hash VARCHAR(128),
+    onchain_settlement_error TEXT,
+    onchain_settled_at TIMESTAMPTZ,
     join_until_date DATE NOT NULL,
     submit_until_date DATE NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -41,6 +52,8 @@ CREATE TABLE IF NOT EXISTS problems (
 CREATE TABLE IF NOT EXISTS problem_participants (
     problem_id BIGINT NOT NULL REFERENCES problems(problem_id) ON DELETE CASCADE,
     user_id BIGINT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    join_tx_hash VARCHAR(128),
+    joined_onchain_at TIMESTAMPTZ,
     registered_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (problem_id, user_id)
 );
@@ -74,14 +87,10 @@ CREATE TABLE IF NOT EXISTS problem_submissions (
     commitment_hash VARCHAR(66) NOT NULL,
     runtime_ms INTEGER NOT NULL DEFAULT 0 CHECK (runtime_ms >= 0),
     memory_used_kb INTEGER CHECK (memory_used_kb >= 0),
-    anchor_status VARCHAR(16) NOT NULL
-        CHECK (anchor_status IN ('pending', 'anchored', 'failed', 'disabled')),
-    anchor_batch_id BIGINT,
-    anchor_merkle_root VARCHAR(66),
-    anchor_merkle_proof_json TEXT NOT NULL DEFAULT '[]',
-    anchor_tx_hash VARCHAR(128),
-    anchor_error TEXT,
-    anchored_at TIMESTAMPTZ,
+    onchain_record_contract_address VARCHAR(66),
+    onchain_record_tx_hash VARCHAR(128),
+    onchain_record_error TEXT,
+    onchain_recorded_at TIMESTAMPTZ,
     submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     FOREIGN KEY (problem_id, user_id)
         REFERENCES problem_participants(problem_id, user_id)
@@ -136,26 +145,11 @@ CREATE TABLE IF NOT EXISTS problem_submission_attestations (
     PRIMARY KEY (submission_id, node_id)
 );
 
-CREATE TABLE IF NOT EXISTS submission_anchor_batches (
-    batch_id BIGSERIAL PRIMARY KEY,
-    merkle_root_hash VARCHAR(66) NOT NULL,
-    leaves_count INTEGER NOT NULL CHECK (leaves_count > 0),
-    from_submission_id BIGINT NOT NULL,
-    to_submission_id BIGINT NOT NULL,
-    chain_id BIGINT,
-    contract_address VARCHAR(66),
-    tx_hash VARCHAR(128),
-    status VARCHAR(16) NOT NULL
-        CHECK (status IN ('pending', 'anchored', 'failed')),
-    failure_reason TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    anchored_at TIMESTAMPTZ
-);
-
 CREATE TABLE IF NOT EXISTS problem_winners (
     problem_id BIGINT NOT NULL,
     winner_user_id BIGINT NOT NULL,
-    payout_amount BIGINT NOT NULL CHECK (payout_amount >= 0),
+    payout_amount TEXT NOT NULL,
+    settlement_tx_hash VARCHAR(128),
     won_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (problem_id, winner_user_id),
     FOREIGN KEY (problem_id, winner_user_id)
@@ -166,15 +160,30 @@ CREATE TABLE IF NOT EXISTS problem_winners (
 CREATE TABLE IF NOT EXISTS dashboard_daily_metrics (
     metric_date DATE PRIMARY KEY,
     active_challenges INTEGER NOT NULL CHECK (active_challenges >= 0),
-    prize_pool_amount BIGINT NOT NULL CHECK (prize_pool_amount >= 0),
+    prize_pool_amount TEXT NOT NULL DEFAULT 'Mixed assets',
     submissions_count INTEGER NOT NULL CHECK (submissions_count >= 0)
 );
 
 ALTER TABLE problems
-    ALTER COLUMN prize_amount TYPE BIGINT USING prize_amount::BIGINT;
+    DROP CONSTRAINT IF EXISTS problems_prize_amount_check;
 
 ALTER TABLE problems
-    ALTER COLUMN entry_fee_amount TYPE BIGINT USING entry_fee_amount::BIGINT;
+    DROP CONSTRAINT IF EXISTS problems_entry_fee_amount_check;
+
+ALTER TABLE problem_winners
+    DROP CONSTRAINT IF EXISTS problem_winners_payout_amount_check;
+
+ALTER TABLE dashboard_daily_metrics
+    DROP CONSTRAINT IF EXISTS dashboard_daily_metrics_prize_pool_amount_check;
+
+ALTER TABLE problems
+    ALTER COLUMN prize_amount TYPE TEXT USING prize_amount::TEXT;
+
+ALTER TABLE problems
+    ALTER COLUMN entry_fee_amount TYPE TEXT USING entry_fee_amount::TEXT;
+
+ALTER TABLE problems
+    ADD COLUMN IF NOT EXISTS payment_asset_code VARCHAR(32);
 
 ALTER TABLE problems
     ADD COLUMN IF NOT EXISTS constraints_text TEXT;
@@ -200,6 +209,48 @@ ALTER TABLE problems
 ALTER TABLE problems
     ADD COLUMN IF NOT EXISTS validated_at TIMESTAMPTZ;
 
+ALTER TABLE problems
+    ADD COLUMN IF NOT EXISTS onchain_competition_id BIGINT;
+
+ALTER TABLE problems
+    ADD COLUMN IF NOT EXISTS onchain_creation_key VARCHAR(66);
+
+ALTER TABLE problems
+    ADD COLUMN IF NOT EXISTS onchain_contract_address VARCHAR(66);
+
+ALTER TABLE problems
+    ADD COLUMN IF NOT EXISTS onchain_creation_tx_hash VARCHAR(128);
+
+ALTER TABLE problems
+    ADD COLUMN IF NOT EXISTS onchain_creation_confirmed_at TIMESTAMPTZ;
+
+ALTER TABLE problems
+    ADD COLUMN IF NOT EXISTS onchain_settlement_status VARCHAR(16);
+
+ALTER TABLE problems
+    ADD COLUMN IF NOT EXISTS onchain_settlement_tx_hash VARCHAR(128);
+
+ALTER TABLE problems
+    ADD COLUMN IF NOT EXISTS onchain_settlement_error TEXT;
+
+ALTER TABLE problems
+    ADD COLUMN IF NOT EXISTS onchain_settled_at TIMESTAMPTZ;
+
+ALTER TABLE problem_participants
+    ADD COLUMN IF NOT EXISTS join_tx_hash VARCHAR(128);
+
+ALTER TABLE problem_participants
+    ADD COLUMN IF NOT EXISTS joined_onchain_at TIMESTAMPTZ;
+
+ALTER TABLE problem_winners
+    ADD COLUMN IF NOT EXISTS settlement_tx_hash VARCHAR(128);
+
+ALTER TABLE problem_winners
+    ALTER COLUMN payout_amount TYPE TEXT USING payout_amount::TEXT;
+
+ALTER TABLE dashboard_daily_metrics
+    ALTER COLUMN prize_pool_amount TYPE TEXT USING prize_pool_amount::TEXT;
+
 UPDATE problems
 SET constraints_text = COALESCE(constraints_text, '')
 WHERE constraints_text IS NULL;
@@ -212,11 +263,39 @@ UPDATE problems
 SET reference_solution_hash = COALESCE(NULLIF(reference_solution_hash, ''), '0x')
 WHERE reference_solution_hash IS NULL OR reference_solution_hash = '';
 
+UPDATE problems
+SET onchain_settlement_status = 'disabled'
+WHERE onchain_settlement_status IS NULL OR onchain_settlement_status = '';
+
+UPDATE problems
+SET payment_asset_code = 'ETH'
+WHERE payment_asset_code IS NULL OR payment_asset_code = '';
+
 ALTER TABLE problems
     ALTER COLUMN constraints_text SET DEFAULT '';
 
 ALTER TABLE problems
     ALTER COLUMN examples_json SET DEFAULT '[]';
+
+ALTER TABLE problems
+    ALTER COLUMN onchain_settlement_status SET DEFAULT 'disabled';
+
+ALTER TABLE problems
+    ALTER COLUMN payment_asset_code SET DEFAULT 'ETH';
+
+ALTER TABLE problems
+    ALTER COLUMN onchain_settlement_status SET NOT NULL;
+
+ALTER TABLE problems
+    ALTER COLUMN payment_asset_code SET NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS problems_onchain_competition_id_uq
+    ON problems(onchain_competition_id)
+    WHERE onchain_competition_id IS NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS problems_onchain_creation_tx_hash_uq
+    ON problems(onchain_creation_tx_hash)
+    WHERE onchain_creation_tx_hash IS NOT NULL;
 
 ALTER TABLE problems
     ALTER COLUMN reference_solution_hash SET DEFAULT '0x';
@@ -229,9 +308,6 @@ ALTER TABLE problems
 
 ALTER TABLE problems
     ALTER COLUMN reference_solution_hash SET NOT NULL;
-
-ALTER TABLE problem_winners
-    ALTER COLUMN payout_amount TYPE BIGINT USING payout_amount::BIGINT;
 
 ALTER TABLE problem_submissions
     ADD COLUMN IF NOT EXISTS source_code TEXT;
@@ -251,6 +327,58 @@ ALTER TABLE problem_submissions
 ALTER TABLE problem_submissions
     ADD COLUMN IF NOT EXISTS consensus_image_hash VARCHAR(128);
 
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_name = 'problem_submissions'
+          AND column_name = 'onchain_result_registry_address'
+    ) THEN
+        ALTER TABLE problem_submissions
+            RENAME COLUMN onchain_result_registry_address TO onchain_record_contract_address;
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_name = 'problem_submissions'
+          AND column_name = 'onchain_result_tx_hash'
+    ) THEN
+        ALTER TABLE problem_submissions
+            RENAME COLUMN onchain_result_tx_hash TO onchain_record_tx_hash;
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_name = 'problem_submissions'
+          AND column_name = 'onchain_result_error'
+    ) THEN
+        ALTER TABLE problem_submissions
+            RENAME COLUMN onchain_result_error TO onchain_record_error;
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_name = 'problem_submissions'
+          AND column_name = 'onchain_result_recorded_at'
+    ) THEN
+        ALTER TABLE problem_submissions
+            RENAME COLUMN onchain_result_recorded_at TO onchain_recorded_at;
+    END IF;
+END $$;
+
 ALTER TABLE problem_submissions
     ADD COLUMN IF NOT EXISTS consensus_nodes INTEGER;
 
@@ -264,25 +392,16 @@ ALTER TABLE problem_submissions
     ADD COLUMN IF NOT EXISTS memory_used_kb INTEGER;
 
 ALTER TABLE problem_submissions
-    ADD COLUMN IF NOT EXISTS anchor_status VARCHAR(16);
+    ADD COLUMN IF NOT EXISTS onchain_record_contract_address VARCHAR(66);
 
 ALTER TABLE problem_submissions
-    ADD COLUMN IF NOT EXISTS anchor_batch_id BIGINT;
+    ADD COLUMN IF NOT EXISTS onchain_record_tx_hash VARCHAR(128);
 
 ALTER TABLE problem_submissions
-    ADD COLUMN IF NOT EXISTS anchor_merkle_root VARCHAR(66);
+    ADD COLUMN IF NOT EXISTS onchain_record_error TEXT;
 
 ALTER TABLE problem_submissions
-    ADD COLUMN IF NOT EXISTS anchor_merkle_proof_json TEXT;
-
-ALTER TABLE problem_submissions
-    ADD COLUMN IF NOT EXISTS anchor_tx_hash VARCHAR(128);
-
-ALTER TABLE problem_submissions
-    ADD COLUMN IF NOT EXISTS anchor_error TEXT;
-
-ALTER TABLE problem_submissions
-    ADD COLUMN IF NOT EXISTS anchored_at TIMESTAMPTZ;
+    ADD COLUMN IF NOT EXISTS onchain_recorded_at TIMESTAMPTZ;
 
 UPDATE problem_submissions
 SET source_code = COALESCE(source_code, '')
@@ -328,14 +447,6 @@ SET memory_used_kb = (
 )
 WHERE memory_used_kb IS NULL;
 
-UPDATE problem_submissions
-SET anchor_status = COALESCE(NULLIF(anchor_status, ''), 'disabled')
-WHERE anchor_status IS NULL OR anchor_status = '';
-
-UPDATE problem_submissions
-SET anchor_merkle_proof_json = COALESCE(NULLIF(anchor_merkle_proof_json, ''), '[]')
-WHERE anchor_merkle_proof_json IS NULL OR anchor_merkle_proof_json = '';
-
 ALTER TABLE problem_submissions
     ALTER COLUMN source_code SET NOT NULL;
 
@@ -361,12 +472,6 @@ ALTER TABLE problem_submissions
     ALTER COLUMN runtime_ms SET DEFAULT 0;
 
 ALTER TABLE problem_submissions
-    ALTER COLUMN anchor_status SET DEFAULT 'disabled';
-
-ALTER TABLE problem_submissions
-    ALTER COLUMN anchor_merkle_proof_json SET DEFAULT '[]';
-
-ALTER TABLE problem_submissions
     ALTER COLUMN code_hash SET NOT NULL;
 
 ALTER TABLE problem_submissions
@@ -384,17 +489,29 @@ ALTER TABLE problem_submissions
 ALTER TABLE problem_submissions
     ALTER COLUMN runtime_ms SET NOT NULL;
 
-ALTER TABLE problem_submissions
-    ALTER COLUMN anchor_status SET NOT NULL;
-
-ALTER TABLE problem_submissions
-    ALTER COLUMN anchor_merkle_proof_json SET NOT NULL;
+DO $$
+BEGIN
+    ALTER TABLE problems
+        ADD CONSTRAINT chk_problems_prize_amount_atomic_format
+        CHECK (prize_amount ~ '^[0-9]+$');
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
 
 DO $$
 BEGIN
-    ALTER TABLE problem_submissions
-        ADD CONSTRAINT chk_problem_submissions_anchor_status
-        CHECK (anchor_status IN ('pending', 'anchored', 'failed', 'disabled'));
+    ALTER TABLE problems
+        ADD CONSTRAINT chk_problems_entry_fee_amount_atomic_format
+        CHECK (entry_fee_amount ~ '^[0-9]+$');
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+    ALTER TABLE problem_winners
+        ADD CONSTRAINT chk_problem_winners_payout_amount_atomic_format
+        CHECK (payout_amount ~ '^[0-9]+$');
 EXCEPTION
     WHEN duplicate_object THEN NULL;
 END $$;
@@ -545,8 +662,8 @@ CREATE INDEX IF NOT EXISTS idx_problem_submissions_user_id
 CREATE INDEX IF NOT EXISTS idx_problem_submissions_problem_user
     ON problem_submissions(problem_id, user_id);
 
-CREATE INDEX IF NOT EXISTS idx_problem_submissions_anchor_status
-    ON problem_submissions(anchor_status, submitted_at);
+CREATE INDEX IF NOT EXISTS idx_problem_submissions_onchain_record_tx
+    ON problem_submissions(onchain_record_tx_hash);
 
 CREATE INDEX IF NOT EXISTS idx_problem_submission_judge_jobs_status_requested_at
     ON problem_submission_judge_jobs(status, requested_at);
@@ -559,9 +676,6 @@ CREATE INDEX IF NOT EXISTS idx_problem_submission_attestations_submission_id
 
 CREATE INDEX IF NOT EXISTS idx_problem_submission_attestations_node_id
     ON problem_submission_attestations(node_id);
-
-CREATE INDEX IF NOT EXISTS idx_submission_anchor_batches_status_created_at
-    ON submission_anchor_batches(status, created_at);
 
 CREATE INDEX IF NOT EXISTS idx_problems_created_by_user_id
     ON problems(created_by_user_id);

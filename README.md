@@ -1,282 +1,271 @@
-### Architecture (MVI + Clean Architecture)
+# Blockchain Platform
 
-- `shared`:
-  shared DTO/domain models used by frontend and backend.
-- `composeApp`:
-  web frontend module: Compose UI, navigation shell, feature-level `datasource` / `repository` / `usecase` / `ViewModel` code, DI composition root.
-- `server`:
-  backend module: Ktor API, auth, PostgreSQL/Redis access, sandbox judge orchestration, blockchain anchoring.
+Kotlin full-stack coding competition platform with one on-chain application contract deployed behind an OpenZeppelin UUPS proxy.
 
-Rules:
+The runtime contract surface is still one address: the `BlockchainTestContract` proxy. The implementation contract contains logic and can be replaced. The proxy keeps the persistent storage under ERC-1967, so competition state, winner history, and recorded submission results survive upgrades.
 
-- UI talks to feature ViewModels/state stores.
-- frontend ViewModels use feature use cases/repositories inside `composeApp`.
-- `shared` carries API DTOs and shared domain models; there is no separate `data` module in the current codebase.
-- backend wiring lives in `server` Koin modules.
+OpenZeppelin references used for this setup:
 
-### Environments (local / staging / prod)
+- UUPS overview: https://docs.openzeppelin.com/upgrades
+- Foundry upgrades workflow: https://docs.openzeppelin.com/upgrades-plugins/foundry-upgrades
+- Foundry upgrades API: https://docs.openzeppelin.com/upgrades-plugins/api-foundry-upgrades
 
-The web app reads environment config from a generated Kotlin file at build time.
+## Architecture
 
-JDK requirement for Gradle:
+- `contracts/BlockchainTestContract.sol`
+  - OpenZeppelin upgradeable implementation contract
+  - inherits `Ownable2StepUpgradeable`, `UUPSUpgradeable`, `ReentrancyGuardTransient`
+  - initializer replaces constructor
+  - supports native ETH plus whitelisted ERC-20 payment tokens such as USDC
+  - rejects fee-on-transfer ERC-20s, so escrow math stays exact
+  - exposes `version()` returning `2.0.0`
+- UUPS proxy
+  - deployed as ERC-1967 proxy
+  - stores all persistent state
+  - keeps the user-facing contract address stable across upgrades
+- `server`
+  - Ktor backend for prepare/create/join verification, settlement, refunds, and accepted result recording
+- `composeApp`
+  - Compose Multiplatform web frontend
+- `sandbox-runner`
+  - isolated code execution nodes used for judging consensus
 
-- use JDK `21` for all Gradle tasks (running with JDK `25.0.1` can fail during Gradle Kotlin DSL bootstrap)
-- example: `JAVA_HOME=$(/usr/libexec/java_home -v 21) ./gradlew :server:run -PappEnv=local`
+## UUPS Upgrade Model
 
-Run backend + frontend together (two terminals):
+This is the exact model you asked for:
 
-- local (default) backend: `./gradlew :server:run -PappEnv=local`
-- local (default) frontend: `./gradlew :composeApp:jsBrowserDevelopmentRun -PappEnv=local`
-- local (wasm) frontend: `./gradlew :composeApp:wasmJsBrowserDevelopmentRun -PappEnv=local`
-- staging backend: `./gradlew :server:run -PappEnv=staging`
-- staging frontend: `./gradlew :composeApp:jsBrowserProductionWebpack -PappEnv=staging -PapiBaseUrl=https://staging-api.your-domain.com`
-- prod backend: `./gradlew :server:run -PappEnv=prod`
-- prod frontend: `./gradlew :composeApp:jsBrowserProductionWebpack -PappEnv=prod -PapiBaseUrl=https://api.your-domain.com`
+- implementation contract
+  - contains logic
+  - can be replaced with a new implementation
+- proxy contract
+  - keeps storage forever
+  - delegates calls to the current implementation
+  - keeps the same public address for frontend, backend, and users
 
-Local frontend guardrail:
+In practice:
 
-- `composeApp` refuses custom `-PapiBaseUrl` in `local`; local frontend can call only `http://localhost:8080`
+1. deploy implementation + UUPS proxy
+2. initialize through proxy
+3. users and backend always use the proxy address
+4. when you need a new version, deploy a new implementation and call `upgradeToAndCall(...)` through the proxy
+5. storage remains in proxy, so values are preserved if storage layout stays compatible
 
-### PostgreSQL (3NF)
+Current scope of the on-chain contract:
 
-Backend endpoint `/problems` is now read from PostgreSQL.
-`/problems` returns only rows with `problem_status = 'open'`.
-Additional read-only endpoints:
+- native chain currency, currently ETH on Sepolia
+- ERC-20 tokens on the same chain, currently USDC
 
-- `/problems/created` (auth required)
-- `/problems/participation` (auth required)
-- `/dashboard/metrics?limit=30`
-- `/dashboard/updates?limit=3` (latest problems from `problems`, ordered by `created_at DESC`)
-- `/platform/meta`
-- `/health`
+Future scope:
 
-Authentication endpoints:
+- more ERC-20 tokens can be enabled without upgrading the proxy, by whitelisting them
+- non-EVM or cross-chain rails like BTC, Arbitrum bridged settlement, or other L2-native payment routes need a new backend payment rail abstraction and separate settlement integration; they are not something a single Ethereum contract can natively execute on its own
 
-- `POST /auth/challenge` (create SIWE challenge for wallet address + chain id)
-- `POST /auth/verify` (verify signed challenge and create auth session cookie)
-- `GET /auth/session` (returns current authenticated wallet)
-- `POST /auth/logout` (clears auth cookie)
-- `POST /auth/logout-all` (invalidates all active sessions for authenticated user)
+The frontend and backend were refactored around a generic `paymentAsset` model, so extending beyond `ETH + USDC` later does not require another domain-model rewrite.
 
-Auth storage model:
+## Foundry Tooling
 
-- SIWE nonces/challenges are stored in Redis with TTL and one-time consume semantics.
-- auth sessions are server-side in Redis (`session_id` cookie only).
-- `POST` auth/protected mutations enforce trusted request origin (`Origin` / `Referer`) to harden CSRF.
-- EIP-1271 smart-contract wallet signature verification is supported when `ETH_RPC_URL` is configured.
+The project now uses Foundry instead of Hardhat for contract work.
 
-Database schema (3NF):
+Added:
 
-- `problems`: core problem attributes (`title`, `description`, `problem_status` = `open|closed`, `prize_amount`, `entry_fee_amount`, dates, participant limits, `created_by_user_id`).
-- `users`: unique user identities (`registered_at`, `last_login_at`).
-- `problem_participants`: mapping of participants (users) assigned/registered to a specific problem.
-- `problem_tests`: ordered tests per problem (`input_data`, `expected_output`, `validator_code`, visibility flag, runtime limits).
-- `problem_submissions`: persisted official submission records. Current production flow persists only accepted submits; rejected/error submit attempts stay in async judge jobs.
-- `problem_submission_test_results`: per-test runtime/memory details stored for persisted submissions. Schema supports `passed|failed|error|timeout`, but with the current submit flow persisted rows are created only for accepted submissions.
-- `problem_submission_judge_jobs`: async judge queue/job state for submits (`queued|running|accepted|rejected|error`) including final payload or rejected preview.
-- `problem_submission_attestations`: per-node sandbox attestation evidence collected during `submit` (`node_id`, `run_hash`, `result_hash`, signature validity, consensus flag, message).
-- `problem_submissions.runtime_ms`: official submission runtime for the whole judge session; tests still run in isolation, but the stored runtime is measured across the full suite execution.
-- `problem_submissions.memory_used_kb`: official submission memory usage (`max` across isolated tests from the matching consensus nodes).
-- `submission_anchor_batches`: local anchoring audit trail. Current on-chain flow anchors one submission hash per tx, so each batch row currently has `leaves_count = 1` and root = submission hash.
-- `problem_winners`: winner history per problem and winner user (`winner_user_id`, `payout_amount`, `won_at`).
-- `dashboard_daily_metrics`: daily snapshot history (`metric_date`, `active_challenges`, `prize_pool_amount`, `submissions_count`).
+- [foundry.toml](/Users/computer.account/Desktop/blockchain-platform/foundry.toml)
+- [remappings.txt](/Users/computer.account/Desktop/blockchain-platform/remappings.txt)
+- [DeployBlockchainTestContract.s.sol](/Users/computer.account/Desktop/blockchain-platform/script/DeployBlockchainTestContract.s.sol)
+- [UpgradeBlockchainTestContract.s.sol](/Users/computer.account/Desktop/blockchain-platform/script/UpgradeBlockchainTestContract.s.sol)
+- [ValidateBlockchainTestContract.s.sol](/Users/computer.account/Desktop/blockchain-platform/script/ValidateBlockchainTestContract.s.sol)
 
-Local startup:
+Removed:
 
-- optional: build sandbox image hash for attestation:
-  - `docker build -t blockchain-platform-sandbox-runner:local sandbox-runner`
-  - `docker save blockchain-platform-sandbox-runner:local | shasum -a 256`
-  - copy hash to env `SANDBOX_IMAGE_HASH` (same value for all 3 nodes)
-- optional: set node attestation secrets for backend verification:
-  - `export SANDBOX_NODE_SECRETS="sandbox-node-1=local-dev-sandbox-secret-1,sandbox-node-2=local-dev-sandbox-secret-2,sandbox-node-3=local-dev-sandbox-secret-3"`
-- when `APP_ENV=local` and `SANDBOX_NODE_SECRETS` is not set, backend falls back to the same default local secrets as `docker-compose.yml`
-- start DB + Redis + 3 sandbox nodes:
-  - `docker compose up -d postgres redis sandbox-node-1 sandbox-node-2 sandbox-node-3`
-  - after changes in `sandbox-runner/runner.py`, rebuild nodes:
-    - `docker compose build sandbox-node-1 sandbox-node-2 sandbox-node-3`
-    - `docker compose up -d sandbox-node-1 sandbox-node-2 sandbox-node-3`
-- start backend: `./gradlew :server:run -PappEnv=local`
-  - helper if port `8080` is already occupied: `./gradlew :server:runLocalForce8080`
+- Hardhat config
+- Hardhat JS deploy/upgrade/validate scripts
 
-Backend auth startup requirement:
+## Requirements
 
-- backend now requires reachable Redis on startup (no fallback challenge store).
+- Java 21
+- Foundry
+- Node.js
+- Docker
+- Ethereum RPC endpoint
 
-On startup, backend automatically:
+Node.js is still needed for OpenZeppelin Foundry upgrade safety validation. OpenZeppelin documents this explicitly for `openzeppelin-foundry-upgrades`.
 
-- creates schema from `server/src/main/resources/db/schema.sql`.
+## Install Contract Dependencies
 
-Database environment variables:
+Run:
 
-- `DATABASE_URL` (optional, full JDBC URL, e.g. `jdbc:postgresql://localhost:5432/blockchain_platform`)
-- `DB_HOST` (default: `localhost`)
-- `DB_PORT` (default: `5432`)
-- `DB_NAME` (default: `blockchain_platform`)
-- `DB_USER` (default: `blockchain_user`)
-- `DB_PASSWORD` (default: `blockchain_pass`)
-
-Redis environment variables:
-
-- `REDIS_URL` (optional, e.g. `redis://:password@localhost:6379/0` or `rediss://...`)
-- `REDIS_HOST` (default: `localhost`, ignored when `REDIS_URL` is set)
-- `REDIS_PORT` (default: `6379`, ignored when `REDIS_URL` is set)
-- `REDIS_USERNAME` (optional)
-- `REDIS_PASSWORD` (optional)
-- `REDIS_DATABASE` (default: `0`)
-- `REDIS_SSL` (`true|false`, default: `false`; ignored when `REDIS_URL` is set)
-- in `staging/prod`: Redis password is required and Redis host cannot point to `localhost`
-
-Sandbox execution environment variables (backend):
-
-- `SANDBOX_NODES` (comma-separated URLs; default: `http://127.0.0.1:8091,http://127.0.0.1:8092,http://127.0.0.1:8093`)
-- `SANDBOX_REQUEST_TIMEOUT_MS` (default: `20000`)
-- `SANDBOX_CONNECT_TIMEOUT_MS` (default: `2500`)
-- `SANDBOX_IMAGE_HASH` (optional; if set, backend verifies returned sandbox image hash and rejects mismatches)
-- `SANDBOX_CONSENSUS_THRESHOLD` (default: `3`; minimum matching nodes required during `submit`)
-- `SANDBOX_NODE_SECRETS` (comma-separated `nodeId=secret`; backend verifies node HMAC attestations during `submit`; in `APP_ENV=local` it defaults to the same local secrets as `docker-compose.yml`)
-  - backend fails on startup in `staging/prod` when this variable is missing
-  - backend also fails on startup when the value is malformed or when too few secrets are configured to satisfy `SANDBOX_CONSENSUS_THRESHOLD`
-
-Sandbox runner environment variables (each docker node):
-
-- `SANDBOX_NODE_ID` (e.g. `sandbox-node-1`)
-- `SANDBOX_PORT` (default: `8080`)
-- `SANDBOX_IMAGE_HASH` (same hash on all 3 nodes)
-- `SANDBOX_VERSION` (arbitrary version label for attestation metadata)
-- `SANDBOX_ATTESTATION_SECRET` (shared secret for node-level HMAC attestation signature)
-
-Submission anchoring environment variables (backend):
-
-- `ETH_ANCHOR_ENABLED` (`true|false`, default: `false`)
-- `ETH_CHAIN_ID` (required when anchoring enabled)
-- `ETH_ANCHOR_CONTRACT_ADDRESS` (required when anchoring enabled)
-- `ETH_ANCHOR_PRIVATE_KEY` (required when anchoring enabled)
-- `ETH_ANCHOR_METHOD_NAME` (default: `anchorSubmission`)
-- `ETH_ANCHOR_GAS_LIMIT` (default: `350000`)
-- `ETH_ANCHOR_GAS_PRICE_WEI` (optional; if omitted backend reads `eth_gasPrice`)
-- `ETH_ANCHOR_RECEIPT_TIMEOUT_MS` (default: `90000`)
-- `ETH_ANCHOR_RECEIPT_POLL_INTERVAL_MS` (default: `2000`)
-- `ETH_ANCHOR_EXPLORER_TX_BASE_URL` (optional, e.g. `https://sepolia.etherscan.io/tx`)
-
-Execution endpoints:
-
-- `POST /problems/create/validate` - create-problem reference validation used by `Uruchom test` / `Uruchom wszystkie`; runs on a single sandbox node with failover
-- `POST /problems/{problemId}/run` - single-node run with failover (preview)
-- `POST /problems/{problemId}/submit` - enqueue async judge job; accepted submissions are persisted only after the worker confirms all tests passed
-- `GET /problems/submission-jobs/{jobId}` - poll async submit status/result
-
-Judge execution model:
-
-- tests always run in isolation for correctness and sandbox safety
-- create-problem validation (`POST /problems/create/validate`) uses one sandbox node; displayed per-test runtime and memory come from that node
-- participant `RUN` (`POST /problems/{problemId}/run`) also uses one sandbox node; displayed runtime and memory come from that node
-- `SUBMIT` executes on all configured sandbox nodes
-- `SUBMIT` consensus is based on valid node attestations plus identical `resultHash` + `imageHash`, not on averages; with the current default `SANDBOX_CONSENSUS_THRESHOLD=3`, this means strict `3/3` agreement for the local 3-node cluster
-- official submission `runtime_ms` is measured conservatively as the highest suite runtime reported by the matching consensus nodes
-- official submission `memory_used_kb` is measured conservatively as the highest per-test memory usage reported by the matching consensus nodes
-- accepted submit test-by-test details shown to the user are taken from the first node inside the winning consensus group; official runtime/memory still use the conservative aggregation above
-- current web solver UI submits `kotlin`; backend judge profiles also define `java`
-- language-specific execution profiles are applied before sending tests to sandbox, so timeout/memory policy can differ per language
-
-Create problem validation contract (production flow):
-
-- `testCases` are the only source of cases for judge.
-- at least `1` test must be public (`isHidden=false`).
-- only Kotlin reference solutions are currently supported during create (`referenceSolutionLanguage = "kotlin"`).
-- `referenceSolutionCode` is required and is executed in sandbox during create.
-- backend computes `expectedOutput` for every test directly from `referenceSolutionCode`.
-- Problem is persisted only if reference solution passes:
-  - all `testCases`,
-  - and repeated runs produce deterministic output set.
-
-Minimal payload example (`POST /problems`):
-
-```json
-{
-  "title": "Square Number",
-  "description": "Given integer n, return n*n.",
-  "constraints": "1 <= n <= 10^6",
-  "referenceSolutionCode": "fun solve(input: String): String { val n = input.trim().toLong(); return (n * n).toString() }",
-  "referenceSolutionLanguage": "kotlin",
-  "prizeAmount": 1000,
-  "entryFeeAmount": 10,
-  "requiredParticipants": 1,
-  "joinUntilDate": "2026-04-10",
-  "submitUntilDate": "2026-04-20",
-  "testCases": [
-    {
-      "inputData": "5",
-      "isHidden": false,
-      "timeoutMs": 1000,
-      "memoryLimitMb": 256
-    },
-    {
-      "inputData": "7",
-      "isHidden": false,
-      "timeoutMs": 1000,
-      "memoryLimitMb": 256
-    },
-    {
-      "inputData": "10",
-      "isHidden": false,
-      "timeoutMs": 1000,
-      "memoryLimitMb": 256
-    }
-  ]
-}
+```bash
+forge install foundry-rs/forge-std
+forge install OpenZeppelin/openzeppelin-foundry-upgrades
+forge install OpenZeppelin/openzeppelin-contracts-upgradeable
 ```
 
-Minimal participant code that passes the example above:
+The repo is already configured for the remappings OpenZeppelin requires for Contracts v5.
 
-```kotlin
-fun solve(input: String): String {
-    val n = input.trim().toLong()
-    return (n * n).toString()
-}
+## Local App Development
+
+1. Edit [`.env.local`](/Users/computer.account/Desktop/blockchain-platform/.env.local).
+
+2. Start local infrastructure:
+
+```bash
+docker compose --env-file .env.local up -d postgres redis sandbox-node-1 sandbox-node-2 sandbox-node-3
 ```
 
-Reference contract:
+3. Start backend:
 
-- `contracts/SubmissionAnchorRegistry.sol`
-- current contract stores one anchored submission hash per `submissionId`
-- backend still writes a local anchor-batch audit row, but current flow is `1 submit = 1 anchored hash`
+```bash
+./gradlew :server:runLocalForce8080
+```
 
-Auth environment variables:
+4. Start frontend:
 
-- `AUTH_DOMAIN` (default: `localhost:8081`)
-- `AUTH_URI` (default: `http://localhost:8081`)
-- `AUTH_CHALLENGE_TTL_SECONDS` (default: `300`)
-- `AUTH_MAX_ACTIVE_CHALLENGES_PER_WALLET` (default: `5`, range: `1..20`)
-- `AUTH_SESSION_COOKIE` (default: `bp_auth_session`)
-- `AUTH_SESSION_SIGN_KEY` (default: `local-dev-sign-key-change-me`; set strong value outside local)
-- `AUTH_SESSION_SECURE` (`true|false`, default: `false`)
-- `AUTH_SESSION_TTL_SECONDS` (default: `1209600` = 14 days)
-- `AUTH_SESSION_SAME_SITE` (`Lax|Strict|None`, default: `Lax`; `None` requires secure cookie)
-- `AUTH_TRUST_PROXY_HEADERS` (`true|false`, default: `false`; enable only behind trusted reverse proxy)
-- `AUTH_TRUSTED_ORIGINS` (optional comma-separated origin list, e.g. `https://app.example.com,https://admin.example.com`; defaults to origin from `AUTH_URI`)
-- `AUTH_RATE_LIMIT_CHALLENGE_PER_MIN` (default: `40`)
-- `AUTH_RATE_LIMIT_VERIFY_PER_MIN` (default: `80`)
-- `AUTH_RATE_LIMIT_SESSION_PER_MIN` (default: `120`)
-- in `staging/prod`: backend fails fast unless cookie is secure, `AUTH_SESSION_SIGN_KEY` is strong (`>= 32` chars), `AUTH_DOMAIN` is not localhost, and `AUTH_URI` / `AUTH_TRUSTED_ORIGINS` use `https://`
+```bash
+./gradlew :composeApp:jsBrowserDevelopmentRun
+```
 
-Blockchain environment variables:
+Frontend runs on `http://localhost:8081`, backend on `http://localhost:8080`.
 
-- `ETH_RPC_URL` (required in `staging/prod`; enables smart-contract wallet signature verification via EIP-1271)
-- in `staging/prod`: `ETH_RPC_URL` must use `https://`
-- chain policy is environment-bound:
-  - `APP_ENV=prod` => mainnet only (`chainId=1`)
-  - `APP_ENV=local|staging` => testnet only (`chainId != 1`)
-  - this policy is enforced for login challenges (`/auth/challenge`) and submit anchoring (`ETH_CHAIN_ID`)
+## Single `.env.local`
 
-CORS environment variables:
+Backend, frontend build, Docker Compose, and Foundry scripts use one configuration source: [`.env.local`](/Users/computer.account/Desktop/blockchain-platform/.env.local).
 
-- `CORS_ALLOWED_HOSTS` (comma-separated, e.g. `https://app.example.com,https://admin.example.com`)
-  - in `staging/prod`: required, and only `https://` origins are accepted
+Before running `forge script`, export that file into your shell:
 
-### Trunk-based workflow (recommended)
+```bash
+set -a
+source .env.local
+set +a
+```
 
-- `main` is the trunk.
-- Short-lived feature branches are merged quickly into `main`.
-- Staging deploys from `main`.
-- Production deploys from tags (e.g., `v1.2.3`) on `main`.
-- PR preview environments can be added later as a CI/CD step.
+Do not use a second env file, Gradle properties, or process env overrides for project configuration. Keep all configurable values in `.env.local`.
+
+For `ETH + USDC` the important blockchain entries are:
+
+- `ETH_RPC_URL`
+- `ETH_PLATFORM_PROXY_ADDRESS`
+- `ETH_PLATFORM_OPERATOR_PRIVATE_KEY`
+- `ETH_PLATFORM_SUPPORTED_ERC20_TOKENS`
+- `ETH_PLATFORM_INITIAL_SUPPORTED_PAYMENT_TOKEN`
+
+Recommended Sepolia USDC format:
+
+```env
+ETH_PLATFORM_SUPPORTED_ERC20_TOKENS=USDC|USD Coin|USDC|6|0x...
+ETH_PLATFORM_INITIAL_SUPPORTED_PAYMENT_TOKEN=0x...
+```
+
+`ETH_PLATFORM_INITIAL_SUPPORTED_PAYMENT_TOKEN` is optional. If you leave it empty and `ETH_PLATFORM_SUPPORTED_ERC20_TOKENS` contains a `USDC|...|ADDRESS` entry, the deploy script will automatically whitelist that USDC token during initialization. The backend/frontend asset catalog reads `ETH_PLATFORM_SUPPORTED_ERC20_TOKENS`.
+
+## Validate, Deploy, Upgrade
+
+Validate current implementation:
+
+```bash
+npm install
+set -a
+source .env.local
+set +a
+forge clean
+env -u ETH_RPC_URL forge script script/ValidateBlockchainTestContract.s.sol:ValidateBlockchainTestContract
+```
+
+Deploy UUPS proxy:
+
+The deploy script uses platform fee `500` basis points by default and initializes owner, operator, and treasury to the wallet behind `ETH_PLATFORM_OPERATOR_PRIVATE_KEY`. If `ETH_PLATFORM_INITIAL_SUPPORTED_PAYMENT_TOKEN` is set, that ERC-20 is whitelisted from the first block of the proxy.
+
+Command:
+
+```bash
+set -a
+source .env.local
+set +a
+forge clean
+forge script script/DeployBlockchainTestContract.s.sol:DeployBlockchainTestContract \
+  --rpc-url "$ETH_RPC_URL" \
+  --broadcast
+```
+
+Upgrade proxy:
+
+Command:
+
+```bash
+set -a
+source .env.local
+set +a
+forge clean
+forge script script/UpgradeBlockchainTestContract.s.sol:UpgradeBlockchainTestContract \
+  --rpc-url "$ETH_RPC_URL" \
+  --sender "$(cast wallet address --private-key "$ETH_PLATFORM_OPERATOR_PRIVATE_KEY")" \
+  --broadcast
+```
+
+The `--sender` flag matters for upgrades because the proxy owner must authorize the UUPS upgrade.
+
+## Recommended Upgrade Discipline
+
+For future implementation versions:
+
+1. keep proxy address unchanged
+2. preserve storage layout order
+3. only append new storage variables
+4. do not remove or reorder storage fields
+5. if you introduce a new implementation file, annotate it with `@custom:oz-upgrades-from <reference>`
+
+That is the OpenZeppelin-safe path for preserving proxy storage across upgrades.
+
+## Backend Flow
+
+Create competition:
+
+1. frontend calls backend prepare endpoint
+2. backend returns prepared wallet tx for `createCompetition(...)`
+3. if asset is ERC-20, backend may also return an approval tx that must be signed first
+4. user signs wallet transaction(s)
+5. backend verifies calldata, value, and `CompetitionCreated`
+6. backend persists on-chain competition id
+
+Join competition:
+
+1. frontend calls backend prepare endpoint
+2. backend returns prepared wallet tx for `joinCompetition(...)`
+3. if asset is ERC-20, backend may also return an approval tx that must be signed first
+4. user signs wallet transaction(s)
+5. backend verifies `CompetitionJoined`
+6. backend records participation
+
+Accepted submission:
+
+1. sandbox nodes run code
+2. backend requires consensus
+3. backend persists accepted submission
+4. backend operator records it on-chain with `recordSubmissionResult(...)`
+
+Settlement:
+
+1. backend worker finds competitions ready for settlement
+2. operator calls `settleCompetition(...)`
+3. if no winner can be produced, operator calls `cancelCompetition(...)`
+4. refunds stay claimable from the same proxy address
+
+## Verification
+
+Backend tests:
+
+```bash
+./gradlew test
+```
+
+Foundry compile:
+
+```bash
+forge build
+```
+
+OpenZeppelin validation:
+
+```bash
+npm install
+forge clean
+env -u ETH_RPC_URL forge script script/ValidateBlockchainTestContract.s.sol:ValidateBlockchainTestContract
+```

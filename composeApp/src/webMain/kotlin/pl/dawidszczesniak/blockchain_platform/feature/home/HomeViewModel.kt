@@ -20,7 +20,7 @@ data class HomeState(
     val showLatestChallengesSection: Boolean = true,
     val showJoinBuildersSection: Boolean = true,
     val activeChallenges: Int? = null,
-    val prizePoolAmount: Long? = null,
+    val prizePoolLabel: String? = null,
     val submissionsToday: Int? = null,
     val submissionsDayOverDayPercent: Int? = null,
     val updates: List<HomeUpdateItem> = emptyList(),
@@ -84,7 +84,7 @@ class HomeViewModel(
                     showLatestChallengesSection = dashboardConfig.showLatestChallengesSection,
                     showJoinBuildersSection = dashboardConfig.showJoinBuildersSection,
                     activeChallenges = latestMetric?.activeChallenges,
-                    prizePoolAmount = latestMetric?.prizePoolAmount,
+                    prizePoolLabel = latestMetric?.prizePoolLabel,
                     submissionsToday = latestMetric?.submissionsCount,
                     submissionsDayOverDayPercent = dayOverDayPercent(
                         currentValue = latestMetric?.submissionsCount,

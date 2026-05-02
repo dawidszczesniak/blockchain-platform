@@ -1,5 +1,7 @@
 package pl.dawidszczesniak.blockchain_platform.feature.problems.domain
 
+import pl.dawidszczesniak.blockchain_platform.feature.platform.dto.PaymentAssetDto
+
 data class ProblemExample(
     val input: String,
     val output: String,
@@ -12,8 +14,9 @@ data class ProblemSummary(
     val description: String,
     val constraints: String = "",
     val examples: List<ProblemExample> = emptyList(),
-    val prizeAmount: Long,
-    val entryFeeAmount: Long,
+    val paymentAsset: PaymentAssetDto,
+    val prizeAmountAtomic: String,
+    val entryFeeAmountAtomic: String,
     val requiredParticipants: Int,
     val registeredParticipants: Int,
     val daysToStart: Int,

@@ -1,6 +1,7 @@
 package pl.dawidszczesniak.blockchain_platform.feature.login
 
 import pl.dawidszczesniak.blockchain_platform.feature.login.repository.LoginRepository
+import pl.dawidszczesniak.blockchain_platform.feature.platform.usecase.GetPlatformConfigUseCase
 
 interface LoginUseCase {
     suspend fun fetchWallets(): List<LoginWalletOption>
@@ -17,6 +18,8 @@ data class LoginWalletOption(
 class LoginUseCaseImpl(
     private val repository: LoginRepository,
     private val walletProvider: WalletProvider,
+    private val getPlatformConfigUseCase: GetPlatformConfigUseCase,
+    private val walletSessionStore: WalletSessionStore,
 ) : LoginUseCase {
     override suspend fun fetchWallets(): List<LoginWalletOption> {
         return walletProvider.discoverWallets().map { wallet ->
@@ -30,7 +33,19 @@ class LoginUseCaseImpl(
     }
 
     override suspend fun login(walletId: String) {
-        val wallet = walletProvider.requestLoginContext(walletId)
+        val platformConfig = getPlatformConfigUseCase()
+        val targetNetwork = platformConfig.walletNetwork?.let { network ->
+            WalletNetworkTarget(
+                chainId = network.chainId,
+                networkName = network.networkName,
+            )
+        }
+        val wallet = walletProvider.requestLoginContext(walletId, targetNetwork)
+        targetNetwork?.let { network ->
+            require(wallet.chainId == network.chainId) {
+                "Wallet is connected to the wrong network. Expected ${network.networkName} (${network.chainId})."
+            }
+        }
         val challenge = repository.createChallenge(
             walletAddress = wallet.walletAddress,
             chainId = wallet.chainId,
@@ -44,6 +59,10 @@ class LoginUseCaseImpl(
             nonce = challenge.nonce,
             message = challenge.message,
             signature = signature,
+        )
+        walletSessionStore.setCurrentWallet(
+            walletId = walletId,
+            walletAddress = wallet.walletAddress,
         )
     }
 }

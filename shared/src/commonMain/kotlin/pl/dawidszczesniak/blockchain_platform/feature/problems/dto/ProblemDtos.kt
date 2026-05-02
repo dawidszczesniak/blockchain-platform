@@ -2,6 +2,7 @@ package pl.dawidszczesniak.blockchain_platform.feature.problems.dto
 
 import kotlinx.serialization.Serializable
 import kotlinx.datetime.LocalDate
+import pl.dawidszczesniak.blockchain_platform.feature.platform.dto.PaymentAssetDto
 
 @Serializable
 data class ProblemSummaryDto(
@@ -10,8 +11,9 @@ data class ProblemSummaryDto(
     val description: String,
     val constraints: String = "",
     val examples: List<ProblemExampleDto> = emptyList(),
-    val prizeAmount: Long,
-    val entryFeeAmount: Long,
+    val paymentAsset: PaymentAssetDto,
+    val prizeAmountAtomic: String,
+    val entryFeeAmountAtomic: String,
     val requiredParticipants: Int,
     val registeredParticipants: Int,
     val daysToStart: Int,
@@ -68,8 +70,9 @@ data class CreateProblemRequestDto(
     val examples: List<ProblemExampleDto> = emptyList(),
     val referenceSolutionCode: String = "",
     val referenceSolutionLanguage: String = "kotlin",
-    val prizeAmount: Long,
-    val entryFeeAmount: Long,
+    val paymentAssetCode: String,
+    val prizeAmountAtomic: String,
+    val entryFeeAmountAtomic: String,
     val requiredParticipants: Int,
     val joinUntilDate: LocalDate,
     val submitUntilDate: LocalDate,
@@ -111,10 +114,53 @@ data class CreateProblemResponseDto(
 )
 
 @Serializable
+data class PreparedWalletTransactionDto(
+    val to: String,
+    val data: String,
+    val valueHex: String = "0x0",
+)
+
+@Serializable
+data class PrepareCreateProblemResponseDto(
+    val intentId: String,
+    val chainId: Long,
+    val proxyAddress: String,
+    val explorerBaseUrl: String? = null,
+    val expiresAt: String,
+    val paymentAsset: PaymentAssetDto,
+    val approvalTransaction: PreparedWalletTransactionDto? = null,
+    val transaction: PreparedWalletTransactionDto,
+)
+
+@Serializable
+data class ConfirmCreateProblemRequestDto(
+    val intentId: String,
+    val txHash: String,
+)
+
+@Serializable
 data class JoinProblemResponseDto(
     val joined: Boolean,
     val registeredParticipants: Int,
     val requiredParticipants: Int,
+)
+
+@Serializable
+data class PrepareJoinProblemResponseDto(
+    val intentId: String,
+    val chainId: Long,
+    val proxyAddress: String,
+    val explorerBaseUrl: String? = null,
+    val expiresAt: String,
+    val paymentAsset: PaymentAssetDto,
+    val approvalTransaction: PreparedWalletTransactionDto? = null,
+    val transaction: PreparedWalletTransactionDto,
+)
+
+@Serializable
+data class ConfirmJoinProblemRequestDto(
+    val intentId: String,
+    val txHash: String,
 )
 
 @Serializable
@@ -164,13 +210,9 @@ data class SubmitProblemResponseDto(
     val sandboxImageHash: String? = null,
     val sandboxResultHash: String,
     val commitmentHash: String,
-    val anchorStatus: String,
-    val anchorBatchId: Long? = null,
-    val anchorMerkleRoot: String? = null,
-    val anchorProof: List<String> = emptyList(),
-    val anchorTxHash: String? = null,
-    val anchorExplorerUrl: String? = null,
-    val anchorError: String? = null,
+    val proxyAddress: String,
+    val txHash: String,
+    val explorerUrl: String? = null,
 )
 
 @Serializable

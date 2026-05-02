@@ -17,6 +17,8 @@ import pl.dawidszczesniak.blockchain_platform.feature.auth.requireAuthSession
 import pl.dawidszczesniak.blockchain_platform.feature.auth.requireTrustedOrigin
 import pl.dawidszczesniak.blockchain_platform.feature.auth.store.AuthSessionStore
 import pl.dawidszczesniak.blockchain_platform.feature.problems.controller.ProblemController
+import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ConfirmCreateProblemRequestDto
+import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ConfirmJoinProblemRequestDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.CreateProblemRequestDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.RunProblemRequestDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ValidateCreateProblemRequestDto
@@ -105,6 +107,76 @@ internal fun Route.problemRoutes() {
             )
         }
     }
+    post("/problems/create/prepare") {
+        val request = call.receive<CreateProblemRequestDto>()
+        try {
+            call.requireTrustedOrigin(authConfig)
+            val session = call.requireAuthSession(authConfig, sessionStore)
+            val prepared = withContext(Dispatchers.IO) {
+                controller.prepareCreateProblemOnChain(
+                    userId = session.userId,
+                    walletAddress = session.walletAddress,
+                    request = request,
+                )
+            }
+            call.respond(HttpStatusCode.OK, prepared)
+        } catch (error: CreateProblemValidationException) {
+            call.respond(
+                HttpStatusCode.BadRequest,
+                mapOf("message" to (error.message ?: "Invalid create problem preparation payload.")),
+            )
+        } catch (error: AuthRequiredException) {
+            call.respond(
+                HttpStatusCode.Unauthorized,
+                mapOf("message" to (error.message ?: "Login required.")),
+            )
+        } catch (error: AuthCsrfException) {
+            call.respond(
+                HttpStatusCode.Forbidden,
+                mapOf("message" to (error.message ?: "Request origin is not allowed.")),
+            )
+        } catch (error: AuthServiceUnavailableException) {
+            call.respond(
+                HttpStatusCode.ServiceUnavailable,
+                mapOf("message" to (error.message ?: "Authentication service is unavailable.")),
+            )
+        }
+    }
+    post("/problems/create/confirm") {
+        val request = call.receive<ConfirmCreateProblemRequestDto>()
+        try {
+            call.requireTrustedOrigin(authConfig)
+            val session = call.requireAuthSession(authConfig, sessionStore)
+            val created = withContext(Dispatchers.IO) {
+                controller.confirmCreateProblemOnChain(
+                    userId = session.userId,
+                    walletAddress = session.walletAddress,
+                    request = request,
+                )
+            }
+            call.respond(HttpStatusCode.Created, created)
+        } catch (error: CreateProblemValidationException) {
+            call.respond(
+                HttpStatusCode.BadRequest,
+                mapOf("message" to (error.message ?: "Invalid create problem confirmation payload.")),
+            )
+        } catch (error: AuthRequiredException) {
+            call.respond(
+                HttpStatusCode.Unauthorized,
+                mapOf("message" to (error.message ?: "Login required.")),
+            )
+        } catch (error: AuthCsrfException) {
+            call.respond(
+                HttpStatusCode.Forbidden,
+                mapOf("message" to (error.message ?: "Request origin is not allowed.")),
+            )
+        } catch (error: AuthServiceUnavailableException) {
+            call.respond(
+                HttpStatusCode.ServiceUnavailable,
+                mapOf("message" to (error.message ?: "Authentication service is unavailable.")),
+            )
+        }
+    }
     post("/problems/create/validate") {
         val request = call.receive<ValidateCreateProblemRequestDto>()
         try {
@@ -153,6 +225,80 @@ internal fun Route.problemRoutes() {
             call.respond(
                 HttpStatusCode.BadRequest,
                 mapOf("message" to (error.message ?: "Cannot register for this problem.")),
+            )
+        } catch (error: AuthRequiredException) {
+            call.respond(
+                HttpStatusCode.Unauthorized,
+                mapOf("message" to (error.message ?: "Login required.")),
+            )
+        } catch (error: AuthCsrfException) {
+            call.respond(
+                HttpStatusCode.Forbidden,
+                mapOf("message" to (error.message ?: "Request origin is not allowed.")),
+            )
+        } catch (error: AuthServiceUnavailableException) {
+            call.respond(
+                HttpStatusCode.ServiceUnavailable,
+                mapOf("message" to (error.message ?: "Authentication service is unavailable.")),
+            )
+        }
+    }
+    post("/problems/{problemId}/join/prepare") {
+        try {
+            call.requireTrustedOrigin(authConfig)
+            val session = call.requireAuthSession(authConfig, sessionStore)
+            val problemId = call.parameters["problemId"]?.toIntOrNull()
+                ?: throw JoinProblemValidationException("Invalid problem identifier.")
+            val prepared = withContext(Dispatchers.IO) {
+                controller.prepareJoinProblemOnChain(
+                    userId = session.userId,
+                    walletAddress = session.walletAddress,
+                    problemId = problemId,
+                )
+            }
+            call.respond(HttpStatusCode.OK, prepared)
+        } catch (error: JoinProblemValidationException) {
+            call.respond(
+                HttpStatusCode.BadRequest,
+                mapOf("message" to (error.message ?: "Cannot prepare join transaction for this problem.")),
+            )
+        } catch (error: AuthRequiredException) {
+            call.respond(
+                HttpStatusCode.Unauthorized,
+                mapOf("message" to (error.message ?: "Login required.")),
+            )
+        } catch (error: AuthCsrfException) {
+            call.respond(
+                HttpStatusCode.Forbidden,
+                mapOf("message" to (error.message ?: "Request origin is not allowed.")),
+            )
+        } catch (error: AuthServiceUnavailableException) {
+            call.respond(
+                HttpStatusCode.ServiceUnavailable,
+                mapOf("message" to (error.message ?: "Authentication service is unavailable.")),
+            )
+        }
+    }
+    post("/problems/{problemId}/join/confirm") {
+        val request = call.receive<ConfirmJoinProblemRequestDto>()
+        try {
+            call.requireTrustedOrigin(authConfig)
+            val session = call.requireAuthSession(authConfig, sessionStore)
+            val problemId = call.parameters["problemId"]?.toIntOrNull()
+                ?: throw JoinProblemValidationException("Invalid problem identifier.")
+            val joined = withContext(Dispatchers.IO) {
+                controller.confirmJoinProblemOnChain(
+                    userId = session.userId,
+                    walletAddress = session.walletAddress,
+                    problemId = problemId,
+                    request = request,
+                )
+            }
+            call.respond(HttpStatusCode.OK, joined)
+        } catch (error: JoinProblemValidationException) {
+            call.respond(
+                HttpStatusCode.BadRequest,
+                mapOf("message" to (error.message ?: "Cannot confirm join transaction for this problem.")),
             )
         } catch (error: AuthRequiredException) {
             call.respond(

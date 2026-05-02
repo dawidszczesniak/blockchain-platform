@@ -1,0 +1,7 @@
+{
+  "name": "blockchain-platform-contract-tooling",
+  "private": true,
+  "devDependencies": {
+    "@openzeppelin/upgrades-core": "^1.44.2"
+  }
+}

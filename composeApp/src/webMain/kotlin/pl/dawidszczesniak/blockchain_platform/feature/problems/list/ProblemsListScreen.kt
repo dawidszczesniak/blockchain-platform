@@ -48,6 +48,7 @@ import blockchain_platform.composeapp.generated.resources.sort_option_required_m
 import blockchain_platform.composeapp.generated.resources.sort_option_start_latest
 import blockchain_platform.composeapp.generated.resources.sort_option_start_soonest
 import org.jetbrains.compose.resources.stringResource
+import pl.dawidszczesniak.blockchain_platform.feature.platform.formatAmountWithSymbol
 import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.ProblemSummary
 import pl.dawidszczesniak.blockchain_platform.feature.problems.statement.decodeProblemDescription
 import pl.dawidszczesniak.blockchain_platform.ui.AppInlineLoader
@@ -330,11 +331,11 @@ private fun ProblemCard(
         ) {
             InfoChip(
                 label = stringResource(Res.string.info_prize),
-                value = "${problem.prizeAmount} USDC"
+                value = formatAmountWithSymbol(problem.paymentAsset, problem.prizeAmountAtomic)
             )
             InfoChip(
                 label = stringResource(Res.string.info_entry_fee),
-                value = "${problem.entryFeeAmount} USDC"
+                value = formatAmountWithSymbol(problem.paymentAsset, problem.entryFeeAmountAtomic)
             )
             InfoChip(
                 label = stringResource(Res.string.info_start),

@@ -1,28 +1,26 @@
 package pl.dawidszczesniak.blockchain_platform.feature.problems.usecase
 
 import java.security.MessageDigest
-import java.security.SecureRandom
 import java.time.Instant
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 import org.web3j.crypto.Hash
 import org.web3j.utils.Numeric
-import pl.dawidszczesniak.blockchain_platform.db.AnchorBatchStatus
-import pl.dawidszczesniak.blockchain_platform.db.SubmissionAnchorStatus
 import pl.dawidszczesniak.blockchain_platform.db.SubmissionAttemptStatus
 import pl.dawidszczesniak.blockchain_platform.db.SubmissionAttestationStatus
 import pl.dawidszczesniak.blockchain_platform.db.SubmissionTestResultStatus
-import pl.dawidszczesniak.blockchain_platform.feature.problems.anchor.AnchorConfig
-import pl.dawidszczesniak.blockchain_platform.feature.problems.anchor.BlockchainAnchorClient
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.RunProblemRequestDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.RunProblemResponseDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.RunProblemTestResultDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.SubmitProblemResponseDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.judge.JudgeLanguages
+import pl.dawidszczesniak.blockchain_platform.feature.problems.onchain.BlockchainPlatformContractClient
+import pl.dawidszczesniak.blockchain_platform.feature.problems.onchain.BlockchainPlatformContractConfig
+import pl.dawidszczesniak.blockchain_platform.feature.problems.onchain.SubmissionResultRecord
+import pl.dawidszczesniak.blockchain_platform.feature.problems.onchain.bytes32HashHex
 import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.ProblemExecutionContext
 import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.ProblemExecutionTest
 import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.ProblemWriteRepository
-import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.SubmissionAnchorDraft
 import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.SubmissionNodeAttestationDraft
 import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.SubmissionPersistedTestResult
 import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.SubmissionRecordDraft
@@ -56,8 +54,8 @@ internal class SubmitProblemCodeUseCaseImpl(
     private val repository: ProblemWriteRepository,
     private val sandboxClient: SandboxClient,
     private val sandboxConfig: SandboxConfig,
-    private val anchorConfig: AnchorConfig,
-    private val blockchainAnchorClient: BlockchainAnchorClient,
+    private val contractConfig: BlockchainPlatformContractConfig,
+    private val contractClient: BlockchainPlatformContractClient,
 ) : SubmitProblemCodeUseCase, SubmissionJudgeService {
     override fun invoke(userId: Long, problemId: Int, request: RunProblemRequestDto): SubmitProblemResponseDto {
         return when (val outcome = judge(userId, problemId, request)) {
@@ -135,15 +133,17 @@ internal class SubmitProblemCodeUseCaseImpl(
 
         val passedCount = evaluatedTests.count { it.apiResult.passed }
         val allPassed = passedCount == evaluatedTests.size
-        // Official runtime is measured for the whole isolated test suite on the sandbox node.
-        val runtimeMs = consensusEntry.value
-            .mapNotNull { it.suiteExecutionTimeMs }
-            .maxOrNull()
-            ?: (evaluatedTests.maxOfOrNull { it.apiResult.executionTimeMs } ?: 0)
-        val memoryUsedKb = consensusEntry.value
-            .flatMap { it.results }
-            .mapNotNull { it.memoryUsedKb }
-            .maxOrNull()
+        // Correctness requires full consensus; ranking metrics use median to reduce node jitter.
+        val runtimeMs = medianInt(
+            consensusEntry.value.mapNotNull { node ->
+                node.suiteExecutionTimeMs ?: node.results.maxOfOrNull { it.executionTimeMs }
+            }
+        ) ?: 0
+        val reportedMemoryUsedKb = medianInt(
+            consensusEntry.value.mapNotNull { node ->
+                node.results.mapNotNull { it.memoryUsedKb }.maxOrNull()
+            }
+        )
         if (!allPassed) {
             val failedCount = evaluatedTests.size - passedCount
             return SubmissionJudgeOutcome.Rejected(
@@ -152,7 +152,7 @@ internal class SubmitProblemCodeUseCaseImpl(
                     passed = passedCount,
                     allPassed = false,
                     runtimeMs = runtimeMs,
-                    memoryUsedKb = memoryUsedKb,
+                    memoryUsedKb = reportedMemoryUsedKb,
                     results = evaluatedTests.map { it.apiResult },
                     sandboxNodeId = consensusNode.nodeId,
                     sandboxImageHash = consensusNode.imageHash,
@@ -161,23 +161,23 @@ internal class SubmitProblemCodeUseCaseImpl(
                 message = "Submission blocked: $failedCount/${evaluatedTests.size} tests did not pass. Solution was not submitted.",
             )
         }
+        val memoryUsedKb = reportedMemoryUsedKb
+            ?: throw SubmitProblemValidationException("Submission blocked: sandbox memory usage was not reported.")
         val submissionStatus = SubmissionAttemptStatus.Accepted
         val codeHash = sha256Hex(sourceCode)
         val testsHash = hashExecutionTests(context)
+        val sandboxImageHash = bytes32HashHex(consensusImageHash)
         val commitmentHash = buildCommitmentHash(
-            problemId = problemId,
-            userId = userId,
+            competitionId = context.onchainCompetitionId,
+            participantWalletAddress = context.participantWalletAddress,
             codeHash = codeHash,
             testsHash = testsHash,
             resultHash = consensusResultHash,
-            imageHash = consensusImageHash,
+            imageHash = sandboxImageHash,
+            runtimeMs = runtimeMs,
+            memoryUsedKb = memoryUsedKb,
+            consensusNodes = consensusReached,
         )
-        val initialAnchor = if (anchorConfig.enabled) {
-            SubmissionAnchorDraft(status = SubmissionAnchorStatus.Pending)
-        } else {
-            SubmissionAnchorDraft(status = SubmissionAnchorStatus.Disabled)
-        }
-
         val submissionRecord = repository.createSubmissionRecord(
             SubmissionRecordDraft(
                 problemId = problemId,
@@ -188,7 +188,7 @@ internal class SubmitProblemCodeUseCaseImpl(
                 codeHash = codeHash,
                 testsHash = testsHash,
                 resultHash = consensusResultHash,
-                consensusImageHash = consensusImageHash,
+                consensusImageHash = sandboxImageHash,
                 consensusNodes = consensusReached,
                 commitmentHash = commitmentHash,
                 runtimeMs = runtimeMs,
@@ -218,18 +218,38 @@ internal class SubmitProblemCodeUseCaseImpl(
                         message = node.message,
                     )
                 },
-                anchor = initialAnchor,
             )
         )
-
-        val finalAnchor = if (anchorConfig.enabled) {
-            anchorSubmission(
+        val resultWrite = contractClient.recordSubmissionResult(
+            SubmissionResultRecord(
+                competitionId = context.onchainCompetitionId,
                 submissionId = submissionRecord.submissionId,
-                commitmentHash = commitmentHash,
+                participantWalletAddress = context.participantWalletAddress,
+                submissionHash = commitmentHash,
+                codeHash = codeHash,
+                testsHash = testsHash,
+                resultHash = consensusResultHash,
+                sandboxImageHash = sandboxImageHash,
+                runtimeMs = runtimeMs,
+                memoryUsedKb = memoryUsedKb,
+                consensusNodes = consensusReached,
             )
-        } else {
-            initialAnchor
+        )
+        if (!resultWrite.success || resultWrite.txHash.isNullOrBlank()) {
+            val error = resultWrite.error?.ifBlank { null }
+                ?: "Submission result was not recorded on-chain."
+            repository.markSubmissionResultFailed(
+                submissionId = submissionRecord.submissionId,
+                error = error,
+            )
+            throw SubmitProblemValidationException(error)
         }
+        repository.markSubmissionResultRecorded(
+            submissionId = submissionRecord.submissionId,
+            proxyAddress = contractConfig.proxyAddress,
+            txHash = resultWrite.txHash,
+            recordedAt = Instant.now(),
+        )
 
         return SubmissionJudgeOutcome.Accepted(
             response = SubmitProblemResponseDto(
@@ -242,63 +262,13 @@ internal class SubmitProblemCodeUseCaseImpl(
                 results = evaluatedTests.map { it.apiResult },
                 consensusRequired = sandboxConfig.requiredConsensus,
                 consensusReached = consensusReached,
-                sandboxImageHash = consensusImageHash,
+                sandboxImageHash = sandboxImageHash,
                 sandboxResultHash = consensusResultHash,
                 commitmentHash = commitmentHash,
-                anchorStatus = finalAnchor.status.name,
-                anchorBatchId = finalAnchor.batchId,
-                anchorMerkleRoot = finalAnchor.merkleRoot,
-                anchorProof = finalAnchor.merkleProof,
-                anchorTxHash = finalAnchor.txHash,
-                anchorExplorerUrl = anchorConfig.explorerTxUrl(finalAnchor.txHash),
-                anchorError = finalAnchor.error,
+                proxyAddress = contractConfig.proxyAddress,
+                txHash = resultWrite.txHash,
+                explorerUrl = contractConfig.explorerTxUrl(resultWrite.txHash),
             )
-        )
-    }
-
-    private fun anchorSubmission(
-        submissionId: Long,
-        commitmentHash: String,
-    ): SubmissionAnchorDraft {
-        val txResult = blockchainAnchorClient.anchorSubmission(
-            commitmentHash = commitmentHash,
-            submissionId = submissionId,
-        )
-        val anchoredAt = if (txResult.anchored) Instant.now() else null
-        val batchStatus = if (txResult.anchored) AnchorBatchStatus.Anchored else AnchorBatchStatus.Failed
-        val submissionStatus = if (txResult.anchored) {
-            SubmissionAnchorStatus.Anchored
-        } else {
-            SubmissionAnchorStatus.Pending
-        }
-        val createdBatch = repository.createAnchorBatch(
-            rootHash = commitmentHash,
-            submissionIds = listOf(submissionId),
-            status = batchStatus,
-            txHash = txResult.txHash,
-            chainId = anchorConfig.chainId,
-            contractAddress = anchorConfig.contractAddress,
-            failureReason = txResult.error,
-            anchoredAt = anchoredAt,
-        )
-        repository.updateSubmissionAnchors(
-            submissionIds = createdBatch.submissionIds,
-            status = submissionStatus,
-            batchId = createdBatch.batchId,
-            merkleRoot = createdBatch.rootHash,
-            proofBySubmission = mapOf(submissionId to emptyList()),
-            txHash = txResult.txHash,
-            error = txResult.error,
-            anchoredAt = anchoredAt,
-        )
-        return SubmissionAnchorDraft(
-            status = submissionStatus,
-            batchId = createdBatch.batchId,
-            merkleRoot = createdBatch.rootHash,
-            merkleProof = emptyList(),
-            txHash = txResult.txHash,
-            error = txResult.error,
-            anchoredAt = anchoredAt,
         )
     }
 
@@ -609,20 +579,20 @@ private fun hashExecutionTests(context: ProblemExecutionContext): String {
 }
 
 private fun buildCommitmentHash(
-    problemId: Int,
-    userId: Long,
+    competitionId: Long,
+    participantWalletAddress: String,
     codeHash: String,
     testsHash: String,
     resultHash: String,
     imageHash: String?,
+    runtimeMs: Int,
+    memoryUsedKb: Int,
+    consensusNodes: Int,
 ): String {
-    val nonce = ByteArray(16).also { bytes ->
-        secureRandom.nextBytes(bytes)
-    }
     val payload = buildString {
-        append(problemId)
+        append(competitionId)
         append('|')
-        append(userId)
+        append(participantWalletAddress.lowercase())
         append('|')
         append(codeHash)
         append('|')
@@ -632,11 +602,24 @@ private fun buildCommitmentHash(
         append('|')
         append(imageHash.orEmpty())
         append('|')
-        append(Instant.now().toEpochMilli())
+        append(runtimeMs)
         append('|')
-        append(Numeric.toHexStringNoPrefix(nonce))
+        append(memoryUsedKb)
+        append('|')
+        append(consensusNodes)
     }
     return keccakHex(payload)
+}
+
+private fun medianInt(values: List<Int>): Int? {
+    if (values.isEmpty()) return null
+    val sorted = values.sorted()
+    val middle = sorted.size / 2
+    return if (sorted.size % 2 == 1) {
+        sorted[middle]
+    } else {
+        ((sorted[middle - 1].toLong() + sorted[middle].toLong()) / 2L).toInt()
+    }
 }
 
 internal fun computeSandboxResultHash(results: List<SandboxRunTestOutput>): String {
@@ -688,7 +671,6 @@ private fun normalizeHashHex(raw: String): String {
     return if (trimmed.startsWith("0x")) trimmed else "0x$trimmed"
 }
 
-private val secureRandom = SecureRandom()
 private const val MAX_SOURCE_CODE_CHARS = 120_000
 private const val HIDDEN_TEST_FAILED_MESSAGE = "Hidden test failed."
 private const val DEFAULT_ATTESTATION_SCHEME = "hmac-sha256"

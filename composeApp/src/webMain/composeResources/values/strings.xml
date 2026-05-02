@@ -15,9 +15,10 @@
     <string name="login">Log in</string>
 
     <string name="create_problem_title">Create problem</string>
-    <string name="create_problem_prize_label">Prize for the winner (USDC)</string>
+    <string name="create_problem_prize_label">Prize for the winner</string>
     <string name="create_problem_participants_label">Number of participants</string>
-    <string name="create_problem_entry_fee_label">Cost of joining the contest (USDC)</string>
+    <string name="create_problem_payment_asset_label">Payment asset</string>
+    <string name="create_problem_entry_fee_label">Cost of joining the contest</string>
     <string name="create_problem_title_label">Problem title (optional)</string>
     <string name="create_problem_description_label">Problem description</string>
     <string name="create_problem_constraints_label">Constraints (optional)</string>
@@ -62,8 +63,10 @@
     <string name="create_problem_action_creating">Creating...</string>
     <string name="create_problem_validation_required">This field is required.</string>
     <string name="create_problem_validation_integer">Enter a whole number.</string>
+    <string name="create_problem_validation_amount">Enter a valid amount for the selected asset.</string>
     <string name="create_problem_validation_positive">Value must be greater than 0.</string>
     <string name="create_problem_validation_non_negative">Value cannot be negative.</string>
+    <string name="create_problem_validation_payment_asset">Select a payment asset.</string>
     <string name="create_problem_validation_invalid_date">Invalid date format (YYYY-MM-DD).</string>
     <string name="create_problem_validation_date_order">Submission end must be later than registration end.</string>
     <string name="create_problem_validation_expected_or_validator">Provide expected output or validator code.</string>
@@ -75,6 +78,7 @@
 
     <string name="login_title">Log in</string>
     <string name="login_subtitle">Sign in with your wallet to access protected actions.</string>
+    <string name="login_required_network">Required network: %1$s</string>
     <string name="login_connect_wallet">Connect wallet</string>
     <string name="login_wallet_detecting">Detecting available wallets…</string>
     <string name="login_wallet_not_found">No compatible wallet detected in this browser.</string>
@@ -86,11 +90,10 @@
     <string name="settings_network_section">Network and contract</string>
     <string name="settings_eth_network">Network</string>
     <string name="settings_chain_id">Chain ID</string>
-    <string name="settings_contract_address">Contract address</string>
+    <string name="settings_proxy_address">BlockchainTestContract proxy address</string>
     <string name="settings_not_configured">Not configured</string>
     <string name="settings_loading">Loading…</string>
     <string name="settings_unavailable">Unavailable</string>
-    <string name="settings_disabled">Disabled</string>
     <string name="settings_interface_language">Interface language</string>
     <string name="settings_language_polish">Polish</string>
     <string name="settings_language_english">English</string>
@@ -139,7 +142,7 @@
     <string name="home_stat_status_value">38</string>
     <string name="home_stat_status_note">Open for submissions</string>
     <string name="home_stat_nodes_title">Prize pool</string>
-    <string name="home_stat_nodes_value">148,200 USDC</string>
+    <string name="home_stat_nodes_value">148,200</string>
     <string name="home_stat_nodes_note">Across all active contests</string>
     <string name="home_stat_block_title">Submissions today</string>
     <string name="home_stat_block_value">312</string>
@@ -147,7 +150,7 @@
 
     <string name="home_updates_title">Latest challenges</string>
     <string name="home_update_title_1">New challenge: ZK Proof Aggregation</string>
-    <string name="home_update_body_1">Prize 25,000 USDC • 20 participants • 14 days left.</string>
+    <string name="home_update_body_1">Prize pool 25,000 • 20 participants • 14 days left.</string>
     <string name="home_update_title_2">Validator v1.4 released</string>
     <string name="home_update_body_2">Faster test execution and deterministic scoring.</string>
     <string name="home_update_title_3">Payouts batch finalized</string>
@@ -199,8 +202,8 @@
     <string name="problem_details_example_output">Output: %1$s</string>
     <string name="problem_details_example_explanation">Explanation: %1$s</string>
     <string name="problem_details_requirement_participants">Required participants: %1$d</string>
-    <string name="problem_details_requirement_prize">Prize pool: %1$d USDC</string>
-    <string name="problem_details_requirement_entry_fee">Entry fee: %1$d USDC</string>
+    <string name="problem_details_requirement_prize">Prize pool: %1$s</string>
+    <string name="problem_details_requirement_entry_fee">Entry fee: %1$s</string>
     <string name="problem_details_requirement_start">Starts in: %1$s</string>
     <string name="problem_details_requirement_join">Registration until: %1$s</string>
     <string name="problem_details_requirement_submit">Submissions until: %1$s</string>
@@ -233,14 +236,11 @@
     <string name="problem_details_submit_result_title">Submission receipt</string>
     <string name="problem_details_submit_consensus">Consensus: %1$d/%2$d nodes</string>
     <string name="problem_details_submit_runtime">Runtime: %1$d ms</string>
-    <string name="problem_details_submit_anchor_status">Anchor status: %1$s</string>
-    <string name="problem_details_submit_anchor_commitment">Hash: %1$s</string>
-    <string name="problem_details_submit_anchor_batch">Anchor ID: %1$d</string>
-    <string name="problem_details_submit_anchor_root">Anchored hash: %1$s</string>
-    <string name="problem_details_submit_anchor_proof">Proof items: %1$d</string>
-    <string name="problem_details_submit_anchor_tx">Tx hash: %1$s</string>
-    <string name="problem_details_submit_anchor_explorer">Explorer: %1$s</string>
-    <string name="problem_details_submit_anchor_error">Anchor error: %1$s</string>
+    <string name="problem_details_submit_hash">Submission hash: %1$s</string>
+    <string name="problem_details_submit_sandbox_result_hash">Sandbox result hash: %1$s</string>
+    <string name="problem_details_submit_proxy_address">BlockchainTestContract proxy: %1$s</string>
+    <string name="problem_details_submit_tx_hash">On-chain record tx: %1$s</string>
+    <string name="problem_details_submit_explorer">Open transaction in explorer: %1$s</string>
 
     <string name="problem_title_template">Problem #%1$d – Algorithm optimization (%2$s)</string>
 

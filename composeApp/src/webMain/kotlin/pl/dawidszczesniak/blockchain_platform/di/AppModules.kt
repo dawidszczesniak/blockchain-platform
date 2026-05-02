@@ -15,6 +15,12 @@ import pl.dawidszczesniak.blockchain_platform.feature.login.repository.LoginRepo
 import pl.dawidszczesniak.blockchain_platform.feature.login.repository.LoginRepositoryImpl
 import pl.dawidszczesniak.blockchain_platform.feature.dashboard.repository.DashboardRepositoryImpl
 import pl.dawidszczesniak.blockchain_platform.feature.dashboard.repository.DashboardRepository
+import pl.dawidszczesniak.blockchain_platform.feature.platform.datasource.PlatformRemoteDataSource
+import pl.dawidszczesniak.blockchain_platform.feature.platform.datasource.PlatformRemoteDataSourceImpl
+import pl.dawidszczesniak.blockchain_platform.feature.platform.repository.PlatformRepository
+import pl.dawidszczesniak.blockchain_platform.feature.platform.repository.PlatformRepositoryImpl
+import pl.dawidszczesniak.blockchain_platform.feature.platform.usecase.GetPlatformConfigUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.platform.usecase.GetPlatformConfigUseCaseImpl
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetCreatedProblemsUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetCreatedProblemsUseCaseImpl
 import pl.dawidszczesniak.blockchain_platform.feature.dashboard.usecase.GetDashboardMetricsHistoryUseCase
@@ -25,8 +31,14 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetPartic
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetParticipationProblemsUseCaseImpl
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetProblemListUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetProblemListUseCaseImpl
-import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.JoinProblemUseCase
-import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.JoinProblemUseCaseImpl
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.PrepareCreateProblemOnChainUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.PrepareCreateProblemOnChainUseCaseImpl
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.ConfirmCreateProblemOnChainUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.ConfirmCreateProblemOnChainUseCaseImpl
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.PrepareJoinProblemOnChainUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.PrepareJoinProblemOnChainUseCaseImpl
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.ConfirmJoinProblemOnChainUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.ConfirmJoinProblemOnChainUseCaseImpl
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.RunProblemCodeUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.RunProblemCodeUseCaseImpl
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetSubmissionJudgeJobUseCase
@@ -34,8 +46,6 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetSubmis
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.SubmitProblemCodeUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.SubmitProblemCodeUseCaseImpl
 import pl.dawidszczesniak.blockchain_platform.app.AppViewModel
-import pl.dawidszczesniak.blockchain_platform.feature.problems.create.CreateProblemUseCase
-import pl.dawidszczesniak.blockchain_platform.feature.problems.create.CreateProblemUseCaseImpl
 import pl.dawidszczesniak.blockchain_platform.feature.problems.create.ValidateCreateProblemUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.create.ValidateCreateProblemUseCaseImpl
 import pl.dawidszczesniak.blockchain_platform.feature.problems.create.CreateProblemViewModel
@@ -47,6 +57,7 @@ import pl.dawidszczesniak.blockchain_platform.feature.login.LoginViewModel
 import pl.dawidszczesniak.blockchain_platform.feature.login.LoginUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.login.LoginUseCaseImpl
 import pl.dawidszczesniak.blockchain_platform.feature.login.WalletProvider
+import pl.dawidszczesniak.blockchain_platform.feature.login.WalletSessionStore
 import pl.dawidszczesniak.blockchain_platform.feature.maintenance.BackendHealthViewModel
 import pl.dawidszczesniak.blockchain_platform.feature.maintenance.BackendMaintenanceViewModel
 import pl.dawidszczesniak.blockchain_platform.feature.problems.participation.MyParticipationViewModel
@@ -82,6 +93,7 @@ fun appModules() = module {
         LoginRepositoryImpl(remoteDataSource = get())
     }
     single<WalletProvider> { InjectedWalletProvider() }
+    single { WalletSessionStore() }
     single<DashboardRemoteDataSource> {
         DashboardRemoteDataSourceImpl(
             apiBaseUrl = get<AppConfig>().apiBaseUrl,
@@ -91,27 +103,39 @@ fun appModules() = module {
     single<DashboardRepository> {
         DashboardRepositoryImpl(remoteDataSource = get())
     }
+    single<PlatformRemoteDataSource> {
+        PlatformRemoteDataSourceImpl(
+            apiBaseUrl = get<AppConfig>().apiBaseUrl,
+            httpTextClient = get(),
+        )
+    }
+    single<PlatformRepository> {
+        PlatformRepositoryImpl(remoteDataSource = get())
+    }
     single { DashboardConfig() }
     factory<GetProblemListUseCase> { GetProblemListUseCaseImpl(get()) }
     factory<GetCreatedProblemsUseCase> { GetCreatedProblemsUseCaseImpl(get()) }
     factory<GetParticipationProblemsUseCase> { GetParticipationProblemsUseCaseImpl(get()) }
-    factory<JoinProblemUseCase> { JoinProblemUseCaseImpl(get()) }
+    factory<PrepareJoinProblemOnChainUseCase> { PrepareJoinProblemOnChainUseCaseImpl(get()) }
+    factory<ConfirmJoinProblemOnChainUseCase> { ConfirmJoinProblemOnChainUseCaseImpl(get()) }
     factory<RunProblemCodeUseCase> { RunProblemCodeUseCaseImpl(get()) }
     factory<SubmitProblemCodeUseCase> { SubmitProblemCodeUseCaseImpl(get()) }
     factory<GetSubmissionJudgeJobUseCase> { GetSubmissionJudgeJobUseCaseImpl(get()) }
-    factory<CreateProblemUseCase> { CreateProblemUseCaseImpl(get()) }
+    factory<PrepareCreateProblemOnChainUseCase> { PrepareCreateProblemOnChainUseCaseImpl(get()) }
+    factory<ConfirmCreateProblemOnChainUseCase> { ConfirmCreateProblemOnChainUseCaseImpl(get()) }
     factory<ValidateCreateProblemUseCase> { ValidateCreateProblemUseCaseImpl(get()) }
     factory<GetDashboardMetricsHistoryUseCase> { GetDashboardMetricsHistoryUseCaseImpl(get()) }
     factory<GetDashboardUpdatesUseCase> { GetDashboardUpdatesUseCaseImpl(get()) }
-    factory<LoginUseCase> { LoginUseCaseImpl(get(), get()) }
+    factory<GetPlatformConfigUseCase> { GetPlatformConfigUseCaseImpl(get()) }
+    factory<LoginUseCase> { LoginUseCaseImpl(get(), get(), get(), get()) }
     factory { AppViewModel(get()) }
     factory { HomeViewModel(get(), get(), get()) }
-    factory { LoginViewModel(get()) }
-    factory { SettingsViewModel(get(), get()) }
+    factory { LoginViewModel(get(), get()) }
+    factory { SettingsViewModel(get(), get(), get()) }
     factory { BackendHealthViewModel(get()) }
     factory { BackendMaintenanceViewModel() }
-    factory { CreateProblemViewModel(get(), get()) }
-    factory { ProblemDetailsViewModel(get(), get(), get(), get(), get(), get()) }
+    factory { CreateProblemViewModel(get(), get(), get(), get(), get(), get()) }
+    factory { ProblemDetailsViewModel(get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     factory { ProblemsListViewModel(get()) }
     factory { MyProblemsViewModel(get()) }
     factory { MyParticipationViewModel(get(), get()) }

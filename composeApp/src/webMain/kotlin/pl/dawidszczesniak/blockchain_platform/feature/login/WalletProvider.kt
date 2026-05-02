@@ -15,6 +15,11 @@ import kotlin.coroutines.resumeWithException
 import kotlin.js.JsAny
 import kotlin.js.Promise
 
+data class WalletNetworkTarget(
+    val chainId: Long,
+    val networkName: String,
+)
+
 data class WalletDescriptor(
     val id: String,
     val name: String,
@@ -27,10 +32,23 @@ data class WalletLoginContext(
     val chainId: Long,
 )
 
+data class WalletTransactionRequest(
+    val to: String,
+    val data: String,
+    val valueHex: String = "0x0",
+)
+
+data class WalletTransactionReceipt(
+    val transactionHash: String,
+    val status: String? = null,
+)
+
 interface WalletProvider {
     suspend fun discoverWallets(): List<WalletDescriptor>
-    suspend fun requestLoginContext(walletId: String): WalletLoginContext
+    suspend fun requestLoginContext(walletId: String, targetNetwork: WalletNetworkTarget? = null): WalletLoginContext
     suspend fun signMessage(walletId: String, walletAddress: String, message: String): String
+    suspend fun sendTransaction(walletId: String, walletAddress: String, request: WalletTransactionRequest): String
+    suspend fun waitForTransactionReceipt(walletId: String, txHash: String): WalletTransactionReceipt
 }
 
 class InjectedWalletProvider : WalletProvider {
@@ -56,9 +74,13 @@ class InjectedWalletProvider : WalletProvider {
         }
     }
 
-    override suspend fun requestLoginContext(walletId: String): WalletLoginContext {
+    override suspend fun requestLoginContext(walletId: String, targetNetwork: WalletNetworkTarget?): WalletLoginContext {
         val payload = awaitJsAsString {
-            requestWalletLoginContextJson(walletId)
+            requestWalletLoginContextJson(
+                walletId = walletId,
+                targetChainId = targetNetwork?.chainId ?: 0L,
+                targetNetworkName = targetNetwork?.networkName.orEmpty(),
+            )
         }
         val walletContext = runCatching {
             json.parseToJsonElement(payload).jsonObject
@@ -77,6 +99,37 @@ class InjectedWalletProvider : WalletProvider {
         return awaitJsAsString {
             signPersonalMessage(walletId, walletAddress, message)
         }
+    }
+
+    override suspend fun sendTransaction(
+        walletId: String,
+        walletAddress: String,
+        request: WalletTransactionRequest,
+    ): String {
+        return awaitJsAsString {
+            sendWalletTransaction(
+                walletId = walletId,
+                walletAddress = walletAddress,
+                to = request.to,
+                data = request.data,
+                valueHex = request.valueHex,
+            )
+        }
+    }
+
+    override suspend fun waitForTransactionReceipt(walletId: String, txHash: String): WalletTransactionReceipt {
+        val payload = awaitJsAsString {
+            waitForWalletTransactionReceipt(walletId, txHash)
+        }
+        val receipt = runCatching {
+            json.parseToJsonElement(payload).jsonObject
+        }.getOrElse {
+            throw IllegalStateException("Wallet receipt payload is invalid.")
+        }
+        return WalletTransactionReceipt(
+            transactionHash = receipt.requiredString("transactionHash"),
+            status = receipt["status"]?.jsonPrimitive?.contentOrNull,
+        )
     }
 
     private suspend fun awaitJsAsString(call: () -> Promise<JsAny?>): String {
@@ -394,21 +447,63 @@ private external fun discoverWalletsJson(): Promise<JsAny?>
 
 @JsFun(
     """
-async (walletId) => {
+async (walletId, targetChainId, targetNetworkName) => {
   const providerRegistry = globalThis.__bpWalletProviders || {};
   const provider = providerRegistry[walletId];
   if (!provider || typeof provider.request !== "function") {
     throw new Error("Selected wallet is not available. Refresh wallet list.");
   }
+  const toNumericChainId = (value) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+  };
+  const toHexChainId = (value) => "0x" + Number(value).toString(16);
+  const readErrorCode = (error) => {
+    if (error && typeof error.code === "number") {
+      return error.code;
+    }
+    if (error && typeof error.originalError?.code === "number") {
+      return error.originalError.code;
+    }
+    if (error && typeof error.data?.originalError?.code === "number") {
+      return error.data.originalError.code;
+    }
+    return null;
+  };
+  const requiredChainId = toNumericChainId(targetChainId);
   const accounts = await provider.request({ method: "eth_requestAccounts" });
   if (!Array.isArray(accounts) || accounts.length === 0) {
     throw new Error("No wallet account available.");
   }
   const walletAddress = String(accounts[0]);
-  const chainIdHex = await provider.request({ method: "eth_chainId" });
-  const parsed = Number.parseInt(String(chainIdHex), 16);
+  let chainIdHex = await provider.request({ method: "eth_chainId" });
+  let parsed = Number.parseInt(String(chainIdHex), 16);
   if (!Number.isFinite(parsed) || parsed <= 0) {
     throw new Error("Invalid chain ID from wallet.");
+  }
+  if (requiredChainId > 0 && parsed !== requiredChainId) {
+    try {
+      await provider.request({
+        method: "wallet_switchEthereumChain",
+        params: [{ chainId: toHexChainId(requiredChainId) }],
+      });
+    } catch (error) {
+      const code = readErrorCode(error);
+      if (code === 4902) {
+        const networkLabel = targetNetworkName ? String(targetNetworkName) : ("chain " + requiredChainId);
+        throw new Error("Wallet does not know " + networkLabel + ". Add this network in the wallet first.");
+      } else {
+        throw error;
+      }
+    }
+    chainIdHex = await provider.request({ method: "eth_chainId" });
+    parsed = Number.parseInt(String(chainIdHex), 16);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      throw new Error("Invalid chain ID from wallet after network switch.");
+    }
+    if (parsed !== requiredChainId) {
+      throw new Error("Wallet did not switch to the required network.");
+    }
   }
   return JSON.stringify({
     walletAddress,
@@ -417,7 +512,11 @@ async (walletId) => {
 }
 """
 )
-private external fun requestWalletLoginContextJson(walletId: String): Promise<JsAny?>
+private external fun requestWalletLoginContextJson(
+    walletId: String,
+    targetChainId: Long,
+    targetNetworkName: String,
+): Promise<JsAny?>
 
 @JsFun(
     """
@@ -439,6 +538,66 @@ private external fun signPersonalMessage(
     walletId: String,
     walletAddress: String,
     message: String,
+): Promise<JsAny?>
+
+@JsFun(
+    """
+async (walletId, walletAddress, to, data, valueHex) => {
+  const providerRegistry = globalThis.__bpWalletProviders || {};
+  const provider = providerRegistry[walletId];
+  if (!provider || typeof provider.request !== "function") {
+    throw new Error("Selected wallet is not available. Refresh wallet list.");
+  }
+  const txHash = await provider.request({
+    method: "eth_sendTransaction",
+    params: [{
+      from: String(walletAddress),
+      to: String(to),
+      data: String(data),
+      value: String(valueHex || "0x0"),
+    }],
+  });
+  return String(txHash);
+}
+"""
+)
+private external fun sendWalletTransaction(
+    walletId: String,
+    walletAddress: String,
+    to: String,
+    data: String,
+    valueHex: String,
+): Promise<JsAny?>
+
+@JsFun(
+    """
+async (walletId, txHash) => {
+  const providerRegistry = globalThis.__bpWalletProviders || {};
+  const provider = providerRegistry[walletId];
+  if (!provider || typeof provider.request !== "function") {
+    throw new Error("Selected wallet is not available. Refresh wallet list.");
+  }
+  const startedAt = Date.now();
+  while (Date.now() - startedAt <= 180000) {
+    const receipt = await provider.request({
+      method: "eth_getTransactionReceipt",
+      params: [String(txHash)],
+    });
+    if (receipt && typeof receipt === "object") {
+      return JSON.stringify({
+        transactionHash: String(receipt.transactionHash || txHash),
+        status: receipt.status == null ? null : String(receipt.status),
+      });
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+  }
+  throw new Error("Transaction receipt was not confirmed in time.");
+}
+"""
+)
+private external fun waitForWalletTransactionReceipt(
+    walletId: String,
+    txHash: String,
 ): Promise<JsAny?>
 
 @JsFun(

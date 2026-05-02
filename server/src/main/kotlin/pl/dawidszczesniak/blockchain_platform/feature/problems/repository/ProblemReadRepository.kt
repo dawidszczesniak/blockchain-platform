@@ -7,14 +7,19 @@ import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlin.math.max
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.lessEq
+import org.jetbrains.exposed.sql.and
+import org.jetbrains.exposed.sql.insertIgnore
+import org.jetbrains.exposed.sql.innerJoin
 import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.insert
+import org.jetbrains.exposed.sql.select
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.update
-import pl.dawidszczesniak.blockchain_platform.db.AnchorBatchStatus
+import pl.dawidszczesniak.blockchain_platform.db.CompetitionSettlementStatus
 import pl.dawidszczesniak.blockchain_platform.db.DbTransactionRunner
 import pl.dawidszczesniak.blockchain_platform.db.ProblemLifecycleStatus
-import pl.dawidszczesniak.blockchain_platform.db.SubmissionAnchorStatus
 import pl.dawidszczesniak.blockchain_platform.db.SubmissionAttemptStatus
 import pl.dawidszczesniak.blockchain_platform.db.SubmissionTestResultStatus
 import pl.dawidszczesniak.blockchain_platform.db.tables.ProblemParticipantsTable
@@ -24,8 +29,8 @@ import pl.dawidszczesniak.blockchain_platform.db.tables.ProblemSubmissionTestRes
 import pl.dawidszczesniak.blockchain_platform.db.tables.ProblemTestsTable
 import pl.dawidszczesniak.blockchain_platform.db.tables.ProblemWinnersTable
 import pl.dawidszczesniak.blockchain_platform.db.tables.ProblemsTable
-import pl.dawidszczesniak.blockchain_platform.db.tables.SubmissionAnchorBatchesTable
 import pl.dawidszczesniak.blockchain_platform.db.tables.UsersTable
+import pl.dawidszczesniak.blockchain_platform.feature.platform.PaymentAssetCatalog
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dao.ProblemDao
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dao.ProblemRowColumns
 import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.CreatedProblem
@@ -45,7 +50,19 @@ internal interface ProblemReadRepository {
 internal class ProblemReadRepositoryImpl(
     private val problemDao: ProblemDao,
     private val transactionRunner: DbTransactionRunner,
+    private val paymentAssetCatalog: PaymentAssetCatalog,
 ) : ProblemReadRepository, ProblemWriteRepository {
+    override fun findProblemIdByOnchainCreationTxHash(txHash: String): Int? {
+        return transactionRunner.inTransaction {
+            ProblemsTable
+                .selectAll()
+                .where { ProblemsTable.onchainCreationTxHash eq txHash }
+                .singleOrNull()
+                ?.get(ProblemsTable.problemId)
+                ?.toInt()
+        }
+    }
+
     override fun fetchProblemSummaries(): List<ProblemSummary> {
         return transactionRunner.inTransaction {
             val participantCounts = participantCountsByProblem()
@@ -60,8 +77,9 @@ internal class ProblemReadRepositoryImpl(
                     description = row[ProblemsTable.description],
                     constraints = row[ProblemsTable.constraintsText],
                     examples = parseProblemExamples(row[ProblemsTable.examplesJson]),
-                    prizeAmount = row[ProblemsTable.prizeAmount],
-                    entryFeeAmount = row[ProblemsTable.entryFeeAmount],
+                    paymentAsset = paymentAssetCatalog.requireByCode(row[ProblemsTable.paymentAssetCode]).toDto(),
+                    prizeAmountAtomic = row[ProblemsTable.prizeAmountAtomic],
+                    entryFeeAmountAtomic = row[ProblemsTable.entryFeeAmountAtomic],
                     requiredParticipants = row[ProblemsTable.requiredParticipants],
                     registeredParticipants = participantCounts[problemId] ?: 0,
                     daysToStart = daysToJoinEnd,
@@ -179,9 +197,20 @@ internal class ProblemReadRepositoryImpl(
                 validationResultHash = draft.validationResultHash,
                 validationImageHash = draft.validationImageHash,
                 validatedAt = draft.validatedAt,
-                prizeAmount = draft.prizeAmount,
-                entryFeeAmount = draft.entryFeeAmount,
+                paymentAssetCode = draft.paymentAssetCode,
+                prizeAmountAtomic = draft.prizeAmountAtomic,
+                entryFeeAmountAtomic = draft.entryFeeAmountAtomic,
                 requiredParticipants = draft.requiredParticipants,
+                onchainCompetitionId = draft.onchainCompetitionId,
+                onchainContractAddress = draft.onchainContractAddress,
+                onchainCreationKey = draft.onchainCreationKey,
+                onchainCreationTxHash = draft.onchainCreationTxHash,
+                onchainCreationConfirmedAt = draft.onchainCreationConfirmedAt,
+                onchainSettlementStatus = if (draft.onchainCompetitionId != null) {
+                    CompetitionSettlementStatus.Pending.dbValue
+                } else {
+                    CompetitionSettlementStatus.Disabled.dbValue
+                },
                 joinUntilDate = draft.joinUntilDate,
                 submitUntilDate = draft.submitUntilDate,
             )
@@ -234,7 +263,7 @@ internal class ProblemReadRepositoryImpl(
                         userId = userId,
                     )
                     if (!nowRegistered) {
-                        throw error
+                    throw error
                     }
                 }
             }
@@ -248,11 +277,84 @@ internal class ProblemReadRepositoryImpl(
         }
     }
 
+    override fun registerUserForProblemOnChain(
+        userId: Long,
+        problemId: Int,
+        txHash: String,
+        joinedAt: Instant,
+    ): JoinProblemResult {
+        return transactionRunner.inTransaction {
+            val normalizedProblemId = problemId.toLong()
+            val problemRow = problemDao.fetchOpenProblemRow(normalizedProblemId)
+                ?: throw IllegalArgumentException("Problem not found or not open.")
+            val requiredParticipants = problemRow[ProblemsTable.requiredParticipants]
+            val joinUntilDate = problemRow[ProblemsTable.joinUntilDate]
+
+            val alreadyRegistered = problemDao.isUserRegisteredForProblem(
+                problemId = normalizedProblemId,
+                userId = userId,
+            )
+            if (!alreadyRegistered) {
+                if (LocalDate.now().isAfter(joinUntilDate)) {
+                    throw IllegalArgumentException("Registration period has ended.")
+                }
+                val participantsBeforeJoin = problemDao.countParticipants(normalizedProblemId)
+                if (participantsBeforeJoin >= requiredParticipants) {
+                    throw IllegalArgumentException("Competition has already started. Registration is closed.")
+                }
+                runCatching {
+                    problemDao.insertProblemParticipant(
+                        problemId = normalizedProblemId,
+                        userId = userId,
+                        joinTxHash = txHash,
+                        joinedOnchainAt = joinedAt,
+                    )
+                }.onFailure { error ->
+                    val nowRegistered = problemDao.isUserRegisteredForProblem(
+                        problemId = normalizedProblemId,
+                        userId = userId,
+                    )
+                    if (!nowRegistered) {
+                        throw error
+                    }
+                }
+            }
+
+            val registeredParticipants = problemDao.countParticipants(normalizedProblemId)
+            JoinProblemResult(
+                joined = true,
+                registeredParticipants = registeredParticipants,
+                requiredParticipants = requiredParticipants,
+            )
+        }
+    }
+
+    override fun fetchOnchainJoinContext(problemId: Int): OnchainJoinContext {
+        return transactionRunner.inTransaction {
+            val normalizedProblemId = problemId.toLong()
+            val problemRow = problemDao.fetchOpenProblemRow(normalizedProblemId)
+                ?: throw IllegalArgumentException("Problem not found or not open.")
+            val competitionId = problemRow[ProblemsTable.onchainCompetitionId]
+                ?: throw IllegalArgumentException("Problem is not linked to an on-chain competition.")
+            OnchainJoinContext(
+                problemId = problemId,
+                competitionId = competitionId,
+                paymentAsset = paymentAssetCatalog.requireByCode(problemRow[ProblemsTable.paymentAssetCode]).toDto(),
+                entryFeeAmountAtomic = problemRow[ProblemsTable.entryFeeAmountAtomic],
+                requiredParticipants = problemRow[ProblemsTable.requiredParticipants],
+                registeredParticipants = problemDao.countParticipants(normalizedProblemId),
+                joinUntilDate = problemRow[ProblemsTable.joinUntilDate],
+            )
+        }
+    }
+
     override fun fetchExecutionContextForUser(userId: Long, problemId: Int): ProblemExecutionContext {
         return transactionRunner.inTransaction {
             val normalizedProblemId = problemId.toLong()
             val problemRow = problemDao.fetchOpenProblemRow(normalizedProblemId)
                 ?: throw IllegalArgumentException("Problem not found or not open.")
+            val onchainCompetitionId = problemRow[ProblemsTable.onchainCompetitionId]
+                ?: throw IllegalArgumentException("Problem is not linked to an on-chain competition.")
 
             val requiredParticipants = problemRow[ProblemsTable.requiredParticipants]
             val submitUntilDate = problemRow[ProblemsTable.submitUntilDate]
@@ -271,6 +373,12 @@ internal class ProblemReadRepositoryImpl(
             if (LocalDate.now().isAfter(submitUntilDate)) {
                 throw IllegalArgumentException("Submission window has ended.")
             }
+            val participantWalletAddress = UsersTable
+                .selectAll()
+                .where { UsersTable.userId eq userId }
+                .singleOrNull()
+                ?.get(UsersTable.walletAddress)
+                ?: throw IllegalArgumentException("Participant wallet was not found.")
 
             val tests = problemDao.fetchProblemTestRows(normalizedProblemId).map { row ->
                 ProblemExecutionTest(
@@ -291,6 +399,8 @@ internal class ProblemReadRepositoryImpl(
 
             ProblemExecutionContext(
                 problemId = problemId,
+                onchainCompetitionId = onchainCompetitionId,
+                participantWalletAddress = participantWalletAddress,
                 requiredParticipants = requiredParticipants,
                 registeredParticipants = registeredParticipants,
                 submitUntilDate = submitUntilDate,
@@ -315,13 +425,6 @@ internal class ProblemReadRepositoryImpl(
                 it[commitmentHash] = draft.commitmentHash
                 it[runtimeMs] = draft.runtimeMs
                 it[memoryUsedKb] = draft.memoryUsedKb
-                it[anchorStatus] = draft.anchor.status.dbValue
-                it[anchorBatchId] = draft.anchor.batchId
-                it[anchorMerkleRoot] = draft.anchor.merkleRoot
-                it[anchorMerkleProofJson] = anchorProofJson.encodeToString(draft.anchor.merkleProof)
-                it[anchorTxHash] = draft.anchor.txHash
-                it[anchorError] = draft.anchor.error
-                it[anchoredAt] = draft.anchor.anchoredAt?.toDbDateTime()
             }
             val submissionId = insertedSubmission[ProblemSubmissionsTable.submissionId]
 
@@ -356,72 +459,157 @@ internal class ProblemReadRepositoryImpl(
 
             PersistedSubmissionRecord(
                 submissionId = submissionId,
-                anchorStatus = draft.anchor.status,
             )
         }
     }
 
-    override fun createAnchorBatch(
-        rootHash: String,
-        submissionIds: List<Long>,
-        status: AnchorBatchStatus,
-        txHash: String?,
-        chainId: Long?,
-        contractAddress: String?,
-        failureReason: String?,
-        anchoredAt: Instant?,
-    ): SubmissionAnchorBatchRecord {
-        require(submissionIds.isNotEmpty()) { "Anchor batch requires at least one submission." }
-        return transactionRunner.inTransaction {
-            val sorted = submissionIds.sorted()
-            val insertedBatch = SubmissionAnchorBatchesTable.insert {
-                it[merkleRootHash] = rootHash
-                it[leavesCount] = sorted.size
-                it[fromSubmissionId] = sorted.first()
-                it[toSubmissionId] = sorted.last()
-                it[SubmissionAnchorBatchesTable.chainId] = chainId
-                it[SubmissionAnchorBatchesTable.contractAddress] = contractAddress
-                it[SubmissionAnchorBatchesTable.txHash] = txHash
-                it[SubmissionAnchorBatchesTable.status] = status.dbValue
-                it[SubmissionAnchorBatchesTable.failureReason] = failureReason
-                it[SubmissionAnchorBatchesTable.anchoredAt] = anchoredAt?.toDbDateTime()
-            }
-            SubmissionAnchorBatchRecord(
-                batchId = insertedBatch[SubmissionAnchorBatchesTable.batchId],
-                rootHash = rootHash,
-                submissionIds = sorted,
-            )
-        }
-    }
-
-    override fun updateSubmissionAnchors(
-        submissionIds: List<Long>,
-        status: SubmissionAnchorStatus,
-        batchId: Long,
-        merkleRoot: String,
-        proofBySubmission: Map<Long, List<String>>,
-        txHash: String?,
-        error: String?,
-        anchoredAt: Instant?,
+    override fun markSubmissionResultRecorded(
+        submissionId: Long,
+        proxyAddress: String,
+        txHash: String,
+        recordedAt: Instant,
     ) {
-        if (submissionIds.isEmpty()) {
-            return
-        }
         transactionRunner.inTransaction {
-            submissionIds.forEach { submissionId ->
-                ProblemSubmissionsTable.update(
-                    where = { ProblemSubmissionsTable.submissionId eq submissionId }
-                ) {
-                    it[anchorStatus] = status.dbValue
-                    it[anchorBatchId] = batchId
-                    it[anchorMerkleRoot] = merkleRoot
-                    it[anchorMerkleProofJson] = anchorProofJson.encodeToString(
-                        proofBySubmission[submissionId].orEmpty()
-                    )
-                    it[anchorTxHash] = txHash
-                    it[anchorError] = error
-                    it[ProblemSubmissionsTable.anchoredAt] = anchoredAt?.toDbDateTime()
+            ProblemSubmissionsTable.update(
+                where = { ProblemSubmissionsTable.submissionId eq submissionId }
+            ) {
+                it[onchainRecordContractAddress] = proxyAddress
+                it[onchainRecordTxHash] = txHash
+                it[onchainRecordError] = null
+                it[onchainRecordedAt] = recordedAt.toDbDateTime()
+            }
+        }
+    }
+
+    override fun markSubmissionResultFailed(submissionId: Long, error: String) {
+        transactionRunner.inTransaction {
+            ProblemSubmissionsTable.update(
+                where = { ProblemSubmissionsTable.submissionId eq submissionId }
+            ) {
+                it[status] = SubmissionAttemptStatus.Error.dbValue
+                it[onchainRecordError] = error
+            }
+        }
+    }
+
+    override fun fetchCompetitionsPendingSettlement(now: Instant): List<OnchainCompetitionSummary> {
+        return transactionRunner.inTransaction {
+            val participantCounts = participantCountsByProblem()
+            ProblemsTable
+                .selectAll()
+                .where {
+                    (ProblemsTable.onchainCompetitionId.isNotNull()) and
+                        (ProblemsTable.onchainSettlementStatus eq CompetitionSettlementStatus.Pending.dbValue)
                 }
+                .orderBy(ProblemsTable.submitUntilDate to SortOrder.ASC)
+                .mapNotNull { row ->
+                    val joinDeadline = row[ProblemsTable.joinUntilDate]
+                    val submitDeadline = row[ProblemsTable.submitUntilDate]
+                    val today = now.atZone(java.time.ZoneOffset.UTC).toLocalDate()
+                    val problemId = row[ProblemsTable.problemId].toInt()
+                    val registeredParticipants = participantCounts[row[ProblemsTable.problemId]] ?: 0
+                    val requiredParticipants = row[ProblemsTable.requiredParticipants]
+                    val registrationFailed = registeredParticipants < requiredParticipants &&
+                        !joinDeadline.isAfter(today)
+                    val submitWindowFinished = !submitDeadline.isAfter(today)
+                    if (!registrationFailed && !submitWindowFinished) {
+                        null
+                    } else {
+                        OnchainCompetitionSummary(
+                            problemId = problemId,
+                            title = row[ProblemsTable.title],
+                            competitionId = row[ProblemsTable.onchainCompetitionId]
+                                ?: return@mapNotNull null,
+                            paymentAsset = paymentAssetCatalog.requireByCode(row[ProblemsTable.paymentAssetCode]).toDto(),
+                            prizeAmountAtomic = row[ProblemsTable.prizeAmountAtomic],
+                            joinUntilDate = joinDeadline,
+                            submitUntilDate = submitDeadline,
+                            requiredParticipants = requiredParticipants,
+                            registeredParticipants = registeredParticipants,
+                            settlementStatus = row[ProblemsTable.onchainSettlementStatus],
+                        )
+                    }
+                }
+        }
+    }
+
+    override fun fetchBestSettlementCandidate(problemId: Int): ProblemSettlementCandidate? {
+        return transactionRunner.inTransaction {
+            ProblemSubmissionsTable
+                .innerJoin(UsersTable, { ProblemSubmissionsTable.userId }, { UsersTable.userId })
+                .selectAll()
+                .where {
+                    (ProblemSubmissionsTable.problemId eq problemId.toLong()) and
+                        (ProblemSubmissionsTable.status eq SubmissionAttemptStatus.Accepted.dbValue)
+                }
+                .orderBy(
+                    ProblemSubmissionsTable.runtimeMs to SortOrder.ASC,
+                    ProblemSubmissionsTable.memoryUsedKb to SortOrder.ASC,
+                    ProblemSubmissionsTable.submissionId to SortOrder.ASC,
+                )
+                .limit(1)
+                .singleOrNull()
+                ?.let { row ->
+                    ProblemSettlementCandidate(
+                        submissionId = row[ProblemSubmissionsTable.submissionId],
+                        userId = row[ProblemSubmissionsTable.userId],
+                        walletAddress = row[UsersTable.walletAddress],
+                        runtimeMs = row[ProblemSubmissionsTable.runtimeMs],
+                        memoryUsedKb = row[ProblemSubmissionsTable.memoryUsedKb],
+                        submittedAt = row[ProblemSubmissionsTable.submittedAt].toInstant(java.time.ZoneOffset.UTC),
+                    )
+                }
+        }
+    }
+
+    override fun recordSettledWinner(
+        problemId: Int,
+        winnerUserId: Long,
+        payoutAmountAtomic: String,
+        txHash: String,
+        settledAt: Instant,
+    ) {
+        transactionRunner.inTransaction {
+            ProblemWinnersTable.insertIgnore {
+                it[ProblemWinnersTable.problemId] = problemId.toLong()
+                it[ProblemWinnersTable.winnerUserId] = winnerUserId
+                it[ProblemWinnersTable.payoutAmountAtomic] = payoutAmountAtomic
+                it[ProblemWinnersTable.settlementTxHash] = txHash
+                it[ProblemWinnersTable.wonAt] = settledAt.toDbDateTime()
+            }
+            ProblemsTable.update(
+                where = { ProblemsTable.problemId eq problemId.toLong() }
+            ) {
+                it[problemStatus] = ProblemLifecycleStatus.Closed.dbValue
+                it[onchainSettlementStatus] = CompetitionSettlementStatus.Settled.dbValue
+                it[onchainSettlementTxHash] = txHash
+                it[onchainSettlementError] = null
+                it[onchainSettledAt] = settledAt.toDbDateTime()
+            }
+        }
+    }
+
+    override fun markCompetitionSettlementCancelled(problemId: Int, txHash: String, settledAt: Instant) {
+        transactionRunner.inTransaction {
+            ProblemsTable.update(
+                where = { ProblemsTable.problemId eq problemId.toLong() }
+            ) {
+                it[problemStatus] = ProblemLifecycleStatus.Closed.dbValue
+                it[onchainSettlementStatus] = CompetitionSettlementStatus.Cancelled.dbValue
+                it[onchainSettlementTxHash] = txHash
+                it[onchainSettlementError] = null
+                it[onchainSettledAt] = settledAt.toDbDateTime()
+            }
+        }
+    }
+
+    override fun markCompetitionSettlementFailed(problemId: Int, error: String) {
+        transactionRunner.inTransaction {
+            ProblemsTable.update(
+                where = { ProblemsTable.problemId eq problemId.toLong() }
+            ) {
+                it[onchainSettlementStatus] = CompetitionSettlementStatus.Failed.dbValue
+                it[onchainSettlementError] = error
             }
         }
     }
@@ -537,10 +725,6 @@ private fun serializeProblemExamples(examples: List<NewProblemExampleDraft>): St
             )
         }
     )
-}
-
-private val anchorProofJson = Json {
-    ignoreUnknownKeys = true
 }
 
 private fun Instant.toDbDateTime(): java.time.LocalDateTime {

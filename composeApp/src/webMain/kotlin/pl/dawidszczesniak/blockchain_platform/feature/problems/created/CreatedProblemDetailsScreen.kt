@@ -55,6 +55,7 @@ import blockchain_platform.composeapp.generated.resources.problem_details_requir
 import blockchain_platform.composeapp.generated.resources.problem_details_statement
 import blockchain_platform.composeapp.generated.resources.problem_details_title
 import org.jetbrains.compose.resources.stringResource
+import pl.dawidszczesniak.blockchain_platform.feature.platform.formatAmountWithSymbol
 import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.CreatedProblem
 import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.CreatedProblemStatus
 import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.ProblemExample
@@ -264,10 +265,16 @@ private fun CreatedProblemOwnerPane(
             )
             CreatedProblemDetailLine(stringResource(Res.string.my_problem_submitted, createdProblem.submissions))
             CreatedProblemDetailLine(
-                stringResource(Res.string.problem_details_requirement_prize, problem.prizeAmount)
+                stringResource(
+                    Res.string.problem_details_requirement_prize,
+                    formatAmountWithSymbol(problem.paymentAsset, problem.prizeAmountAtomic),
+                )
             )
             CreatedProblemDetailLine(
-                stringResource(Res.string.problem_details_requirement_entry_fee, problem.entryFeeAmount)
+                stringResource(
+                    Res.string.problem_details_requirement_entry_fee,
+                    formatAmountWithSymbol(problem.paymentAsset, problem.entryFeeAmountAtomic),
+                )
             )
             CreatedProblemDetailLine(
                 stringResource(

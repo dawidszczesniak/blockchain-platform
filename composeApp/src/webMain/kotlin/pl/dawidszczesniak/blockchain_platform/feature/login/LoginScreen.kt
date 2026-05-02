@@ -30,6 +30,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import blockchain_platform.composeapp.generated.resources.Res
 import blockchain_platform.composeapp.generated.resources.login_connect_wallet
+import blockchain_platform.composeapp.generated.resources.login_required_network
 import blockchain_platform.composeapp.generated.resources.login_subtitle
 import blockchain_platform.composeapp.generated.resources.login_title
 import blockchain_platform.composeapp.generated.resources.login_wallet_not_found
@@ -72,6 +73,14 @@ fun LoginScreen(onLogin: () -> Unit) {
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                state.requiredNetworkLabel?.let { networkLabel ->
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = stringResource(Res.string.login_required_network, networkLabel),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
 
                 Spacer(Modifier.height(16.dp))
                 if (state.isLoadingWallets || state.isConnectingWallet) {

@@ -40,11 +40,11 @@ import pl.dawidszczesniak.blockchain_platform.feature.dashboard.usecase.GetDashb
 import pl.dawidszczesniak.blockchain_platform.feature.dashboard.usecase.GetDashboardMetricsHistoryUseCaseImpl
 import pl.dawidszczesniak.blockchain_platform.feature.dashboard.usecase.GetDashboardUpdatesUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.dashboard.usecase.GetDashboardUpdatesUseCaseImpl
+import pl.dawidszczesniak.blockchain_platform.feature.platform.PaymentAssetCatalog
 import pl.dawidszczesniak.blockchain_platform.feature.platform.controller.PlatformController
 import pl.dawidszczesniak.blockchain_platform.feature.problems.controller.ProblemController
-import pl.dawidszczesniak.blockchain_platform.feature.problems.anchor.AnchorConfig
-import pl.dawidszczesniak.blockchain_platform.feature.problems.anchor.BlockchainAnchorClient
-import pl.dawidszczesniak.blockchain_platform.feature.problems.anchor.EthereumBlockchainAnchorClient
+import pl.dawidszczesniak.blockchain_platform.feature.problems.competition.CompetitionIntentStore
+import pl.dawidszczesniak.blockchain_platform.feature.problems.competition.RedisCompetitionIntentStore
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dao.ProblemDao
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dao.ProblemDaoImpl
 import pl.dawidszczesniak.blockchain_platform.feature.problems.judge.RedisSubmissionJudgeQueue
@@ -53,6 +53,9 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.judge.SubmissionJ
 import pl.dawidszczesniak.blockchain_platform.feature.problems.judge.SubmissionJudgeJobRepositoryImpl
 import pl.dawidszczesniak.blockchain_platform.feature.problems.judge.SubmissionJudgeQueue
 import pl.dawidszczesniak.blockchain_platform.feature.problems.judge.SubmissionJudgeWorker
+import pl.dawidszczesniak.blockchain_platform.feature.problems.onchain.BlockchainPlatformContractClient
+import pl.dawidszczesniak.blockchain_platform.feature.problems.onchain.BlockchainPlatformContractConfig
+import pl.dawidszczesniak.blockchain_platform.feature.problems.onchain.EthereumBlockchainPlatformContractClient
 import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.ProblemReadRepository
 import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.ProblemReadRepositoryImpl
 import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.ProblemWriteRepository
@@ -61,6 +64,7 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.sandbox.SandboxCo
 import pl.dawidszczesniak.blockchain_platform.feature.problems.sandbox.SandboxHttpClient
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.CreateProblemUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.CreateProblemUseCaseImpl
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.CreateProblemDraftFactory
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.EnqueueProblemSubmissionUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.EnqueueProblemSubmissionUseCaseImpl
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetSubmissionJudgeJobUseCase
@@ -73,6 +77,15 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetProble
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetProblemSummariesUseCaseImpl
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.JoinProblemUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.JoinProblemUseCaseImpl
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.PrepareCreateProblemOnChainUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.PrepareCreateProblemOnChainUseCaseImpl
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.ConfirmCreateProblemOnChainUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.ConfirmCreateProblemOnChainUseCaseImpl
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.PrepareJoinProblemOnChainUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.PrepareJoinProblemOnChainUseCaseImpl
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.ConfirmJoinProblemOnChainUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.ConfirmJoinProblemOnChainUseCaseImpl
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.CompetitionSettlementWorker
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.RunProblemCodeUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.RunProblemCodeUseCaseImpl
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.SubmissionJudgeService
@@ -85,17 +98,17 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.CreatePro
 import pl.dawidszczesniak.blockchain_platform.redis.RedisConfig
 import pl.dawidszczesniak.blockchain_platform.redis.RedisFactory
 
-internal fun serverModules() = module {
-    single { PostgresConfig.fromEnvironment() }
-    single { RedisConfig.fromEnvironment() }
-    single { AuthConfig.fromEnvironment() }
-    single { BlockchainConfig.fromEnvironment() }
+internal fun serverModules(environment: Map<String, String>) = module {
+    single { PostgresConfig.fromEnvironment(environment) }
+    single { RedisConfig.fromEnvironment(environment) }
+    single { AuthConfig.fromEnvironment(environment) }
+    single { BlockchainConfig.fromEnvironment(environment) }
     single<Database> { DatabaseFactory.connect(get()) }
     single<JedisPooled> { RedisFactory.connect(get()) }
     single<DbTransactionRunner> { ExposedDbTransactionRunner(get()) }
 
     single { DbSchemaRunner(get()) }
-    single { DashboardMetricsRefresher() }
+    single { DashboardMetricsRefresher(get()) }
     single { DatabaseBootstrapper(get(), get(), get()) }
 
     single<UserDao> { UserDaoImpl() }
@@ -112,23 +125,30 @@ internal fun serverModules() = module {
     factory { AuthController(get(), get(), get()) }
 
     single<ProblemDao> { ProblemDaoImpl() }
-    single { ProblemReadRepositoryImpl(get(), get()) }
+    single { ProblemReadRepositoryImpl(get(), get(), get()) }
     single<ProblemReadRepository> { get<ProblemReadRepositoryImpl>() }
     single<ProblemWriteRepository> { get<ProblemReadRepositoryImpl>() }
-    single { SandboxConfig.fromEnvironment() }
-    single { AnchorConfig.fromEnvironment() }
+    single { SandboxConfig.fromEnvironment(environment) }
+    single { PaymentAssetCatalog.fromEnvironment(environment, get()) }
+    single { BlockchainPlatformContractConfig.fromEnvironment(environment, get()) }
     single<SandboxClient> { SandboxHttpClient(get()) }
     single<SubmissionJudgeJobRepository> { SubmissionJudgeJobRepositoryImpl(get()) }
     single<SubmissionJudgeQueue> { RedisSubmissionJudgeQueue(get()) }
     single { SubmissionJudgeJobMapper() }
     single<CreateProblemReferenceValidationService> { CreateProblemReferenceValidationServiceImpl(get()) }
-    single<BlockchainAnchorClient> { EthereumBlockchainAnchorClient(get(), get()) }
-    factory<CreateProblemUseCase> { CreateProblemUseCaseImpl(get(), get(), get(), get()) }
+    single { CreateProblemDraftFactory(get(), get()) }
+    single<CompetitionIntentStore> { RedisCompetitionIntentStore(get(), get()) }
+    single<BlockchainPlatformContractClient> { EthereumBlockchainPlatformContractClient(get(), get()) }
+    factory<CreateProblemUseCase> { CreateProblemUseCaseImpl() }
+    factory<PrepareCreateProblemOnChainUseCase> { PrepareCreateProblemOnChainUseCaseImpl(get(), get(), get(), get(), get()) }
+    factory<ConfirmCreateProblemOnChainUseCase> { ConfirmCreateProblemOnChainUseCaseImpl(get(), get(), get(), get(), get(), get(), get()) }
     factory<ValidateCreateProblemUseCase> { ValidateCreateProblemUseCaseImpl(get()) }
     factory<GetProblemSummariesUseCase> { GetProblemSummariesUseCaseImpl(get()) }
     factory<GetCreatedProblemsUseCase> { GetCreatedProblemsUseCaseImpl(get()) }
     factory<GetParticipationProblemsUseCase> { GetParticipationProblemsUseCaseImpl(get()) }
-    factory<JoinProblemUseCase> { JoinProblemUseCaseImpl(get()) }
+    factory<JoinProblemUseCase> { JoinProblemUseCaseImpl() }
+    factory<PrepareJoinProblemOnChainUseCase> { PrepareJoinProblemOnChainUseCaseImpl(get(), get(), get(), get(), get()) }
+    factory<ConfirmJoinProblemOnChainUseCase> { ConfirmJoinProblemOnChainUseCaseImpl(get(), get(), get(), get()) }
     factory<RunProblemCodeUseCase> { RunProblemCodeUseCaseImpl(get(), get()) }
     single { SubmitProblemCodeUseCaseImpl(get(), get(), get(), get(), get()) }
     single<SubmitProblemCodeUseCase> { get<SubmitProblemCodeUseCaseImpl>() }
@@ -136,12 +156,13 @@ internal fun serverModules() = module {
     single<EnqueueProblemSubmissionUseCase> { EnqueueProblemSubmissionUseCaseImpl(get(), get(), get()) }
     single<GetSubmissionJudgeJobUseCase> { GetSubmissionJudgeJobUseCaseImpl(get(), get(), get()) }
     single { SubmissionJudgeWorker(get(), get(), get()) }
-    factory { ProblemController(get(), get(), get(), get(), get(), get(), get(), get(), get()) }
+    single { CompetitionSettlementWorker(get(), get(), get()) }
+    factory { ProblemController(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
 
     single<DashboardDao> { DashboardDaoImpl(get()) }
-    single<DashboardReadRepository> { DashboardReadRepositoryImpl(get(), get()) }
+    single<DashboardReadRepository> { DashboardReadRepositoryImpl(get(), get(), get()) }
     factory<GetDashboardMetricsHistoryUseCase> { GetDashboardMetricsHistoryUseCaseImpl(get()) }
     factory<GetDashboardUpdatesUseCase> { GetDashboardUpdatesUseCaseImpl(get()) }
     factory { DashboardController(get(), get()) }
-    factory { PlatformController(get()) }
+    factory { PlatformController(get(), get(), get()) }
 }

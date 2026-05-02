@@ -16,10 +16,19 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.datetime.LocalDate
+import pl.dawidszczesniak.blockchain_platform.feature.platform.dto.PaymentAssetDto
+import pl.dawidszczesniak.blockchain_platform.feature.platform.parseHumanAmountToAtomic
+import pl.dawidszczesniak.blockchain_platform.feature.platform.sanitizeHumanAmountInput
+import pl.dawidszczesniak.blockchain_platform.feature.login.WalletProvider
+import pl.dawidszczesniak.blockchain_platform.feature.login.WalletSessionStore
+import pl.dawidszczesniak.blockchain_platform.feature.login.WalletTransactionRequest
+import pl.dawidszczesniak.blockchain_platform.feature.platform.usecase.GetPlatformConfigUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.CreateProblemValidationTestResultDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.CreateProblemRequestDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.CreateProblemTestCaseDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ValidateCreateProblemRequestDto
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.ConfirmCreateProblemOnChainUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.PrepareCreateProblemOnChainUseCase
 
 const val MAX_CREATE_PROBLEM_TESTS = 50
 const val MIN_CREATE_PROBLEM_TESTS = 1
@@ -47,13 +56,16 @@ data class CreateProblemTestRunResult(
 enum class CreateProblemValidationError {
     Required,
     InvalidInteger,
+    InvalidAmount,
     MustBePositive,
     MustBeNonNegative,
+    PaymentAssetRequired,
     SubmitBeforeJoin,
     MinPublicTests,
 }
 
 data class CreateProblemValidation(
+    val paymentAsset: CreateProblemValidationError? = null,
     val prize: CreateProblemValidationError? = null,
     val participants: CreateProblemValidationError? = null,
     val entryFee: CreateProblemValidationError? = null,
@@ -66,7 +78,8 @@ data class CreateProblemValidation(
     val testsById: Map<Int, CreateProblemTestValidation> = emptyMap(),
 ) {
     val hasErrors: Boolean
-        get() = prize != null ||
+        get() = paymentAsset != null ||
+            prize != null ||
             participants != null ||
             entryFee != null ||
             title != null ||
@@ -79,6 +92,9 @@ data class CreateProblemValidation(
 }
 
 data class CreateProblemState(
+    val supportedPaymentAssets: List<PaymentAssetDto> = emptyList(),
+    val selectedPaymentAssetCode: String? = null,
+    val isPaymentAssetsLoading: Boolean = true,
     val prize: String = "",
     val participants: String = "",
     val entryFee: String = "",
@@ -106,9 +122,13 @@ data class CreateProblemState(
     val isSubmitting: Boolean = false,
     val submitFailed: Boolean = false,
     val requiresFreshValidationForSubmit: Boolean = false,
+    val submitStatusMessage: String? = null,
     val submitErrorMessage: String? = null,
     val submitSuccessProblemId: Int? = null,
 ) {
+    val selectedPaymentAsset: PaymentAssetDto?
+        get() = supportedPaymentAssets.firstOrNull { it.code == selectedPaymentAssetCode }
+
     val prizeValue: Double
         get() = parseAmount(prize)
 
@@ -157,6 +177,7 @@ data class CreateProblemState(
 }
 
 sealed interface CreateProblemIntent {
+    data class PaymentAssetChanged(val code: String) : CreateProblemIntent
     data class PrizeChanged(val value: String) : CreateProblemIntent
     data class ParticipantsChanged(val value: String) : CreateProblemIntent
     data class EntryFeeChanged(val value: String) : CreateProblemIntent
@@ -177,17 +198,31 @@ sealed interface CreateProblemIntent {
 }
 
 class CreateProblemViewModel(
-    private val createProblemUseCase: CreateProblemUseCase,
+    private val prepareCreateProblemOnChainUseCase: PrepareCreateProblemOnChainUseCase,
+    private val confirmCreateProblemOnChainUseCase: ConfirmCreateProblemOnChainUseCase,
     private val validateCreateProblemUseCase: ValidateCreateProblemUseCase,
+    private val getPlatformConfigUseCase: GetPlatformConfigUseCase,
+    private val walletProvider: WalletProvider,
+    private val walletSessionStore: WalletSessionStore,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val _state = MutableStateFlow(CreateProblemState())
     val state: StateFlow<CreateProblemState> = _state.asStateFlow()
 
+    init {
+        loadPaymentAssets()
+    }
+
     fun onIntent(intent: CreateProblemIntent) {
         when (intent) {
+            is CreateProblemIntent.PaymentAssetChanged -> {
+                _state.update { current ->
+                    current.copy(selectedPaymentAssetCode = intent.code).clearSubmissionAndValidationFeedback()
+                }
+            }
+
             is CreateProblemIntent.PrizeChanged -> {
-                val normalized = intent.value.filter { it.isDigit() }
+                val normalized = sanitizeHumanAmountInput(intent.value)
                 _state.update { current ->
                     current.copy(prize = normalized).clearSubmissionFeedback()
                 }
@@ -201,7 +236,7 @@ class CreateProblemViewModel(
             }
 
             is CreateProblemIntent.EntryFeeChanged -> {
-                val normalized = intent.value.filter { it.isDigit() }
+                val normalized = sanitizeHumanAmountInput(intent.value)
                 _state.update { current ->
                     current.copy(entryFee = normalized).clearSubmissionFeedback()
                 }
@@ -333,6 +368,7 @@ class CreateProblemViewModel(
                     submitAttempted = true,
                     submitFailed = false,
                     requiresFreshValidationForSubmit = false,
+                    submitStatusMessage = null,
                     submitErrorMessage = null,
                     submitSuccessProblemId = null,
                 )
@@ -345,6 +381,7 @@ class CreateProblemViewModel(
                     submitAttempted = true,
                     submitFailed = true,
                     requiresFreshValidationForSubmit = true,
+                    submitStatusMessage = null,
                     submitErrorMessage = null,
                     submitSuccessProblemId = null,
                 )
@@ -359,6 +396,7 @@ class CreateProblemViewModel(
                 isSubmitting = true,
                 submitFailed = false,
                 requiresFreshValidationForSubmit = false,
+                submitStatusMessage = "Przygotowuję transakcję konkursu.",
                 submitErrorMessage = null,
                 submitSuccessProblemId = null,
             )
@@ -366,9 +404,99 @@ class CreateProblemViewModel(
 
         scope.launch {
             runCatching {
-                createProblemUseCase(request)
+                val walletId = walletSessionStore.currentWalletId()
+                    ?: error("Reconnect wallet before creating an on-chain competition.")
+                val walletAddress = walletSessionStore.currentWalletAddress()
+                    ?: error("Reconnect wallet before creating an on-chain competition.")
+                val prepared = prepareCreateProblemOnChainUseCase(request)
+                prepared.approvalTransaction?.let { approval ->
+                    _state.update { current ->
+                        current.copy(
+                            submitStatusMessage = "Potwierdź autoryzację ${prepared.paymentAsset.symbol} w portfelu.",
+                        )
+                    }
+                    val approvalTxHash = walletProvider.sendTransaction(
+                        walletId = walletId,
+                        walletAddress = walletAddress,
+                        request = WalletTransactionRequest(
+                            to = approval.to,
+                            data = approval.data,
+                            valueHex = approval.valueHex,
+                        ),
+                    )
+                    _state.update { current ->
+                        current.copy(
+                            submitStatusMessage = "Autoryzacja wysłana. Czekam na potwierdzenie w sieci.",
+                        )
+                    }
+                    walletProvider.waitForTransactionReceipt(
+                        walletId = walletId,
+                        txHash = approvalTxHash,
+                    )
+                }
+                _state.update { current ->
+                    current.copy(
+                        submitStatusMessage = "Potwierdź utworzenie konkursu w portfelu.",
+                    )
+                }
+                val txHash = walletProvider.sendTransaction(
+                    walletId = walletId,
+                    walletAddress = walletAddress,
+                    request = WalletTransactionRequest(
+                        to = prepared.transaction.to,
+                        data = prepared.transaction.data,
+                        valueHex = prepared.transaction.valueHex,
+                    ),
+                )
+                _state.update { current ->
+                    current.copy(
+                        submitStatusMessage = "Transakcja wysłana. Czekam na potwierdzenie w sieci.",
+                    )
+                }
+                val receipt = walletProvider.waitForTransactionReceipt(
+                    walletId = walletId,
+                    txHash = txHash,
+                )
+                _state.update { current ->
+                    current.copy(
+                        submitStatusMessage = "Potwierdzam konkurs z backendem.",
+                    )
+                }
+                confirmCreateProblemOnChainUseCase(
+                    intentId = prepared.intentId,
+                    txHash = receipt.transactionHash,
+                )
             }.onSuccess { createdProblemId ->
-                _state.value = CreateProblemState(
+                _state.value = state.value.copy(
+                    prize = "",
+                    participants = "",
+                    entryFee = "",
+                    title = "",
+                    description = "",
+                    constraints = "",
+                    referenceSolutionCode = "",
+                    joinUntilDate = null,
+                    submitUntilDate = null,
+                    tests = listOf(
+                        CreateProblemTest(
+                            id = 1,
+                            input = "",
+                            isHidden = false,
+                            expanded = false,
+                        ),
+                    ),
+                    nextTestId = 2,
+                    runningTestIds = emptySet(),
+                    isRunningAllTests = false,
+                    runErrorMessage = null,
+                    testRunResultsById = emptyMap(),
+                    validatedSnapshotHash = null,
+                    submitAttempted = false,
+                    isSubmitting = false,
+                    submitFailed = false,
+                    requiresFreshValidationForSubmit = false,
+                    submitStatusMessage = null,
+                    submitErrorMessage = null,
                     submitSuccessProblemId = createdProblemId,
                 )
             }.onFailure { error ->
@@ -377,11 +505,34 @@ class CreateProblemViewModel(
                         isSubmitting = false,
                         submitFailed = true,
                         requiresFreshValidationForSubmit = false,
+                        submitStatusMessage = null,
                         submitErrorMessage = extractReadableErrorMessage(error),
                         submitSuccessProblemId = null,
                     )
                 }
             }
+        }
+    }
+
+    private fun loadPaymentAssets() {
+        scope.launch {
+            runCatching { getPlatformConfigUseCase() }
+                .onSuccess { platform ->
+                    val supportedAssets = platform.supportedPaymentAssets
+                    _state.update { current ->
+                        current.copy(
+                            supportedPaymentAssets = supportedAssets,
+                            selectedPaymentAssetCode = current.selectedPaymentAssetCode
+                                ?: supportedAssets.firstOrNull()?.code,
+                            isPaymentAssetsLoading = false,
+                        )
+                    }
+                }
+                .onFailure {
+                    _state.update { current ->
+                        current.copy(isPaymentAssetsLoading = false)
+                    }
+                }
         }
     }
 
@@ -502,15 +653,23 @@ class CreateProblemViewModel(
 }
 
 private fun validateCreateProblem(state: CreateProblemState): CreateProblemValidation {
+    val selectedPaymentAsset = state.selectedPaymentAsset
+    val paymentAssetError = if (selectedPaymentAsset == null) {
+        CreateProblemValidationError.PaymentAssetRequired
+    } else {
+        null
+    }
+
     val prizeRaw = state.prize.trim()
     var prizeError: CreateProblemValidationError? = null
     if (prizeRaw.isEmpty()) {
         prizeError = CreateProblemValidationError.Required
+    } else if (selectedPaymentAsset == null) {
+        prizeError = CreateProblemValidationError.PaymentAssetRequired
     } else {
-        val parsedPrize = prizeRaw.toLongOrNull()
-        prizeError = when {
-            parsedPrize == null -> CreateProblemValidationError.InvalidInteger
-            parsedPrize < 0L -> CreateProblemValidationError.MustBeNonNegative
+        prizeError = when (parseHumanAmountToAtomic(prizeRaw, selectedPaymentAsset)) {
+            null -> CreateProblemValidationError.InvalidAmount
+            "0" -> CreateProblemValidationError.MustBePositive
             else -> null
         }
     }
@@ -532,12 +691,13 @@ private fun validateCreateProblem(state: CreateProblemState): CreateProblemValid
     var entryFeeError: CreateProblemValidationError? = null
     if (entryFeeRaw.isEmpty()) {
         entryFeeError = CreateProblemValidationError.Required
+    } else if (selectedPaymentAsset == null) {
+        entryFeeError = CreateProblemValidationError.PaymentAssetRequired
     } else {
-        val parsedEntryFee = entryFeeRaw.toLongOrNull()
-        entryFeeError = when {
-            parsedEntryFee == null -> CreateProblemValidationError.InvalidInteger
-            parsedEntryFee < 0L -> CreateProblemValidationError.MustBeNonNegative
-            else -> null
+        entryFeeError = if (parseHumanAmountToAtomic(entryFeeRaw, selectedPaymentAsset) == null) {
+            CreateProblemValidationError.InvalidAmount
+        } else {
+            null
         }
     }
 
@@ -591,6 +751,7 @@ private fun validateCreateProblem(state: CreateProblemState): CreateProblemValid
     }
 
     return CreateProblemValidation(
+        paymentAsset = paymentAssetError,
         prize = prizeError,
         participants = participantsError,
         entryFee = entryFeeError,
@@ -608,6 +769,9 @@ private fun CreateProblemState.toCreateProblemRequest(): CreateProblemRequestDto
     require(!validation.hasErrors) {
         "CreateProblemRequestDto can be built only from valid state."
     }
+    val paymentAsset = requireNotNull(selectedPaymentAsset) {
+        "payment asset must be set in valid state."
+    }
     return CreateProblemRequestDto(
         title = title.trim(),
         description = description.trim(),
@@ -615,8 +779,9 @@ private fun CreateProblemState.toCreateProblemRequest(): CreateProblemRequestDto
         examples = emptyList(),
         referenceSolutionCode = referenceSolutionCode,
         referenceSolutionLanguage = "kotlin",
-        prizeAmount = prize.trim().toLong(),
-        entryFeeAmount = entryFee.trim().toLong(),
+        paymentAssetCode = paymentAsset.code,
+        prizeAmountAtomic = requireNotNull(parseHumanAmountToAtomic(prize.trim(), paymentAsset)),
+        entryFeeAmountAtomic = requireNotNull(parseHumanAmountToAtomic(entryFee.trim(), paymentAsset)),
         requiredParticipants = participants.trim().toInt(),
         joinUntilDate = requireNotNull(joinUntilDate) {
             "joinUntilDate must be set in valid state."
@@ -673,6 +838,7 @@ private fun CreateProblemState.clearSubmissionFeedback(): CreateProblemState {
         isSubmitting = false,
         submitFailed = false,
         requiresFreshValidationForSubmit = false,
+        submitStatusMessage = null,
         submitErrorMessage = null,
         submitSuccessProblemId = null,
     )

@@ -13,22 +13,27 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import pl.dawidszczesniak.blockchain_platform.feature.platform.usecase.GetPlatformConfigUseCase
 
 data class LoginState(
     val isLoadingWallets: Boolean = false,
+    val isLoadingNetwork: Boolean = false,
     val wallets: List<LoginWalletOption> = emptyList(),
     val isConnectingWallet: Boolean = false,
+    val requiredNetworkLabel: String? = null,
     val errorMessage: String? = null,
 )
 
 class LoginViewModel(
     private val loginUseCase: LoginUseCase,
+    private val getPlatformConfigUseCase: GetPlatformConfigUseCase,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val _state = MutableStateFlow(LoginState())
     val state: StateFlow<LoginState> = _state.asStateFlow()
 
     init {
+        refreshNetwork()
         refreshWallets()
     }
 
@@ -104,6 +109,36 @@ class LoginViewModel(
 
     fun close() {
         scope.cancel()
+    }
+
+    private fun refreshNetwork() {
+        _state.update { current ->
+            current.copy(isLoadingNetwork = true)
+        }
+        scope.launch {
+            runCatching { getPlatformConfigUseCase() }
+                .onSuccess { platform ->
+                    val label = platform.walletNetwork?.let { network ->
+                        "${network.networkName} (${network.chainId})"
+                    } ?: platform.chainId?.let { chainId ->
+                        "${platform.networkName} ($chainId)"
+                    } ?: platform.networkName
+                    _state.update { current ->
+                        current.copy(
+                            isLoadingNetwork = false,
+                            requiredNetworkLabel = label.ifBlank { null },
+                        )
+                    }
+                }
+                .onFailure {
+                    _state.update { current ->
+                        current.copy(
+                            isLoadingNetwork = false,
+                            requiredNetworkLabel = null,
+                        )
+                    }
+                }
+        }
     }
 }
 

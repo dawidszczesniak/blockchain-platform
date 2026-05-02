@@ -9,7 +9,7 @@ internal fun DashboardMetricDto.toDomain(): DashboardMetric {
     return DashboardMetric(
         metricDate = metricDate,
         activeChallenges = activeChallenges,
-        prizePoolAmount = prizePoolAmount,
+        prizePoolLabel = prizePoolLabel,
         submissionsCount = submissionsCount,
     )
 }

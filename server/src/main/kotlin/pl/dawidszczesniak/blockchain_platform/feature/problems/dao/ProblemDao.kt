@@ -28,7 +28,7 @@ internal interface ProblemDao {
     fun fetchCreatedProblemRowsForUser(userId: Long): List<ResultRow>
     fun fetchParticipationProblemRowsForUser(userId: Long): List<ResultRow>
     fun isUserRegisteredForProblem(problemId: Long, userId: Long): Boolean
-    fun insertProblemParticipant(problemId: Long, userId: Long)
+    fun insertProblemParticipant(problemId: Long, userId: Long, joinTxHash: String? = null, joinedOnchainAt: java.time.Instant? = null)
     fun countParticipants(problemId: Long): Int
     fun fetchParticipantCountRows(): List<ResultRow>
     fun fetchSubmissionCountRows(): List<ResultRow>
@@ -47,9 +47,16 @@ internal interface ProblemDao {
         validationResultHash: String?,
         validationImageHash: String?,
         validatedAt: java.time.Instant,
-        prizeAmount: Long,
-        entryFeeAmount: Long,
+        paymentAssetCode: String,
+        prizeAmountAtomic: String,
+        entryFeeAmountAtomic: String,
         requiredParticipants: Int,
+        onchainCompetitionId: Long?,
+        onchainContractAddress: String?,
+        onchainCreationKey: String?,
+        onchainCreationTxHash: String?,
+        onchainCreationConfirmedAt: java.time.Instant?,
+        onchainSettlementStatus: String,
         joinUntilDate: LocalDate,
         submitUntilDate: LocalDate,
     ): Long
@@ -122,10 +129,19 @@ internal class ProblemDaoImpl : ProblemDao {
             .any { row -> row[ProblemParticipantsTable.userId] == userId }
     }
 
-    override fun insertProblemParticipant(problemId: Long, userId: Long) {
+    override fun insertProblemParticipant(
+        problemId: Long,
+        userId: Long,
+        joinTxHash: String?,
+        joinedOnchainAt: java.time.Instant?,
+    ) {
         ProblemParticipantsTable.insert {
             it[ProblemParticipantsTable.problemId] = problemId
             it[ProblemParticipantsTable.userId] = userId
+            it[ProblemParticipantsTable.joinTxHash] = joinTxHash
+            it[ProblemParticipantsTable.joinedOnchainAt] = joinedOnchainAt?.let { instant ->
+                java.time.LocalDateTime.ofInstant(instant, java.time.ZoneOffset.UTC)
+            }
         }
     }
 
@@ -198,9 +214,16 @@ internal class ProblemDaoImpl : ProblemDao {
         validationResultHash: String?,
         validationImageHash: String?,
         validatedAt: java.time.Instant,
-        prizeAmount: Long,
-        entryFeeAmount: Long,
+        paymentAssetCode: String,
+        prizeAmountAtomic: String,
+        entryFeeAmountAtomic: String,
         requiredParticipants: Int,
+        onchainCompetitionId: Long?,
+        onchainContractAddress: String?,
+        onchainCreationKey: String?,
+        onchainCreationTxHash: String?,
+        onchainCreationConfirmedAt: java.time.Instant?,
+        onchainSettlementStatus: String,
         joinUntilDate: LocalDate,
         submitUntilDate: LocalDate,
     ): Long {
@@ -220,9 +243,18 @@ internal class ProblemDaoImpl : ProblemDao {
                 validatedAt,
                 java.time.ZoneOffset.UTC,
             )
-            it[ProblemsTable.prizeAmount] = prizeAmount
-            it[ProblemsTable.entryFeeAmount] = entryFeeAmount
+            it[ProblemsTable.paymentAssetCode] = paymentAssetCode
+            it[ProblemsTable.prizeAmountAtomic] = prizeAmountAtomic
+            it[ProblemsTable.entryFeeAmountAtomic] = entryFeeAmountAtomic
             it[ProblemsTable.requiredParticipants] = requiredParticipants
+            it[ProblemsTable.onchainCompetitionId] = onchainCompetitionId
+            it[ProblemsTable.onchainContractAddress] = onchainContractAddress
+            it[ProblemsTable.onchainCreationKey] = onchainCreationKey
+            it[ProblemsTable.onchainCreationTxHash] = onchainCreationTxHash
+            it[ProblemsTable.onchainCreationConfirmedAt] = onchainCreationConfirmedAt?.let { instant ->
+                java.time.LocalDateTime.ofInstant(instant, java.time.ZoneOffset.UTC)
+            }
+            it[ProblemsTable.onchainSettlementStatus] = onchainSettlementStatus
             it[ProblemsTable.joinUntilDate] = joinUntilDate
             it[ProblemsTable.submitUntilDate] = submitUntilDate
         }

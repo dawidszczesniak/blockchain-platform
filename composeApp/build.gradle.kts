@@ -1,10 +1,10 @@
-import org.gradle.api.GradleException
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.OutputFile
 import org.gradle.api.tasks.TaskAction
+import java.io.File
 import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
 import org.jetbrains.kotlin.gradle.targets.js.webpack.KotlinWebpackConfig
 
@@ -18,6 +18,7 @@ val localHost = "localhost"
 val frontendPort = 8081
 val backendPort = 8080
 val localApiBaseUrl = "http://$localHost:$backendPort"
+val localEnv = loadDotEnv(rootDir.resolve(".env.local"))
 
 kotlin {
     js {
@@ -90,9 +91,9 @@ abstract class GenerateAppConfig : DefaultTask() {
     }
 }
 
-val appEnvProvider = providers.gradleProperty("appEnv")
-    .map { it.lowercase() }
-    .orElse("local")
+val appEnvProvider = providers.provider {
+    localEnv["APP_ENV"]?.trim()?.lowercase().orEmpty().ifBlank { "local" }
+}
 val defaultApiBaseUrlProvider = appEnvProvider.map { env ->
     when (env) {
         "prod", "production" -> "https://api.your-domain.com"
@@ -100,19 +101,11 @@ val defaultApiBaseUrlProvider = appEnvProvider.map { env ->
         else -> localApiBaseUrl
     }
 }
-val apiBaseUrlProvider = providers.gradleProperty("apiBaseUrl")
-    .orElse(defaultApiBaseUrlProvider)
-val restrictedApiBaseUrlProvider = appEnvProvider.zip(apiBaseUrlProvider) { env, apiBaseUrl ->
-    if (env == "local" && apiBaseUrl != localApiBaseUrl) {
-        throw GradleException("Local frontend can use only $localApiBaseUrl as backend URL.")
-    }
-    apiBaseUrl
-}
 
 val generatedConfigDir = layout.buildDirectory.dir("generated/appConfig")
 val generateAppConfig by tasks.registering(GenerateAppConfig::class) {
     appEnv.set(appEnvProvider)
-    apiBaseUrl.set(restrictedApiBaseUrlProvider)
+    apiBaseUrl.set(defaultApiBaseUrlProvider)
     outputFile.set(
         generatedConfigDir.map {
             it.file("pl/dawidszczesniak/blockchain_platform/AppBuildConfig.kt")
@@ -130,4 +123,38 @@ tasks.matching { it.name.startsWith("compileKotlin") }.configureEach {
 
 tasks.matching { it.name == "prepareKotlinIdeaImport" }.configureEach {
     dependsOn(generateAppConfig)
+}
+
+fun loadDotEnv(path: File): Map<String, String> {
+    require(path.isFile) {
+        ".env.local must exist in project root because frontend build config is read only from this file."
+    }
+    val values = linkedMapOf<String, String>()
+    path.readLines().forEachIndexed { index, rawLine ->
+        val trimmedLine = rawLine.trim()
+        if (trimmedLine.isEmpty() || trimmedLine.startsWith("#")) {
+            return@forEachIndexed
+        }
+        val content = trimmedLine.removePrefix("export ").trimStart()
+        val separatorIndex = content.indexOf('=')
+        require(separatorIndex > 0) {
+            "Invalid .env.local entry at line ${index + 1}. Expected KEY=value."
+        }
+        val key = content.substring(0, separatorIndex).trim()
+        require(key.matches(Regex("[A-Z0-9_]+"))) {
+            "Invalid env key '$key' in .env.local at line ${index + 1}."
+        }
+        val value = content.substring(separatorIndex + 1).trim()
+        values[key] = unwrapMatchingQuotes(value)
+    }
+    return values
+}
+
+fun unwrapMatchingQuotes(value: String): String {
+    if (value.length < 2) return value
+    return when {
+        value.startsWith('"') && value.endsWith('"') -> value.substring(1, value.lastIndex)
+        value.startsWith('\'') && value.endsWith('\'') -> value.substring(1, value.lastIndex)
+        else -> value
+    }
 }

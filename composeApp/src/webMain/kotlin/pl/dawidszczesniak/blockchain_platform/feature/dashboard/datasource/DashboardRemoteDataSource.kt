@@ -31,7 +31,7 @@ class DashboardRemoteDataSourceImpl(
             DashboardMetricDto(
                 metricDate = obj.requiredString("metricDate"),
                 activeChallenges = obj.requiredInt("activeChallenges"),
-                prizePoolAmount = obj.requiredLong("prizePoolAmount"),
+                prizePoolLabel = obj.requiredString("prizePoolLabel"),
                 submissionsCount = obj.requiredInt("submissionsCount"),
             )
         }

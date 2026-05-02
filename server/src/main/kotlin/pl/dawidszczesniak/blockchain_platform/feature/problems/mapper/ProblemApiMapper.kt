@@ -21,8 +21,9 @@ internal fun ProblemSummary.toDto(): ProblemSummaryDto {
                 explanation = example.explanation,
             )
         },
-        prizeAmount = prizeAmount,
-        entryFeeAmount = entryFeeAmount,
+        paymentAsset = paymentAsset,
+        prizeAmountAtomic = prizeAmountAtomic,
+        entryFeeAmountAtomic = entryFeeAmountAtomic,
         requiredParticipants = requiredParticipants,
         registeredParticipants = registeredParticipants,
         daysToStart = daysToStart,

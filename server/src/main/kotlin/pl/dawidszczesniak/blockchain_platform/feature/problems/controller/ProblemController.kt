@@ -1,10 +1,14 @@
 package pl.dawidszczesniak.blockchain_platform.feature.problems.controller
 
+import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ConfirmCreateProblemRequestDto
+import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ConfirmJoinProblemRequestDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.CreateProblemRequestDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.CreateProblemResponseDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.CreatedProblemDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.JoinProblemResponseDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ParticipationProblemDto
+import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.PrepareCreateProblemResponseDto
+import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.PrepareJoinProblemResponseDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ProblemSummaryDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.RunProblemRequestDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.RunProblemResponseDto
@@ -20,6 +24,10 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetPartic
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetProblemSummariesUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.JoinProblemUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.RunProblemCodeUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.PrepareCreateProblemOnChainUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.ConfirmCreateProblemOnChainUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.PrepareJoinProblemOnChainUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.ConfirmJoinProblemOnChainUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.ValidateCreateProblemUseCase
 
 internal class ProblemController(
@@ -27,8 +35,12 @@ internal class ProblemController(
     private val getCreatedProblemsUseCase: GetCreatedProblemsUseCase,
     private val getParticipationProblemsUseCase: GetParticipationProblemsUseCase,
     private val createProblemUseCase: CreateProblemUseCase,
+    private val prepareCreateProblemOnChainUseCase: PrepareCreateProblemOnChainUseCase,
+    private val confirmCreateProblemOnChainUseCase: ConfirmCreateProblemOnChainUseCase,
     private val validateCreateProblemUseCase: ValidateCreateProblemUseCase,
     private val joinProblemUseCase: JoinProblemUseCase,
+    private val prepareJoinProblemOnChainUseCase: PrepareJoinProblemOnChainUseCase,
+    private val confirmJoinProblemOnChainUseCase: ConfirmJoinProblemOnChainUseCase,
     private val runProblemCodeUseCase: RunProblemCodeUseCase,
     private val enqueueProblemSubmissionUseCase: EnqueueProblemSubmissionUseCase,
     private val getSubmissionJudgeJobUseCase: GetSubmissionJudgeJobUseCase,
@@ -50,6 +62,22 @@ internal class ProblemController(
         return CreateProblemResponseDto(id = createdId)
     }
 
+    fun prepareCreateProblemOnChain(
+        userId: Long,
+        walletAddress: String,
+        request: CreateProblemRequestDto,
+    ): PrepareCreateProblemResponseDto {
+        return prepareCreateProblemOnChainUseCase(userId, walletAddress, request)
+    }
+
+    fun confirmCreateProblemOnChain(
+        userId: Long,
+        walletAddress: String,
+        request: ConfirmCreateProblemRequestDto,
+    ): CreateProblemResponseDto {
+        return confirmCreateProblemOnChainUseCase(userId, walletAddress, request)
+    }
+
     fun validateCreateProblem(
         userId: Long,
         request: ValidateCreateProblemRequestDto,
@@ -64,6 +92,23 @@ internal class ProblemController(
             registeredParticipants = result.registeredParticipants,
             requiredParticipants = result.requiredParticipants,
         )
+    }
+
+    fun prepareJoinProblemOnChain(
+        userId: Long,
+        walletAddress: String,
+        problemId: Int,
+    ): PrepareJoinProblemResponseDto {
+        return prepareJoinProblemOnChainUseCase(userId, walletAddress, problemId)
+    }
+
+    fun confirmJoinProblemOnChain(
+        userId: Long,
+        walletAddress: String,
+        problemId: Int,
+        request: ConfirmJoinProblemRequestDto,
+    ): JoinProblemResponseDto {
+        return confirmJoinProblemOnChainUseCase(userId, walletAddress, problemId, request)
     }
 
     fun runProblemCode(

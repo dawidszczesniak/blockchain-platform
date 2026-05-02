@@ -31,9 +31,10 @@ import pl.dawidszczesniak.blockchain_platform.feature.auth.endpoint.authRoutes
 import pl.dawidszczesniak.blockchain_platform.feature.auth.service.Eip1271SignatureVerifier
 import pl.dawidszczesniak.blockchain_platform.feature.dashboard.endpoint.dashboardRoutes
 import pl.dawidszczesniak.blockchain_platform.feature.platform.endpoint.platformRoutes
-import pl.dawidszczesniak.blockchain_platform.feature.problems.anchor.BlockchainAnchorClient
 import pl.dawidszczesniak.blockchain_platform.feature.problems.judge.SubmissionJudgeWorker
 import pl.dawidszczesniak.blockchain_platform.feature.problems.endpoint.problemRoutes
+import pl.dawidszczesniak.blockchain_platform.feature.problems.onchain.BlockchainPlatformContractClient
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.CompetitionSettlementWorker
 
 fun main() {
     embeddedServer(Netty, port = SERVER_PORT, host = LOCAL_HOST, module = Application::module)
@@ -41,13 +42,13 @@ fun main() {
 }
 
 fun Application.module() {
-    val systemEnv = System.getenv()
-    val envId = systemEnv["APP_ENV"] ?: AppEnvironment.Local.id
+    val runtimeEnv = RuntimeEnvironment.load()
+    val envId = runtimeEnv["APP_ENV"] ?: AppEnvironment.Local.id
     val appEnv = parseAppEnvironment(AppEnvironment.fromId(envId))
-    val allowedHosts = resolveAllowedCorsHosts(appEnv, systemEnv)
+    val allowedHosts = resolveAllowedCorsHosts(appEnv, runtimeEnv)
 
     install(Koin) {
-        modules(serverModules())
+        modules(serverModules(runtimeEnv))
     }
     val authConfig = get<AuthConfig>()
     validateSecurityConfiguration(appEnv, authConfig, allowedHosts)
@@ -55,14 +56,17 @@ fun Application.module() {
     val transactionRunner = get<DbTransactionRunner>()
     val redisClient = get<JedisPooled>()
     val eip1271Verifier = get<Eip1271SignatureVerifier>()
-    val blockchainAnchorClient = get<BlockchainAnchorClient>()
+    val platformContractClient = get<BlockchainPlatformContractClient>()
     val submissionJudgeWorker = get<SubmissionJudgeWorker>()
+    val competitionSettlementWorker = get<CompetitionSettlementWorker>()
     submissionJudgeWorker.start()
+    competitionSettlementWorker.start()
     monitor.subscribe(ApplicationStopped) {
         submissionJudgeWorker.close()
+        competitionSettlementWorker.close()
         redisClient.close()
         eip1271Verifier.close()
-        blockchainAnchorClient.close()
+        platformContractClient.close()
     }
 
     install(CORS) {
@@ -150,12 +154,13 @@ private fun resolveAllowedCorsHosts(
     if (configured.isNotEmpty()) {
         return configured
     }
-    return when (env) {
-        AppEnvironment.Local -> listOf(CorsHostSpec(host = "$LOCAL_HOST:$FRONTEND_PORT", schemes = listOf("http")))
-        AppEnvironment.Staging,
-        AppEnvironment.Prod,
-        -> emptyList()
+    if (env == AppEnvironment.Local) {
+        val localAuthOrigin = systemEnv["AUTH_URI"]?.let(::parseCorsHostSpec)
+        if (localAuthOrigin != null) {
+            return listOf(localAuthOrigin)
+        }
     }
+    return emptyList()
 }
 
 private fun parseCorsHostSpec(raw: String): CorsHostSpec? {

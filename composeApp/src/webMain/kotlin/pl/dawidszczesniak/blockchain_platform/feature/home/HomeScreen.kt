@@ -182,7 +182,7 @@ private fun StatsSection(state: HomeState) {
         hasError = hasError,
     )
     val prizePoolValue = prizePoolLabel(
-        amount = state.prizePoolAmount,
+        label = state.prizePoolLabel,
         isLoading = state.isLoading,
         hasError = hasError,
     )
@@ -446,15 +446,15 @@ private fun metricValue(
 }
 
 private fun prizePoolLabel(
-    amount: Long?,
+    label: String?,
     isLoading: Boolean,
     hasError: Boolean,
 ): String {
     return when {
-        amount != null -> "${groupByThousands(amount)} USDC"
-        isLoading -> "... USDC"
+        !label.isNullOrBlank() -> label
+        isLoading -> "..."
         hasError -> "N/A"
-        else -> "0 USDC"
+        else -> "0"
     }
 }
 
@@ -476,18 +476,6 @@ private fun submissionsTrendLabel(
     }
 }
 
-private fun groupByThousands(value: Long): String {
-    val raw = value.toString()
-    val reversed = raw.reversed()
-    val builder = StringBuilder()
-    reversed.forEachIndexed { index, char ->
-        if (index > 0 && index % 3 == 0) {
-            builder.append(',')
-        }
-        builder.append(char)
-    }
-    return builder.reverse().toString()
-}
 
 @Composable
 private fun CommunityCard(modifier: Modifier = Modifier) {

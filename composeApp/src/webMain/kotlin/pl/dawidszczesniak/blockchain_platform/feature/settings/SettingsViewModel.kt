@@ -10,12 +10,16 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import pl.dawidszczesniak.blockchain_platform.feature.login.repository.LoginRepository
+import pl.dawidszczesniak.blockchain_platform.feature.platform.usecase.GetPlatformConfigUseCase
 
 data class SettingsState(
     val walletAddress: String? = null,
     val selectedLanguage: UiLanguage = UiLanguage.Polish,
     val availableLanguages: List<UiLanguage> = UiLanguage.entries,
     val isWalletLoading: Boolean = true,
+    val isPlatformLoading: Boolean = true,
+    val networkLabel: String? = null,
+    val proxyAddress: String? = null,
 )
 
 sealed interface SettingsIntent {
@@ -26,6 +30,7 @@ sealed interface SettingsIntent {
 class SettingsViewModel(
     private val loginRepository: LoginRepository,
     private val appLanguageStore: AppLanguageStore,
+    private val getPlatformConfigUseCase: GetPlatformConfigUseCase,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val _state = MutableStateFlow(
@@ -59,6 +64,7 @@ class SettingsViewModel(
         _state.update { current ->
             current.copy(
                 isWalletLoading = true,
+                isPlatformLoading = true,
             )
         }
         scope.launch {
@@ -76,6 +82,32 @@ class SettingsViewModel(
                         current.copy(
                             walletAddress = null,
                             isWalletLoading = false,
+                        )
+                    }
+                }
+        }
+        scope.launch {
+            runCatching { getPlatformConfigUseCase() }
+                .onSuccess { platform ->
+                    val networkLabel = platform.walletNetwork?.let { network ->
+                        "${network.networkName} (${network.chainId})"
+                    } ?: platform.chainId?.let { chainId ->
+                        "${platform.networkName} ($chainId)"
+                    } ?: platform.networkName
+                    _state.update { current ->
+                        current.copy(
+                            isPlatformLoading = false,
+                            networkLabel = networkLabel.ifBlank { null },
+                            proxyAddress = platform.proxyAddress?.takeIf { it.isNotBlank() },
+                        )
+                    }
+                }
+                .onFailure {
+                    _state.update { current ->
+                        current.copy(
+                            isPlatformLoading = false,
+                            networkLabel = null,
+                            proxyAddress = null,
                         )
                     }
                 }

@@ -68,18 +68,15 @@ import blockchain_platform.composeapp.generated.resources.problem_details_run_re
 import blockchain_platform.composeapp.generated.resources.problem_details_run_result_test_label
 import blockchain_platform.composeapp.generated.resources.problem_details_run_result_time
 import blockchain_platform.composeapp.generated.resources.problem_details_run_running
-import blockchain_platform.composeapp.generated.resources.problem_details_submit_anchor_batch
-import blockchain_platform.composeapp.generated.resources.problem_details_submit_anchor_commitment
-import blockchain_platform.composeapp.generated.resources.problem_details_submit_anchor_error
-import blockchain_platform.composeapp.generated.resources.problem_details_submit_anchor_explorer
-import blockchain_platform.composeapp.generated.resources.problem_details_submit_anchor_proof
-import blockchain_platform.composeapp.generated.resources.problem_details_submit_anchor_root
-import blockchain_platform.composeapp.generated.resources.problem_details_submit_anchor_status
-import blockchain_platform.composeapp.generated.resources.problem_details_submit_anchor_tx
 import blockchain_platform.composeapp.generated.resources.problem_details_submit_consensus
 import blockchain_platform.composeapp.generated.resources.problem_details_submit_error_prefix
+import blockchain_platform.composeapp.generated.resources.problem_details_submit_hash
+import blockchain_platform.composeapp.generated.resources.problem_details_submit_proxy_address
+import blockchain_platform.composeapp.generated.resources.problem_details_submit_explorer
+import blockchain_platform.composeapp.generated.resources.problem_details_submit_tx_hash
 import blockchain_platform.composeapp.generated.resources.problem_details_submit_runtime
 import blockchain_platform.composeapp.generated.resources.problem_details_submit_result_title
+import blockchain_platform.composeapp.generated.resources.problem_details_submit_sandbox_result_hash
 import blockchain_platform.composeapp.generated.resources.problem_details_submit_submitting
 import blockchain_platform.composeapp.generated.resources.problem_details_example_input
 import blockchain_platform.composeapp.generated.resources.problem_details_example_label
@@ -96,6 +93,7 @@ import blockchain_platform.composeapp.generated.resources.problem_details_statem
 import blockchain_platform.composeapp.generated.resources.problem_details_title
 import kotlin.math.max
 import org.jetbrains.compose.resources.stringResource
+import pl.dawidszczesniak.blockchain_platform.feature.platform.formatAmountWithSymbol
 import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.ProblemExample
 import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.ProblemSummary
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.RunProblemResponseDto
@@ -146,6 +144,7 @@ fun ProblemDetailsScreen(
         requiresJoin = !gateState.isMembershipLoading && !gateState.isJoined,
         waitingForStart = !gateState.isMembershipLoading && gateState.isJoined && !hasCompetitionStarted,
         isJoining = gateState.isJoining,
+        joinStatusMessage = gateState.joinStatusMessage,
         joinErrorMessage = gateState.joinErrorMessage,
         registeredParticipants = registeredParticipants,
         requiredParticipants = problem.requiredParticipants,
@@ -315,8 +314,18 @@ private fun ProblemStatementPane(
             }
             Spacer(Modifier.height(4.dp))
             DetailLine(stringResource(Res.string.problem_details_requirement_participants, problem.requiredParticipants))
-            DetailLine(stringResource(Res.string.problem_details_requirement_prize, problem.prizeAmount))
-            DetailLine(stringResource(Res.string.problem_details_requirement_entry_fee, problem.entryFeeAmount))
+            DetailLine(
+                stringResource(
+                    Res.string.problem_details_requirement_prize,
+                    formatAmountWithSymbol(problem.paymentAsset, problem.prizeAmountAtomic),
+                ),
+            )
+            DetailLine(
+                stringResource(
+                    Res.string.problem_details_requirement_entry_fee,
+                    formatAmountWithSymbol(problem.paymentAsset, problem.entryFeeAmountAtomic),
+                ),
+            )
             DetailLine(
                 stringResource(
                     Res.string.problem_details_requirement_start,
@@ -576,6 +585,14 @@ private fun CodeEditorPane(
                             color = MaterialTheme.colorScheme.error,
                         )
                     }
+                    if (overlayState.isJoining && !overlayState.joinStatusMessage.isNullOrBlank()) {
+                        Text(
+                            text = overlayState.joinStatusMessage,
+                            style = MaterialTheme.typography.bodySmall,
+                            textAlign = TextAlign.Center,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
                 }
             }
         }
@@ -621,58 +638,48 @@ private fun SubmitResultPane(result: SubmitProblemResponseDto) {
         )
     }
     Text(
-        text = stringResource(Res.string.problem_details_submit_anchor_status, result.anchorStatus),
+        text = stringResource(Res.string.problem_details_submit_hash, result.commitmentHash),
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
     Text(
-        text = stringResource(Res.string.problem_details_submit_anchor_commitment, result.commitmentHash),
+        text = stringResource(Res.string.problem_details_submit_sandbox_result_hash, result.sandboxResultHash),
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
-    result.anchorBatchId?.let { batchId ->
+    result.sandboxImageHash?.takeIf { it.isNotBlank() }?.let { imageHash ->
         Text(
-            text = stringResource(Res.string.problem_details_submit_anchor_batch, batchId),
+            text = "Sandbox image hash: $imageHash",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
-    result.anchorMerkleRoot
-        ?.takeIf { it.isNotBlank() && it != result.commitmentHash }
-        ?.let { root ->
-        Text(
-            text = stringResource(Res.string.problem_details_submit_anchor_root, root),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-    if (result.anchorProof.isNotEmpty()) {
-        Text(
-            text = stringResource(Res.string.problem_details_submit_anchor_proof, result.anchorProof.size),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-    result.anchorTxHash?.takeIf { it.isNotBlank() }?.let { tx ->
-        Text(
-            text = stringResource(Res.string.problem_details_submit_anchor_tx, tx),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-    result.anchorExplorerUrl?.takeIf { it.isNotBlank() }?.let { url ->
-        Text(
-            text = stringResource(Res.string.problem_details_submit_anchor_explorer, url),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-    result.anchorError?.takeIf { it.isNotBlank() }?.let { error ->
-        Text(
-            text = stringResource(Res.string.problem_details_submit_anchor_error, error),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.error,
-        )
+    SelectionContainer {
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                text = stringResource(
+                    Res.string.problem_details_submit_proxy_address,
+                    result.proxyAddress,
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                text = stringResource(
+                    Res.string.problem_details_submit_tx_hash,
+                    result.txHash,
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            result.explorerUrl?.takeIf { it.isNotBlank() }?.let { url ->
+                Text(
+                    text = stringResource(Res.string.problem_details_submit_explorer, url),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+        }
     }
 }
 
@@ -872,6 +879,7 @@ private data class EditorOverlayState(
     val requiresJoin: Boolean,
     val waitingForStart: Boolean,
     val isJoining: Boolean,
+    val joinStatusMessage: String?,
     val joinErrorMessage: String?,
     val registeredParticipants: Int,
     val requiredParticipants: Int,

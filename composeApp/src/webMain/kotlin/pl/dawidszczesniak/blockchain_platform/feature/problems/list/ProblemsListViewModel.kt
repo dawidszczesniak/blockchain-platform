@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlin.math.max
+import pl.dawidszczesniak.blockchain_platform.feature.platform.compareAtomicAmounts
 import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.ProblemSummary
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetProblemListUseCase
 
@@ -140,10 +141,21 @@ private fun sortProblems(
         ProblemsSortOption.Oldest -> problems.sortedBy { it.id }
         ProblemsSortOption.StartSoonest -> problems.sortedBy { it.daysToStart }
         ProblemsSortOption.StartLatest -> problems.sortedByDescending { it.daysToStart }
-        ProblemsSortOption.PrizeHighest -> problems.sortedByDescending { it.prizeAmount }
-        ProblemsSortOption.PrizeLowest -> problems.sortedBy { it.prizeAmount }
-        ProblemsSortOption.EntryFeeHighest -> problems.sortedByDescending { it.entryFeeAmount }
-        ProblemsSortOption.EntryFeeLowest -> problems.sortedBy { it.entryFeeAmount }
+        ProblemsSortOption.PrizeHighest -> problems.sortedWith { left, right ->
+            compareProblemsByAssetAmount(left, right) { it.prizeAmountAtomic } * -1
+        }
+
+        ProblemsSortOption.PrizeLowest -> problems.sortedWith { left, right ->
+            compareProblemsByAssetAmount(left, right) { it.prizeAmountAtomic }
+        }
+
+        ProblemsSortOption.EntryFeeHighest -> problems.sortedWith { left, right ->
+            compareProblemsByAssetAmount(left, right) { it.entryFeeAmountAtomic } * -1
+        }
+
+        ProblemsSortOption.EntryFeeLowest -> problems.sortedWith { left, right ->
+            compareProblemsByAssetAmount(left, right) { it.entryFeeAmountAtomic }
+        }
         ProblemsSortOption.RequiredMost -> problems.sortedByDescending { it.requiredParticipants }
         ProblemsSortOption.RequiredLeast -> problems.sortedBy { it.requiredParticipants }
         ProblemsSortOption.RegisteredMost -> problems.sortedByDescending { it.registeredParticipants }
@@ -163,4 +175,16 @@ private fun sortProblems(
 
 private fun progressValue(registered: Int, required: Int): Float {
     return if (required == 0) 0f else registered.toFloat() / required.toFloat()
+}
+
+private fun compareProblemsByAssetAmount(
+    left: ProblemSummary,
+    right: ProblemSummary,
+    selector: (ProblemSummary) -> String,
+): Int {
+    val assetCodeComparison = left.paymentAsset.code.compareTo(right.paymentAsset.code)
+    if (assetCodeComparison != 0) {
+        return assetCodeComparison
+    }
+    return compareAtomicAmounts(selector(left), selector(right))
 }

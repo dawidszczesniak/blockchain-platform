@@ -5,6 +5,8 @@
 *.iws
 out/
 .run/
+broadcast/
+cache/
 
 # Gradle / Kotlin caches & build outputs
 .gradle/
@@ -21,9 +23,10 @@ kotlin-js-store/**/node_modules/
 local.properties
 .env
 .env.*
-!.env.example
 
 # OS junk
 .DS_Store
 Thumbs.db
 *.log
+__pycache__/
+*.pyc

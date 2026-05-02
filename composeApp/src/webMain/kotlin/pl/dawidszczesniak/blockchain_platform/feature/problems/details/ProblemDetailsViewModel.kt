@@ -17,12 +17,16 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import pl.dawidszczesniak.blockchain_platform.feature.login.WalletProvider
+import pl.dawidszczesniak.blockchain_platform.feature.login.WalletSessionStore
+import pl.dawidszczesniak.blockchain_platform.feature.login.WalletTransactionRequest
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.RunProblemResponseDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.SubmitProblemResponseDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.participation.ParticipationSyncStore
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.ConfirmJoinProblemOnChainUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetParticipationProblemsUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetSubmissionJudgeJobUseCase
-import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.JoinProblemUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.PrepareJoinProblemOnChainUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.RunProblemCodeUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.SubmitProblemCodeUseCase
 
@@ -30,6 +34,7 @@ data class ProblemDetailsGateState(
     val isMembershipLoading: Boolean = true,
     val isJoined: Boolean = false,
     val isJoining: Boolean = false,
+    val joinStatusMessage: String? = null,
     val joinErrorMessage: String? = null,
     val registeredParticipants: Int? = null,
     val isRunning: Boolean = false,
@@ -43,11 +48,14 @@ data class ProblemDetailsGateState(
 
 class ProblemDetailsViewModel(
     private val getParticipationProblemsUseCase: GetParticipationProblemsUseCase,
-    private val joinProblemUseCase: JoinProblemUseCase,
+    private val prepareJoinProblemOnChainUseCase: PrepareJoinProblemOnChainUseCase,
+    private val confirmJoinProblemOnChainUseCase: ConfirmJoinProblemOnChainUseCase,
     private val runProblemCodeUseCase: RunProblemCodeUseCase,
     private val submitProblemCodeUseCase: SubmitProblemCodeUseCase,
     private val getSubmissionJudgeJobUseCase: GetSubmissionJudgeJobUseCase,
     private val participationSyncStore: ParticipationSyncStore,
+    private val walletProvider: WalletProvider,
+    private val walletSessionStore: WalletSessionStore,
 ) {
     private var scope = newScope()
     private val joinedProblemIds = mutableSetOf<Int>()
@@ -77,6 +85,7 @@ class ProblemDetailsViewModel(
                 isMembershipLoading = isLoggedIn,
                 isJoined = cachedJoined,
                 isJoining = false,
+                joinStatusMessage = null,
                 joinErrorMessage = null,
                 registeredParticipants = initialRegistered,
                 isRunning = false,
@@ -105,50 +114,20 @@ class ProblemDetailsViewModel(
                 .onSuccess { participationProblems ->
                     joinedProblemIds.clear()
                     joinedProblemIds.addAll(participationProblems.map { it.id })
-                    val joined = joinedProblemIds.contains(problemId)
-                    val shouldProbeJoinForStartedCompetition =
-                        !joined && initialRegisteredParticipants >= requiredParticipants
-                    val probedJoinResult = if (shouldProbeJoinForStartedCompetition) {
-                        runCatching { joinProblemUseCase(problemId) }.getOrNull()
-                    } else {
-                        null
-                    }
-                    if (probedJoinResult != null) {
-                        joinedProblemIds.add(problemId)
-                        participationSyncStore.notifyChanged()
-                    }
                     _state.update { current ->
                         current.copy(
                             isMembershipLoading = false,
-                            isJoined = joined || probedJoinResult != null,
+                            isJoined = joinedProblemIds.contains(problemId),
                             joinErrorMessage = null,
-                            registeredParticipants = max(
-                                current.registeredParticipants ?: 0,
-                                probedJoinResult?.registeredParticipants ?: 0,
-                            ),
+                            joinStatusMessage = null,
                         )
                     }
                 }
                 .onFailure {
-                    val shouldProbeJoinForStartedCompetition =
-                        initialRegisteredParticipants >= requiredParticipants
-                    val probedJoinResult = if (shouldProbeJoinForStartedCompetition) {
-                        runCatching { joinProblemUseCase(problemId) }.getOrNull()
-                    } else {
-                        null
-                    }
-                    if (probedJoinResult != null) {
-                        joinedProblemIds.add(problemId)
-                        participationSyncStore.notifyChanged()
-                    }
                     _state.update { current ->
                         current.copy(
                             isMembershipLoading = false,
-                            isJoined = current.isJoined || probedJoinResult != null,
-                            registeredParticipants = max(
-                                current.registeredParticipants ?: 0,
-                                probedJoinResult?.registeredParticipants ?: 0,
-                            ),
+                            joinStatusMessage = null,
                         )
                     }
                 }
@@ -162,11 +141,70 @@ class ProblemDetailsViewModel(
         _state.update { current ->
             current.copy(
                 isJoining = true,
+                joinStatusMessage = "Przygotowuję transakcję dołączenia.",
                 joinErrorMessage = null,
             )
         }
         activeScope().launch {
-            runCatching { joinProblemUseCase(problemId) }
+            runCatching {
+                val walletId = walletSessionStore.currentWalletId()
+                    ?: error("Reconnect wallet before joining this competition.")
+                val walletAddress = walletSessionStore.currentWalletAddress()
+                    ?: error("Reconnect wallet before joining this competition.")
+                val prepared = prepareJoinProblemOnChainUseCase(problemId)
+                prepared.approvalTransaction?.let { approval ->
+                    _state.update { current ->
+                        current.copy(
+                            joinStatusMessage = "Potwierdź autoryzację ${prepared.paymentAsset.symbol} w portfelu.",
+                        )
+                    }
+                    val approvalTxHash = walletProvider.sendTransaction(
+                        walletId = walletId,
+                        walletAddress = walletAddress,
+                        request = WalletTransactionRequest(
+                            to = approval.to,
+                            data = approval.data,
+                            valueHex = approval.valueHex,
+                        ),
+                    )
+                    _state.update { current ->
+                        current.copy(
+                            joinStatusMessage = "Autoryzacja wysłana. Czekam na potwierdzenie w sieci.",
+                        )
+                    }
+                    walletProvider.waitForTransactionReceipt(walletId, approvalTxHash)
+                }
+                _state.update { current ->
+                    current.copy(
+                        joinStatusMessage = "Potwierdź dołączenie w portfelu.",
+                    )
+                }
+                val txHash = walletProvider.sendTransaction(
+                    walletId = walletId,
+                    walletAddress = walletAddress,
+                    request = WalletTransactionRequest(
+                        to = prepared.transaction.to,
+                        data = prepared.transaction.data,
+                        valueHex = prepared.transaction.valueHex,
+                    ),
+                )
+                _state.update { current ->
+                    current.copy(
+                        joinStatusMessage = "Transakcja wysłana. Czekam na potwierdzenie w sieci.",
+                    )
+                }
+                val receipt = walletProvider.waitForTransactionReceipt(walletId, txHash)
+                _state.update { current ->
+                    current.copy(
+                        joinStatusMessage = "Potwierdzam dołączenie z backendem.",
+                    )
+                }
+                confirmJoinProblemOnChainUseCase(
+                    problemId = problemId,
+                    intentId = prepared.intentId,
+                    txHash = receipt.transactionHash,
+                )
+            }
                 .onSuccess { result ->
                     joinedProblemIds.add(problemId)
                     participationSyncStore.notifyChanged()
@@ -174,6 +212,7 @@ class ProblemDetailsViewModel(
                         current.copy(
                             isJoining = false,
                             isJoined = true,
+                            joinStatusMessage = null,
                             joinErrorMessage = null,
                             registeredParticipants = max(
                                 current.registeredParticipants ?: 0,
@@ -186,6 +225,7 @@ class ProblemDetailsViewModel(
                     _state.update { current ->
                         current.copy(
                             isJoining = false,
+                            joinStatusMessage = null,
                             joinErrorMessage = extractReadableErrorMessage(error),
                         )
                     }

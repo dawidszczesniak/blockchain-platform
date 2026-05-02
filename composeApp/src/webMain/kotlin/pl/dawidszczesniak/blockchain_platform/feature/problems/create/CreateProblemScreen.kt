@@ -25,6 +25,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.KeyboardArrowUp
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DatePicker
@@ -69,6 +71,7 @@ import blockchain_platform.composeapp.generated.resources.create_problem_descrip
 import blockchain_platform.composeapp.generated.resources.create_problem_entry_fee_label
 import blockchain_platform.composeapp.generated.resources.create_problem_join_until_label
 import blockchain_platform.composeapp.generated.resources.create_problem_participants_label
+import blockchain_platform.composeapp.generated.resources.create_problem_payment_asset_label
 import blockchain_platform.composeapp.generated.resources.create_problem_profit_entry_fee
 import blockchain_platform.composeapp.generated.resources.create_problem_profit_creator
 import blockchain_platform.composeapp.generated.resources.create_problem_profit_note
@@ -96,9 +99,11 @@ import blockchain_platform.composeapp.generated.resources.create_problem_test_re
 import blockchain_platform.composeapp.generated.resources.create_problem_tests_title
 import blockchain_platform.composeapp.generated.resources.create_problem_title_label
 import blockchain_platform.composeapp.generated.resources.create_problem_validation_date_order
+import blockchain_platform.composeapp.generated.resources.create_problem_validation_amount
 import blockchain_platform.composeapp.generated.resources.create_problem_validation_integer
 import blockchain_platform.composeapp.generated.resources.create_problem_validation_min_public_tests
 import blockchain_platform.composeapp.generated.resources.create_problem_validation_non_negative
+import blockchain_platform.composeapp.generated.resources.create_problem_validation_payment_asset
 import blockchain_platform.composeapp.generated.resources.create_problem_validation_positive
 import blockchain_platform.composeapp.generated.resources.create_problem_validation_required
 import blockchain_platform.composeapp.generated.resources.create_problem_validation_run_required
@@ -147,6 +152,7 @@ fun CreateProblemScreen() {
                 Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
                     CreateProblemWorkspace(
                         state = state,
+                        onPaymentAssetChange = { viewModel.onIntent(CreateProblemIntent.PaymentAssetChanged(it)) },
                         onPrizeChange = { viewModel.onIntent(CreateProblemIntent.PrizeChanged(it)) },
                         onParticipantsChange = { viewModel.onIntent(CreateProblemIntent.ParticipantsChanged(it)) },
                         onEntryFeeChange = { viewModel.onIntent(CreateProblemIntent.EntryFeeChanged(it)) },
@@ -174,6 +180,7 @@ fun CreateProblemScreen() {
             } else {
                 CreateProblemWorkspace(
                     state = state,
+                    onPaymentAssetChange = { viewModel.onIntent(CreateProblemIntent.PaymentAssetChanged(it)) },
                     onPrizeChange = { viewModel.onIntent(CreateProblemIntent.PrizeChanged(it)) },
                     onParticipantsChange = { viewModel.onIntent(CreateProblemIntent.ParticipantsChanged(it)) },
                     onEntryFeeChange = { viewModel.onIntent(CreateProblemIntent.EntryFeeChanged(it)) },
@@ -205,6 +212,7 @@ fun CreateProblemScreen() {
 @Composable
 private fun CreateProblemWorkspace(
     state: CreateProblemState,
+    onPaymentAssetChange: (String) -> Unit,
     onPrizeChange: (String) -> Unit,
     onParticipantsChange: (String) -> Unit,
     onEntryFeeChange: (String) -> Unit,
@@ -228,6 +236,7 @@ private fun CreateProblemWorkspace(
         EditorPane(title = "Create Problem") {
             CreateProblemForm(
                 state = state,
+                onPaymentAssetChange = onPaymentAssetChange,
                 onPrizeChange = onPrizeChange,
                 onParticipantsChange = onParticipantsChange,
                 onEntryFeeChange = onEntryFeeChange,
@@ -265,6 +274,7 @@ private fun CreateProblemWorkspace(
                     EditorPane(title = "Create Problem") {
                     CreateProblemForm(
                         state = state,
+                        onPaymentAssetChange = onPaymentAssetChange,
                         onPrizeChange = onPrizeChange,
                         onParticipantsChange = onParticipantsChange,
                         onEntryFeeChange = onEntryFeeChange,
@@ -380,6 +390,7 @@ private fun editorTextFieldColors() = TextFieldDefaults.colors(
 private fun CreateProblemForm(
     modifier: Modifier = Modifier,
     state: CreateProblemState,
+    onPaymentAssetChange: (String) -> Unit,
     onPrizeChange: (String) -> Unit,
     onParticipantsChange: (String) -> Unit,
     onEntryFeeChange: (String) -> Unit,
@@ -397,6 +408,10 @@ private fun CreateProblemForm(
     onSubmit: () -> Unit,
 ) {
     val validation = state.validation
+    val paymentAssetError = validationMessage(
+        visible = state.submitAttempted,
+        error = validation.paymentAsset,
+    )
     val prizeError = validationMessage(
         visible = state.submitAttempted,
         error = validation.prize,
@@ -430,6 +445,38 @@ private fun CreateProblemForm(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         EditorSection("Problem")
+        Text(
+            text = stringResource(Res.string.create_problem_payment_asset_label),
+            style = MaterialTheme.typography.labelMedium.copy(fontFamily = FontFamily.Monospace),
+            color = IntelliJCodePalette.Comment,
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            state.supportedPaymentAssets.forEach { paymentAsset ->
+                val selected = paymentAsset.code == state.selectedPaymentAssetCode
+                AssistChip(
+                    onClick = { onPaymentAssetChange(paymentAsset.code) },
+                    label = { Text("${paymentAsset.symbol} · ${paymentAsset.displayName}") },
+                    colors = AssistChipDefaults.assistChipColors(
+                        containerColor = if (selected) IntelliJCodePalette.Accent.copy(alpha = 0.18f) else IntelliJCodePalette.Editor,
+                        labelColor = if (selected) IntelliJCodePalette.Identifier else IntelliJCodePalette.Comment,
+                    ),
+                    border = AssistChipDefaults.assistChipBorder(
+                        enabled = true,
+                        borderColor = if (selected) IntelliJCodePalette.Accent else IntelliJCodePalette.Border,
+                    ),
+                )
+            }
+        }
+        if (paymentAssetError != null) {
+            Text(
+                text = paymentAssetError,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
         OutlinedTextField(
             value = state.title,
             onValueChange = onTitleChange,
@@ -470,7 +517,7 @@ private fun CreateProblemForm(
             OutlinedTextField(
                 value = state.prize,
                 onValueChange = onPrizeChange,
-                label = { Text(stringResource(Res.string.create_problem_prize_label)) },
+                label = { Text(amountFieldLabel(state, Res.string.create_problem_prize_label)) },
                 modifier = Modifier.weight(1f),
                 isError = prizeError != null,
                 colors = editorTextFieldColors(),
@@ -498,7 +545,7 @@ private fun CreateProblemForm(
             OutlinedTextField(
                 value = state.entryFee,
                 onValueChange = onEntryFeeChange,
-                label = { Text(stringResource(Res.string.create_problem_entry_fee_label)) },
+                label = { Text(amountFieldLabel(state, Res.string.create_problem_entry_fee_label)) },
                 modifier = Modifier.weight(1f),
                 isError = entryFeeError != null,
                 colors = editorTextFieldColors(),
@@ -632,6 +679,13 @@ private fun CreateProblemForm(
                 color = MaterialTheme.colorScheme.error,
             )
         }
+        if (state.isSubmitting && !state.submitStatusMessage.isNullOrBlank()) {
+            Text(
+                text = state.submitStatusMessage,
+                style = MaterialTheme.typography.bodySmall,
+                color = IntelliJCodePalette.Accent,
+            )
+        }
         if (state.submitSuccessProblemId != null) {
             Text(
                 text = stringResource(Res.string.create_problem_submit_success),
@@ -670,12 +724,21 @@ private fun validationMessage(
         when (error) {
             CreateProblemValidationError.Required -> Res.string.create_problem_validation_required
             CreateProblemValidationError.InvalidInteger -> Res.string.create_problem_validation_integer
+            CreateProblemValidationError.InvalidAmount -> Res.string.create_problem_validation_amount
             CreateProblemValidationError.MustBePositive -> Res.string.create_problem_validation_positive
             CreateProblemValidationError.MustBeNonNegative -> Res.string.create_problem_validation_non_negative
+            CreateProblemValidationError.PaymentAssetRequired -> Res.string.create_problem_validation_payment_asset
             CreateProblemValidationError.SubmitBeforeJoin -> Res.string.create_problem_validation_date_order
             CreateProblemValidationError.MinPublicTests -> Res.string.create_problem_validation_min_public_tests
         }
     )
+}
+
+@Composable
+private fun amountFieldLabel(state: CreateProblemState, labelRes: org.jetbrains.compose.resources.StringResource): String {
+    val base = stringResource(labelRes)
+    val symbol = state.selectedPaymentAsset?.symbol
+    return if (symbol.isNullOrBlank()) base else "$base ($symbol)"
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -903,11 +966,11 @@ private fun ProfitPanel(
 
         ProfitRow(
             label = stringResource(Res.string.create_problem_profit_prize),
-            value = formatAmount(state.prizeValue)
+            value = withAssetSymbol(formatAmount(state.prizeValue), state.selectedPaymentAsset?.symbol)
         )
         ProfitRow(
             label = stringResource(Res.string.create_problem_profit_entry_fee),
-            value = formatAmount(state.entryFeeValue)
+            value = withAssetSymbol(formatAmount(state.entryFeeValue), state.selectedPaymentAsset?.symbol)
         )
         ProfitRow(
             label = stringResource(Res.string.create_problem_profit_participants),
@@ -915,18 +978,18 @@ private fun ProfitPanel(
         )
         ProfitRow(
             label = stringResource(Res.string.create_problem_profit_platform_fee),
-            value = formatAmount(state.platformFee)
+            value = withAssetSymbol(formatAmount(state.platformFee), state.selectedPaymentAsset?.symbol)
         )
         Spacer(Modifier.height(8.dp))
         ProfitRow(
             label = stringResource(Res.string.create_problem_profit_creator),
-            value = formatAmount(state.creatorProfit),
+            value = withAssetSymbol(formatAmount(state.creatorProfit), state.selectedPaymentAsset?.symbol),
             highlight = true,
             valueColor = creatorProfitColor
         )
         ProfitRow(
             label = stringResource(Res.string.create_problem_profit_winner),
-            value = formatAmount(state.winnerProfit),
+            value = withAssetSymbol(formatAmount(state.winnerProfit), state.selectedPaymentAsset?.symbol),
             highlight = true,
             valueColor = winnerProfitColor
         )
@@ -958,6 +1021,10 @@ private fun ProfitRow(
         )
     }
     Spacer(Modifier.height(6.dp))
+}
+
+private fun withAssetSymbol(value: String, symbol: String?): String {
+    return if (symbol.isNullOrBlank()) value else "$value $symbol"
 }
 
 @Composable

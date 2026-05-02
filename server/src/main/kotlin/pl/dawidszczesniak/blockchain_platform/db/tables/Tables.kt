@@ -27,9 +27,19 @@ internal object ProblemsTable : Table("problems") {
     val validationResultHash = varchar("validation_result_hash", length = 66).nullable()
     val validationImageHash = varchar("validation_image_hash", length = 128).nullable()
     val validatedAt = datetime("validated_at").nullable()
-    val prizeAmount = long("prize_amount")
-    val entryFeeAmount = long("entry_fee_amount")
+    val paymentAssetCode = varchar("payment_asset_code", length = 32)
+    val prizeAmountAtomic = text("prize_amount")
+    val entryFeeAmountAtomic = text("entry_fee_amount")
     val requiredParticipants = integer("required_participants")
+    val onchainCompetitionId = long("onchain_competition_id").nullable()
+    val onchainCreationKey = varchar("onchain_creation_key", length = 66).nullable()
+    val onchainContractAddress = varchar("onchain_contract_address", length = 66).nullable()
+    val onchainCreationTxHash = varchar("onchain_creation_tx_hash", length = 128).nullable()
+    val onchainCreationConfirmedAt = datetime("onchain_creation_confirmed_at").nullable()
+    val onchainSettlementStatus = varchar("onchain_settlement_status", length = 16)
+    val onchainSettlementTxHash = varchar("onchain_settlement_tx_hash", length = 128).nullable()
+    val onchainSettlementError = text("onchain_settlement_error").nullable()
+    val onchainSettledAt = datetime("onchain_settled_at").nullable()
     val joinUntilDate = date("join_until_date")
     val submitUntilDate = date("submit_until_date")
     val createdAt = datetime("created_at")
@@ -40,6 +50,8 @@ internal object ProblemsTable : Table("problems") {
 internal object ProblemParticipantsTable : Table("problem_participants") {
     val problemId = long("problem_id")
     val userId = long("user_id")
+    val joinTxHash = varchar("join_tx_hash", length = 128).nullable()
+    val joinedOnchainAt = datetime("joined_onchain_at").nullable()
     val registeredAt = datetime("registered_at")
 
     override val primaryKey = PrimaryKey(problemId, userId)
@@ -76,13 +88,10 @@ internal object ProblemSubmissionsTable : Table("problem_submissions") {
     val commitmentHash = varchar("commitment_hash", length = 66)
     val runtimeMs = integer("runtime_ms")
     val memoryUsedKb = integer("memory_used_kb").nullable()
-    val anchorStatus = varchar("anchor_status", length = 16)
-    val anchorBatchId = long("anchor_batch_id").nullable()
-    val anchorMerkleRoot = varchar("anchor_merkle_root", length = 66).nullable()
-    val anchorMerkleProofJson = text("anchor_merkle_proof_json")
-    val anchorTxHash = varchar("anchor_tx_hash", length = 128).nullable()
-    val anchorError = text("anchor_error").nullable()
-    val anchoredAt = datetime("anchored_at").nullable()
+    val onchainRecordContractAddress = varchar("onchain_record_contract_address", length = 66).nullable()
+    val onchainRecordTxHash = varchar("onchain_record_tx_hash", length = 128).nullable()
+    val onchainRecordError = text("onchain_record_error").nullable()
+    val onchainRecordedAt = datetime("onchain_recorded_at").nullable()
     val submittedAt = datetime("submitted_at")
 
     override val primaryKey = PrimaryKey(submissionId)
@@ -137,27 +146,11 @@ internal object ProblemSubmissionAttestationsTable : Table("problem_submission_a
     override val primaryKey = PrimaryKey(submissionId, nodeId)
 }
 
-internal object SubmissionAnchorBatchesTable : Table("submission_anchor_batches") {
-    val batchId = long("batch_id").autoIncrement()
-    val merkleRootHash = varchar("merkle_root_hash", length = 66)
-    val leavesCount = integer("leaves_count")
-    val fromSubmissionId = long("from_submission_id")
-    val toSubmissionId = long("to_submission_id")
-    val chainId = long("chain_id").nullable()
-    val contractAddress = varchar("contract_address", length = 66).nullable()
-    val txHash = varchar("tx_hash", length = 128).nullable()
-    val status = varchar("status", length = 16)
-    val failureReason = text("failure_reason").nullable()
-    val createdAt = datetime("created_at")
-    val anchoredAt = datetime("anchored_at").nullable()
-
-    override val primaryKey = PrimaryKey(batchId)
-}
-
 internal object ProblemWinnersTable : Table("problem_winners") {
     val problemId = long("problem_id")
     val winnerUserId = long("winner_user_id")
-    val payoutAmount = long("payout_amount")
+    val payoutAmountAtomic = text("payout_amount")
+    val settlementTxHash = varchar("settlement_tx_hash", length = 128).nullable()
     val wonAt = datetime("won_at")
 
     override val primaryKey = PrimaryKey(problemId, winnerUserId)
@@ -166,7 +159,7 @@ internal object ProblemWinnersTable : Table("problem_winners") {
 internal object DashboardDailyMetricsTable : Table("dashboard_daily_metrics") {
     val metricDate = date("metric_date")
     val activeChallenges = integer("active_challenges")
-    val prizePoolAmount = long("prize_pool_amount")
+    val prizePoolLabel = text("prize_pool_amount")
     val submissionsCount = integer("submissions_count")
 
     override val primaryKey = PrimaryKey(metricDate)
