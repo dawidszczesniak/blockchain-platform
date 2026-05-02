@@ -249,6 +249,7 @@ internal class SubmitProblemCodeUseCaseImpl(
             proxyAddress = contractConfig.proxyAddress,
             txHash = resultWrite.txHash,
             recordedAt = Instant.now(),
+            fromWallet = contractConfig.operatorWalletAddress,
         )
 
         return SubmissionJudgeOutcome.Accepted(

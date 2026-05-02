@@ -28,7 +28,13 @@ internal interface ProblemDao {
     fun fetchCreatedProblemRowsForUser(userId: Long): List<ResultRow>
     fun fetchParticipationProblemRowsForUser(userId: Long): List<ResultRow>
     fun isUserRegisteredForProblem(problemId: Long, userId: Long): Boolean
-    fun insertProblemParticipant(problemId: Long, userId: Long, joinTxHash: String? = null, joinedOnchainAt: java.time.Instant? = null)
+    fun insertProblemParticipant(
+        problemId: Long,
+        userId: Long,
+        joinTxHash: String? = null,
+        joinFromWallet: String? = null,
+        joinedOnchainAt: java.time.Instant? = null,
+    )
     fun countParticipants(problemId: Long): Int
     fun fetchParticipantCountRows(): List<ResultRow>
     fun fetchSubmissionCountRows(): List<ResultRow>
@@ -55,6 +61,7 @@ internal interface ProblemDao {
         onchainContractAddress: String?,
         onchainCreationKey: String?,
         onchainCreationTxHash: String?,
+        onchainCreationFromWallet: String?,
         onchainCreationConfirmedAt: java.time.Instant?,
         onchainSettlementStatus: String,
         joinUntilDate: LocalDate,
@@ -133,12 +140,14 @@ internal class ProblemDaoImpl : ProblemDao {
         problemId: Long,
         userId: Long,
         joinTxHash: String?,
+        joinFromWallet: String?,
         joinedOnchainAt: java.time.Instant?,
     ) {
         ProblemParticipantsTable.insert {
             it[ProblemParticipantsTable.problemId] = problemId
             it[ProblemParticipantsTable.userId] = userId
             it[ProblemParticipantsTable.joinTxHash] = joinTxHash
+            it[ProblemParticipantsTable.joinFromWallet] = joinFromWallet
             it[ProblemParticipantsTable.joinedOnchainAt] = joinedOnchainAt?.let { instant ->
                 java.time.LocalDateTime.ofInstant(instant, java.time.ZoneOffset.UTC)
             }
@@ -222,6 +231,7 @@ internal class ProblemDaoImpl : ProblemDao {
         onchainContractAddress: String?,
         onchainCreationKey: String?,
         onchainCreationTxHash: String?,
+        onchainCreationFromWallet: String?,
         onchainCreationConfirmedAt: java.time.Instant?,
         onchainSettlementStatus: String,
         joinUntilDate: LocalDate,
@@ -251,6 +261,7 @@ internal class ProblemDaoImpl : ProblemDao {
             it[ProblemsTable.onchainContractAddress] = onchainContractAddress
             it[ProblemsTable.onchainCreationKey] = onchainCreationKey
             it[ProblemsTable.onchainCreationTxHash] = onchainCreationTxHash
+            it[ProblemsTable.onchainCreationFromWallet] = onchainCreationFromWallet
             it[ProblemsTable.onchainCreationConfirmedAt] = onchainCreationConfirmedAt?.let { instant ->
                 java.time.LocalDateTime.ofInstant(instant, java.time.ZoneOffset.UTC)
             }

@@ -45,6 +45,7 @@ internal data class NewProblemDraft(
     val onchainContractAddress: String? = null,
     val onchainCreationKey: String? = null,
     val onchainCreationTxHash: String? = null,
+    val onchainCreationFromWallet: String? = null,
     val onchainCreationConfirmedAt: Instant? = null,
 )
 
@@ -157,7 +158,13 @@ internal interface ProblemWriteRepository {
     fun findProblemIdByOnchainCreationTxHash(txHash: String): Int?
     fun createProblemForUser(userId: Long, draft: NewProblemDraft): Int
     fun registerUserForProblem(userId: Long, problemId: Int): JoinProblemResult
-    fun registerUserForProblemOnChain(userId: Long, problemId: Int, txHash: String, joinedAt: Instant): JoinProblemResult
+    fun registerUserForProblemOnChain(
+        userId: Long,
+        problemId: Int,
+        txHash: String,
+        joinedAt: Instant,
+        fromWallet: String,
+    ): JoinProblemResult
     fun fetchOnchainJoinContext(problemId: Int): OnchainJoinContext
     fun fetchExecutionContextForUser(userId: Long, problemId: Int): ProblemExecutionContext
     fun createSubmissionRecord(draft: SubmissionRecordDraft): PersistedSubmissionRecord
@@ -166,11 +173,19 @@ internal interface ProblemWriteRepository {
         proxyAddress: String,
         txHash: String,
         recordedAt: Instant,
+        fromWallet: String,
     )
     fun markSubmissionResultFailed(submissionId: Long, error: String)
     fun fetchCompetitionsPendingSettlement(now: Instant): List<OnchainCompetitionSummary>
     fun fetchBestSettlementCandidate(problemId: Int): ProblemSettlementCandidate?
-    fun recordSettledWinner(problemId: Int, winnerUserId: Long, payoutAmountAtomic: String, txHash: String, settledAt: Instant)
-    fun markCompetitionSettlementCancelled(problemId: Int, txHash: String, settledAt: Instant)
+    fun recordSettledWinner(
+        problemId: Int,
+        winnerUserId: Long,
+        payoutAmountAtomic: String,
+        txHash: String,
+        settledAt: Instant,
+        fromWallet: String,
+    )
+    fun markCompetitionSettlementCancelled(problemId: Int, txHash: String, settledAt: Instant, fromWallet: String)
     fun markCompetitionSettlementFailed(problemId: Int, error: String)
 }

@@ -205,6 +205,7 @@ internal class ProblemReadRepositoryImpl(
                 onchainContractAddress = draft.onchainContractAddress,
                 onchainCreationKey = draft.onchainCreationKey,
                 onchainCreationTxHash = draft.onchainCreationTxHash,
+                onchainCreationFromWallet = draft.onchainCreationFromWallet,
                 onchainCreationConfirmedAt = draft.onchainCreationConfirmedAt,
                 onchainSettlementStatus = if (draft.onchainCompetitionId != null) {
                     CompetitionSettlementStatus.Pending.dbValue
@@ -282,6 +283,7 @@ internal class ProblemReadRepositoryImpl(
         problemId: Int,
         txHash: String,
         joinedAt: Instant,
+        fromWallet: String,
     ): JoinProblemResult {
         return transactionRunner.inTransaction {
             val normalizedProblemId = problemId.toLong()
@@ -307,6 +309,7 @@ internal class ProblemReadRepositoryImpl(
                         problemId = normalizedProblemId,
                         userId = userId,
                         joinTxHash = txHash,
+                        joinFromWallet = fromWallet,
                         joinedOnchainAt = joinedAt,
                     )
                 }.onFailure { error ->
@@ -468,6 +471,7 @@ internal class ProblemReadRepositoryImpl(
         proxyAddress: String,
         txHash: String,
         recordedAt: Instant,
+        fromWallet: String,
     ) {
         transactionRunner.inTransaction {
             ProblemSubmissionsTable.update(
@@ -475,6 +479,7 @@ internal class ProblemReadRepositoryImpl(
             ) {
                 it[onchainRecordContractAddress] = proxyAddress
                 it[onchainRecordTxHash] = txHash
+                it[onchainRecordFromWallet] = fromWallet
                 it[onchainRecordError] = null
                 it[onchainRecordedAt] = recordedAt.toDbDateTime()
             }
@@ -568,6 +573,7 @@ internal class ProblemReadRepositoryImpl(
         payoutAmountAtomic: String,
         txHash: String,
         settledAt: Instant,
+        fromWallet: String,
     ) {
         transactionRunner.inTransaction {
             ProblemWinnersTable.insertIgnore {
@@ -575,6 +581,7 @@ internal class ProblemReadRepositoryImpl(
                 it[ProblemWinnersTable.winnerUserId] = winnerUserId
                 it[ProblemWinnersTable.payoutAmountAtomic] = payoutAmountAtomic
                 it[ProblemWinnersTable.settlementTxHash] = txHash
+                it[ProblemWinnersTable.settlementFromWallet] = fromWallet
                 it[ProblemWinnersTable.wonAt] = settledAt.toDbDateTime()
             }
             ProblemsTable.update(
@@ -583,13 +590,14 @@ internal class ProblemReadRepositoryImpl(
                 it[problemStatus] = ProblemLifecycleStatus.Closed.dbValue
                 it[onchainSettlementStatus] = CompetitionSettlementStatus.Settled.dbValue
                 it[onchainSettlementTxHash] = txHash
+                it[onchainSettlementFromWallet] = fromWallet
                 it[onchainSettlementError] = null
                 it[onchainSettledAt] = settledAt.toDbDateTime()
             }
         }
     }
 
-    override fun markCompetitionSettlementCancelled(problemId: Int, txHash: String, settledAt: Instant) {
+    override fun markCompetitionSettlementCancelled(problemId: Int, txHash: String, settledAt: Instant, fromWallet: String) {
         transactionRunner.inTransaction {
             ProblemsTable.update(
                 where = { ProblemsTable.problemId eq problemId.toLong() }
@@ -597,6 +605,7 @@ internal class ProblemReadRepositoryImpl(
                 it[problemStatus] = ProblemLifecycleStatus.Closed.dbValue
                 it[onchainSettlementStatus] = CompetitionSettlementStatus.Cancelled.dbValue
                 it[onchainSettlementTxHash] = txHash
+                it[onchainSettlementFromWallet] = fromWallet
                 it[onchainSettlementError] = null
                 it[onchainSettledAt] = settledAt.toDbDateTime()
             }

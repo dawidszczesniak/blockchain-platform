@@ -133,6 +133,7 @@ internal class ConfirmCreateProblemOnChainUseCaseImpl(
                 onchainContractAddress = contractConfig.proxyAddress,
                 onchainCreationKey = intent.competitionKey,
                 onchainCreationTxHash = verifiedTx.txHash,
+                onchainCreationFromWallet = normalizeWallet(walletAddress),
                 onchainCreationConfirmedAt = Instant.now(),
             ),
         )
@@ -228,6 +229,7 @@ internal class ConfirmJoinProblemOnChainUseCaseImpl(
                 problemId = problemId,
                 txHash = normalizeTxHash(request.txHash),
                 joinedAt = Instant.now(),
+                fromWallet = normalizeWallet(walletAddress),
             )
         } catch (error: IllegalArgumentException) {
             throw JoinProblemValidationException(error.message ?: "Cannot register for this problem.")
@@ -274,6 +276,7 @@ internal class CompetitionSettlementWorker(
                         problemId = summary.problemId,
                         txHash = cancellation.txHash,
                         settledAt = now,
+                        fromWallet = contractConfig.operatorWalletAddress,
                     )
                 } else {
                     repository.markCompetitionSettlementFailed(
@@ -292,6 +295,7 @@ internal class CompetitionSettlementWorker(
                         problemId = summary.problemId,
                         txHash = cancellation.txHash,
                         settledAt = now,
+                        fromWallet = contractConfig.operatorWalletAddress,
                     )
                 } else {
                     repository.markCompetitionSettlementFailed(
@@ -310,6 +314,7 @@ internal class CompetitionSettlementWorker(
                     payoutAmountAtomic = summary.prizeAmountAtomic,
                     txHash = settlement.txHash,
                     settledAt = now,
+                    fromWallet = contractConfig.operatorWalletAddress,
                 )
             } else {
                 repository.markCompetitionSettlementFailed(

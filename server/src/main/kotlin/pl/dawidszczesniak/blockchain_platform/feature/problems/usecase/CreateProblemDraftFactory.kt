@@ -41,6 +41,7 @@ internal data class ValidatedCreateProblemDraft(
         onchainContractAddress: String? = null,
         onchainCreationKey: String? = null,
         onchainCreationTxHash: String? = null,
+        onchainCreationFromWallet: String? = null,
         onchainCreationConfirmedAt: java.time.Instant? = null,
     ): NewProblemDraft {
         return NewProblemDraft(
@@ -81,6 +82,7 @@ internal data class ValidatedCreateProblemDraft(
             onchainContractAddress = onchainContractAddress,
             onchainCreationKey = onchainCreationKey,
             onchainCreationTxHash = onchainCreationTxHash,
+            onchainCreationFromWallet = onchainCreationFromWallet,
             onchainCreationConfirmedAt = onchainCreationConfirmedAt,
         )
     }

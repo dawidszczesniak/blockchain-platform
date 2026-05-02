@@ -41,6 +41,9 @@ internal data class BlockchainPlatformContractConfig(
     val prepareIntentTtlSeconds: Int,
     val autoSettlePollIntervalMs: Long,
 ) {
+    val operatorWalletAddress: String
+        get() = normalizeAddress(Credentials.create(operatorPrivateKey.removePrefix("0x")).address)
+
     fun explorerTxUrl(txHash: String?): String? {
         if (txHash.isNullOrBlank()) return null
         val base = explorerTxBaseUrl?.trim().orEmpty().trimEnd('/')

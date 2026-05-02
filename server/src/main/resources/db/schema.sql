@@ -37,10 +37,12 @@ CREATE TABLE IF NOT EXISTS problems (
     onchain_creation_key VARCHAR(66),
     onchain_contract_address VARCHAR(66),
     onchain_creation_tx_hash VARCHAR(128) UNIQUE,
+    onchain_creation_from_wallet VARCHAR(66),
     onchain_creation_confirmed_at TIMESTAMPTZ,
     onchain_settlement_status VARCHAR(16) NOT NULL DEFAULT 'disabled'
         CHECK (onchain_settlement_status IN ('pending', 'settled', 'cancelled', 'failed', 'disabled')),
     onchain_settlement_tx_hash VARCHAR(128),
+    onchain_settlement_from_wallet VARCHAR(66),
     onchain_settlement_error TEXT,
     onchain_settled_at TIMESTAMPTZ,
     join_until_date DATE NOT NULL,
@@ -53,6 +55,7 @@ CREATE TABLE IF NOT EXISTS problem_participants (
     problem_id BIGINT NOT NULL REFERENCES problems(problem_id) ON DELETE CASCADE,
     user_id BIGINT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
     join_tx_hash VARCHAR(128),
+    join_from_wallet VARCHAR(66),
     joined_onchain_at TIMESTAMPTZ,
     registered_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (problem_id, user_id)
@@ -89,6 +92,7 @@ CREATE TABLE IF NOT EXISTS problem_submissions (
     memory_used_kb INTEGER CHECK (memory_used_kb >= 0),
     onchain_record_contract_address VARCHAR(66),
     onchain_record_tx_hash VARCHAR(128),
+    onchain_record_from_wallet VARCHAR(66),
     onchain_record_error TEXT,
     onchain_recorded_at TIMESTAMPTZ,
     submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -150,6 +154,7 @@ CREATE TABLE IF NOT EXISTS problem_winners (
     winner_user_id BIGINT NOT NULL,
     payout_amount TEXT NOT NULL,
     settlement_tx_hash VARCHAR(128),
+    settlement_from_wallet VARCHAR(66),
     won_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (problem_id, winner_user_id),
     FOREIGN KEY (problem_id, winner_user_id)
@@ -222,6 +227,9 @@ ALTER TABLE problems
     ADD COLUMN IF NOT EXISTS onchain_creation_tx_hash VARCHAR(128);
 
 ALTER TABLE problems
+    ADD COLUMN IF NOT EXISTS onchain_creation_from_wallet VARCHAR(66);
+
+ALTER TABLE problems
     ADD COLUMN IF NOT EXISTS onchain_creation_confirmed_at TIMESTAMPTZ;
 
 ALTER TABLE problems
@@ -229,6 +237,9 @@ ALTER TABLE problems
 
 ALTER TABLE problems
     ADD COLUMN IF NOT EXISTS onchain_settlement_tx_hash VARCHAR(128);
+
+ALTER TABLE problems
+    ADD COLUMN IF NOT EXISTS onchain_settlement_from_wallet VARCHAR(66);
 
 ALTER TABLE problems
     ADD COLUMN IF NOT EXISTS onchain_settlement_error TEXT;
@@ -240,10 +251,16 @@ ALTER TABLE problem_participants
     ADD COLUMN IF NOT EXISTS join_tx_hash VARCHAR(128);
 
 ALTER TABLE problem_participants
+    ADD COLUMN IF NOT EXISTS join_from_wallet VARCHAR(66);
+
+ALTER TABLE problem_participants
     ADD COLUMN IF NOT EXISTS joined_onchain_at TIMESTAMPTZ;
 
 ALTER TABLE problem_winners
     ADD COLUMN IF NOT EXISTS settlement_tx_hash VARCHAR(128);
+
+ALTER TABLE problem_winners
+    ADD COLUMN IF NOT EXISTS settlement_from_wallet VARCHAR(66);
 
 ALTER TABLE problem_winners
     ALTER COLUMN payout_amount TYPE TEXT USING payout_amount::TEXT;
@@ -270,6 +287,18 @@ WHERE onchain_settlement_status IS NULL OR onchain_settlement_status = '';
 UPDATE problems
 SET payment_asset_code = 'ETH'
 WHERE payment_asset_code IS NULL OR payment_asset_code = '';
+
+UPDATE problems p
+SET onchain_creation_from_wallet = u.wallet_address
+FROM users u
+WHERE p.created_by_user_id = u.user_id
+  AND p.onchain_creation_from_wallet IS NULL;
+
+UPDATE problem_participants pp
+SET join_from_wallet = u.wallet_address
+FROM users u
+WHERE pp.user_id = u.user_id
+  AND pp.join_from_wallet IS NULL;
 
 ALTER TABLE problems
     ALTER COLUMN constraints_text SET DEFAULT '';
@@ -396,6 +425,9 @@ ALTER TABLE problem_submissions
 
 ALTER TABLE problem_submissions
     ADD COLUMN IF NOT EXISTS onchain_record_tx_hash VARCHAR(128);
+
+ALTER TABLE problem_submissions
+    ADD COLUMN IF NOT EXISTS onchain_record_from_wallet VARCHAR(66);
 
 ALTER TABLE problem_submissions
     ADD COLUMN IF NOT EXISTS onchain_record_error TEXT;
