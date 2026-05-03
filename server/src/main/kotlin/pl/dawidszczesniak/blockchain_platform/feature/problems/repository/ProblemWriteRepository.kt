@@ -65,16 +65,13 @@ internal data class OnchainJoinContext(
     val joinUntilDate: LocalDate,
 )
 
-internal data class OnchainCompetitionSummary(
+internal data class CompetitionSettlementSnapshot(
     val problemId: Int,
-    val title: String,
     val competitionId: Long,
-    val paymentAsset: PaymentAssetDto,
     val prizeAmountAtomic: String,
-    val joinUntilDate: LocalDate,
-    val submitUntilDate: LocalDate,
     val requiredParticipants: Int,
     val registeredParticipants: Int,
+    val problemStatus: String,
     val settlementStatus: String,
 )
 
@@ -176,7 +173,7 @@ internal interface ProblemWriteRepository {
         fromWallet: String,
     )
     fun markSubmissionResultFailed(submissionId: Long, error: String)
-    fun fetchCompetitionsPendingSettlement(now: Instant): List<OnchainCompetitionSummary>
+    fun fetchCompetitionSettlementSnapshot(problemId: Int): CompetitionSettlementSnapshot?
     fun fetchBestSettlementCandidate(problemId: Int): ProblemSettlementCandidate?
     fun recordSettledWinner(
         problemId: Int,
@@ -187,5 +184,6 @@ internal interface ProblemWriteRepository {
         fromWallet: String,
     )
     fun markCompetitionSettlementCancelled(problemId: Int, txHash: String, settledAt: Instant, fromWallet: String)
+    fun markCompetitionSettlementPendingError(problemId: Int, error: String)
     fun markCompetitionSettlementFailed(problemId: Int, error: String)
 }

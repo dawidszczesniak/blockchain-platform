@@ -458,6 +458,7 @@ private class FakeProblemWriteRepository(
         problemId: Int,
         txHash: String,
         joinedAt: Instant,
+        fromWallet: String,
     ): JoinProblemResult = error("Not used in this test.")
 
     override fun fetchOnchainJoinContext(problemId: Int) =
@@ -479,6 +480,7 @@ private class FakeProblemWriteRepository(
         proxyAddress: String,
         txHash: String,
         recordedAt: Instant,
+        fromWallet: String,
     ) {
         recordedSubmissionId = submissionId
     }
@@ -487,7 +489,7 @@ private class FakeProblemWriteRepository(
         failedSubmissionId = submissionId
     }
 
-    override fun fetchCompetitionsPendingSettlement(now: Instant) =
+    override fun fetchCompetitionSettlementSnapshot(problemId: Int) =
         error("Not used in this test.")
 
     override fun fetchBestSettlementCandidate(problemId: Int) =
@@ -499,9 +501,13 @@ private class FakeProblemWriteRepository(
         payoutAmountAtomic: String,
         txHash: String,
         settledAt: Instant,
+        fromWallet: String,
     ) = error("Not used in this test.")
 
-    override fun markCompetitionSettlementCancelled(problemId: Int, txHash: String, settledAt: Instant) =
+    override fun markCompetitionSettlementCancelled(problemId: Int, txHash: String, settledAt: Instant, fromWallet: String) =
+        error("Not used in this test.")
+
+    override fun markCompetitionSettlementPendingError(problemId: Int, error: String) =
         error("Not used in this test.")
 
     override fun markCompetitionSettlementFailed(problemId: Int, error: String) =
@@ -589,7 +595,6 @@ private fun fakePlatformContractConfig(): BlockchainPlatformContractConfig {
         receiptPollIntervalMs = 2_000L,
         explorerTxBaseUrl = "https://sepolia.etherscan.io/tx",
         prepareIntentTtlSeconds = 900,
-        autoSettlePollIntervalMs = 30_000L,
     )
 }
 

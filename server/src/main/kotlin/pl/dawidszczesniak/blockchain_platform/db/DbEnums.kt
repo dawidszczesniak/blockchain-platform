@@ -32,6 +32,18 @@ internal enum class CompetitionSettlementStatus(val dbValue: String) {
     Disabled("disabled"),
 }
 
+internal enum class CompetitionSettlementJobType(val dbValue: String) {
+    RegistrationDeadline("registration_deadline"),
+    SubmissionDeadline("submission_deadline"),
+}
+
+internal enum class CompetitionSettlementJobStatus(val dbValue: String) {
+    Scheduled("scheduled"),
+    Running("running"),
+    Completed("completed"),
+    Dead("dead"),
+}
+
 internal enum class SubmissionJudgeJobStatus(val dbValue: String) {
     Queued("queued"),
     Running("running"),

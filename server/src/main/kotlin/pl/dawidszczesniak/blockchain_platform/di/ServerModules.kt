@@ -85,6 +85,9 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.PrepareJo
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.PrepareJoinProblemOnChainUseCaseImpl
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.ConfirmJoinProblemOnChainUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.ConfirmJoinProblemOnChainUseCaseImpl
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.CompetitionSettlementJobRepository
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.CompetitionSettlementJobRepositoryImpl
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.CompetitionSettlementWakeupSignal
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.CompetitionSettlementWorker
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.RunProblemCodeUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.RunProblemCodeUseCaseImpl
@@ -125,7 +128,8 @@ internal fun serverModules(environment: Map<String, String>) = module {
     factory { AuthController(get(), get(), get()) }
 
     single<ProblemDao> { ProblemDaoImpl() }
-    single { ProblemReadRepositoryImpl(get(), get(), get()) }
+    single { CompetitionSettlementWakeupSignal() }
+    single { ProblemReadRepositoryImpl(get(), get(), get(), get()) }
     single<ProblemReadRepository> { get<ProblemReadRepositoryImpl>() }
     single<ProblemWriteRepository> { get<ProblemReadRepositoryImpl>() }
     single { SandboxConfig.fromEnvironment(environment) }
@@ -139,6 +143,7 @@ internal fun serverModules(environment: Map<String, String>) = module {
     single { CreateProblemDraftFactory(get(), get()) }
     single<CompetitionIntentStore> { RedisCompetitionIntentStore(get(), get()) }
     single<BlockchainPlatformContractClient> { EthereumBlockchainPlatformContractClient(get(), get()) }
+    single<CompetitionSettlementJobRepository> { CompetitionSettlementJobRepositoryImpl(get(), get()) }
     factory<CreateProblemUseCase> { CreateProblemUseCaseImpl() }
     factory<PrepareCreateProblemOnChainUseCase> { PrepareCreateProblemOnChainUseCaseImpl(get(), get(), get(), get(), get()) }
     factory<ConfirmCreateProblemOnChainUseCase> { ConfirmCreateProblemOnChainUseCaseImpl(get(), get(), get(), get(), get(), get(), get()) }
@@ -156,7 +161,7 @@ internal fun serverModules(environment: Map<String, String>) = module {
     single<EnqueueProblemSubmissionUseCase> { EnqueueProblemSubmissionUseCaseImpl(get(), get(), get()) }
     single<GetSubmissionJudgeJobUseCase> { GetSubmissionJudgeJobUseCaseImpl(get(), get(), get()) }
     single { SubmissionJudgeWorker(get(), get(), get()) }
-    single { CompetitionSettlementWorker(get(), get(), get()) }
+    single { CompetitionSettlementWorker(get(), get(), get(), get(), get()) }
     factory { ProblemController(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
 
     single<DashboardDao> { DashboardDaoImpl(get()) }

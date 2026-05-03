@@ -130,6 +130,30 @@ CREATE TABLE IF NOT EXISTS problem_submission_judge_jobs (
     completed_at TIMESTAMPTZ
 );
 
+CREATE TABLE IF NOT EXISTS competition_settlement_jobs (
+    job_id BIGSERIAL PRIMARY KEY,
+    problem_id BIGINT NOT NULL REFERENCES problems(problem_id) ON DELETE CASCADE,
+    competition_id BIGINT NOT NULL,
+    job_type VARCHAR(32) NOT NULL
+        CHECK (job_type IN ('registration_deadline', 'submission_deadline')),
+    status VARCHAR(16) NOT NULL
+        CHECK (status IN ('scheduled', 'running', 'completed', 'dead')),
+    attempts INTEGER NOT NULL DEFAULT 0 CHECK (attempts >= 0),
+    run_at TIMESTAMPTZ NOT NULL,
+    available_at TIMESTAMPTZ NOT NULL,
+    locked_at TIMESTAMPTZ,
+    status_message TEXT,
+    completed_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (problem_id, job_type)
+);
+
+CREATE INDEX IF NOT EXISTS idx_competition_settlement_jobs_status_available
+    ON competition_settlement_jobs(status, available_at, run_at);
+
+CREATE INDEX IF NOT EXISTS idx_competition_settlement_jobs_problem
+    ON competition_settlement_jobs(problem_id);
+
 CREATE TABLE IF NOT EXISTS problem_submission_attestations (
     submission_id BIGINT NOT NULL REFERENCES problem_submissions(submission_id) ON DELETE CASCADE,
     node_id VARCHAR(128) NOT NULL,
@@ -299,6 +323,54 @@ SET join_from_wallet = u.wallet_address
 FROM users u
 WHERE pp.user_id = u.user_id
   AND pp.join_from_wallet IS NULL;
+
+INSERT INTO competition_settlement_jobs (
+    problem_id,
+    competition_id,
+    job_type,
+    status,
+    attempts,
+    run_at,
+    available_at,
+    created_at
+)
+SELECT
+    p.problem_id,
+    p.onchain_competition_id,
+    'registration_deadline',
+    'scheduled',
+    0,
+    ((p.join_until_date + 1)::timestamp AT TIME ZONE 'UTC'),
+    ((p.join_until_date + 1)::timestamp AT TIME ZONE 'UTC'),
+    COALESCE(p.onchain_creation_confirmed_at, p.created_at, NOW())
+FROM problems p
+WHERE p.onchain_competition_id IS NOT NULL
+  AND p.onchain_settlement_status = 'pending'
+ON CONFLICT (problem_id, job_type) DO NOTHING;
+
+INSERT INTO competition_settlement_jobs (
+    problem_id,
+    competition_id,
+    job_type,
+    status,
+    attempts,
+    run_at,
+    available_at,
+    created_at
+)
+SELECT
+    p.problem_id,
+    p.onchain_competition_id,
+    'submission_deadline',
+    'scheduled',
+    0,
+    ((p.submit_until_date + 1)::timestamp AT TIME ZONE 'UTC'),
+    ((p.submit_until_date + 1)::timestamp AT TIME ZONE 'UTC'),
+    COALESCE(p.onchain_creation_confirmed_at, p.created_at, NOW())
+FROM problems p
+WHERE p.onchain_competition_id IS NOT NULL
+  AND p.onchain_settlement_status = 'pending'
+ON CONFLICT (problem_id, job_type) DO NOTHING;
 
 ALTER TABLE problems
     ALTER COLUMN constraints_text SET DEFAULT '';

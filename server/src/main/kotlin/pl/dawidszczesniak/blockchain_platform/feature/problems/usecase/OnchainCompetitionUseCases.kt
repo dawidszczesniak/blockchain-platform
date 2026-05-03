@@ -2,19 +2,11 @@ package pl.dawidszczesniak.blockchain_platform.feature.problems.usecase
 
 import java.time.Instant
 import java.time.LocalDate
-import java.time.LocalTime
-import java.time.ZoneOffset
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
 import pl.dawidszczesniak.blockchain_platform.db.DashboardMetricsRefresher
 import pl.dawidszczesniak.blockchain_platform.db.DbTransactionRunner
 import pl.dawidszczesniak.blockchain_platform.feature.auth.BlockchainConfig
 import pl.dawidszczesniak.blockchain_platform.feature.platform.PaymentAssetCatalog
+import pl.dawidszczesniak.blockchain_platform.feature.problems.competition.toContractDeadlineEpochSeconds
 import pl.dawidszczesniak.blockchain_platform.feature.problems.competition.CompetitionIntentStore
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ConfirmCreateProblemRequestDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ConfirmJoinProblemRequestDto
@@ -243,89 +235,6 @@ internal class ConfirmJoinProblemOnChainUseCaseImpl(
     }
 }
 
-internal class CompetitionSettlementWorker(
-    private val repository: ProblemWriteRepository,
-    private val contractClient: BlockchainPlatformContractClient,
-    private val contractConfig: BlockchainPlatformContractConfig,
-) : AutoCloseable {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-
-    fun start() {
-        scope.launch {
-            while (isActive) {
-                runCatching { settleReadyCompetitions() }
-                    .onFailure { error ->
-                        System.err.println("CompetitionSettlementWorker failed: ${error.message}")
-                    }
-                delay(contractConfig.autoSettlePollIntervalMs)
-            }
-        }
-    }
-
-    override fun close() {
-        scope.cancel()
-    }
-
-    private fun settleReadyCompetitions() {
-        val now = Instant.now()
-        repository.fetchCompetitionsPendingSettlement(now).forEach { summary ->
-            if (summary.registeredParticipants < summary.requiredParticipants) {
-                val cancellation = contractClient.cancelCompetition(summary.competitionId)
-                if (cancellation.success && !cancellation.txHash.isNullOrBlank()) {
-                    repository.markCompetitionSettlementCancelled(
-                        problemId = summary.problemId,
-                        txHash = cancellation.txHash,
-                        settledAt = now,
-                        fromWallet = contractConfig.operatorWalletAddress,
-                    )
-                } else {
-                    repository.markCompetitionSettlementFailed(
-                        problemId = summary.problemId,
-                        error = cancellation.error ?: "Competition cancellation failed.",
-                    )
-                }
-                return@forEach
-            }
-
-            val bestCandidate = repository.fetchBestSettlementCandidate(summary.problemId)
-            if (bestCandidate == null) {
-                val cancellation = contractClient.cancelCompetition(summary.competitionId)
-                if (cancellation.success && !cancellation.txHash.isNullOrBlank()) {
-                    repository.markCompetitionSettlementCancelled(
-                        problemId = summary.problemId,
-                        txHash = cancellation.txHash,
-                        settledAt = now,
-                        fromWallet = contractConfig.operatorWalletAddress,
-                    )
-                } else {
-                    repository.markCompetitionSettlementFailed(
-                        problemId = summary.problemId,
-                        error = cancellation.error ?: "Competition cancellation failed because no winner was available.",
-                    )
-                }
-                return@forEach
-            }
-
-            val settlement = contractClient.settleCompetition(summary.competitionId)
-            if (settlement.success && !settlement.txHash.isNullOrBlank()) {
-                repository.recordSettledWinner(
-                    problemId = summary.problemId,
-                    winnerUserId = bestCandidate.userId,
-                    payoutAmountAtomic = summary.prizeAmountAtomic,
-                    txHash = settlement.txHash,
-                    settledAt = now,
-                    fromWallet = contractConfig.operatorWalletAddress,
-                )
-            } else {
-                repository.markCompetitionSettlementFailed(
-                    problemId = summary.problemId,
-                    error = settlement.error ?: "Competition settlement failed.",
-                )
-            }
-        }
-    }
-}
-
 private fun pl.dawidszczesniak.blockchain_platform.feature.problems.competition.PreparedCreateProblemIntent.toValidatedDraft(
     paymentAssetCatalog: PaymentAssetCatalog,
 ): ValidatedCreateProblemDraft {
@@ -358,11 +267,6 @@ private fun pl.dawidszczesniak.blockchain_platform.feature.problems.onchain.Prep
         data = data,
         valueHex = valueHex,
     )
-}
-
-private fun LocalDate.toContractDeadlineEpochSeconds(): Long {
-    return atTime(LocalTime.of(23, 59, 59))
-        .toEpochSecond(ZoneOffset.UTC)
 }
 
 private fun normalizeWallet(walletAddress: String): String {

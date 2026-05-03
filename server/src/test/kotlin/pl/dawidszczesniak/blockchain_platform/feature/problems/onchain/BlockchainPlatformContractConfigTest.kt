@@ -60,7 +60,6 @@ class BlockchainPlatformContractConfigTest {
 
         assertEquals("0x1111111111111111111111111111111111111111", config.proxyAddress)
         assertEquals("0xabc", config.operatorPrivateKey)
-        assertEquals(30_000L, config.autoSettlePollIntervalMs)
         assertEquals("https://sepolia.etherscan.io/tx/0xtx", config.explorerTxUrl("0xtx"))
     }
 

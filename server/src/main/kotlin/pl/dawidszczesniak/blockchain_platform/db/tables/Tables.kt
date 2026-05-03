@@ -131,6 +131,23 @@ internal object ProblemSubmissionJudgeJobsTable : Table("problem_submission_judg
     override val primaryKey = PrimaryKey(jobId)
 }
 
+internal object CompetitionSettlementJobsTable : Table("competition_settlement_jobs") {
+    val jobId = long("job_id").autoIncrement()
+    val problemId = long("problem_id")
+    val competitionId = long("competition_id")
+    val jobType = varchar("job_type", length = 32)
+    val status = varchar("status", length = 16)
+    val attempts = integer("attempts")
+    val runAt = datetime("run_at")
+    val availableAt = datetime("available_at")
+    val lockedAt = datetime("locked_at").nullable()
+    val statusMessage = text("status_message").nullable()
+    val completedAt = datetime("completed_at").nullable()
+    val createdAt = datetime("created_at")
+
+    override val primaryKey = PrimaryKey(jobId)
+}
+
 internal object ProblemSubmissionAttestationsTable : Table("problem_submission_attestations") {
     val submissionId = long("submission_id")
     val nodeId = varchar("node_id", length = 128)

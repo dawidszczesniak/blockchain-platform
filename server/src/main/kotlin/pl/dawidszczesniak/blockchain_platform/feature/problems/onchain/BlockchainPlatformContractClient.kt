@@ -39,7 +39,6 @@ internal data class BlockchainPlatformContractConfig(
     val receiptPollIntervalMs: Long,
     val explorerTxBaseUrl: String?,
     val prepareIntentTtlSeconds: Int,
-    val autoSettlePollIntervalMs: Long,
 ) {
     val operatorWalletAddress: String
         get() = normalizeAddress(Credentials.create(operatorPrivateKey.removePrefix("0x")).address)
@@ -92,10 +91,6 @@ internal data class BlockchainPlatformContractConfig(
                     ?.toIntOrNull()
                     ?.coerceIn(60, 3_600)
                     ?: DEFAULT_PREPARE_INTENT_TTL_SECONDS,
-                autoSettlePollIntervalMs = env["ETH_PLATFORM_AUTO_SETTLE_POLL_INTERVAL_MS"]
-                    ?.toLongOrNull()
-                    ?.coerceIn(5_000L, 300_000L)
-                    ?: DEFAULT_AUTO_SETTLE_POLL_INTERVAL_MS,
             )
         }
     }
@@ -637,6 +632,5 @@ private const val DEFAULT_GAS_LIMIT = 700_000L
 private const val DEFAULT_RECEIPT_TIMEOUT_MS = 120_000L
 private const val DEFAULT_RECEIPT_POLL_INTERVAL_MS = 2_000L
 private const val DEFAULT_PREPARE_INTENT_TTL_SECONDS = 900
-private const val DEFAULT_AUTO_SETTLE_POLL_INTERVAL_MS = 30_000L
 private const val ZERO_HEX = "0x0"
 private const val ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
