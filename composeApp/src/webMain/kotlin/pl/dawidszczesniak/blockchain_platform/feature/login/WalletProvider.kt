@@ -43,8 +43,30 @@ data class WalletTransactionReceipt(
     val status: String? = null,
 )
 
+data class WalletSessionCandidate(
+    val walletId: String,
+    val walletAddress: String,
+)
+
+enum class WalletRuntimeEventType {
+    AccountsChanged,
+    ChainChanged,
+    Disconnect,
+}
+
+data class WalletRuntimeEvent(
+    val type: WalletRuntimeEventType,
+    val walletAddress: String? = null,
+)
+
+fun interface WalletSessionSubscription {
+    fun cancel()
+}
+
 interface WalletProvider {
     suspend fun discoverWallets(): List<WalletDescriptor>
+    suspend fun findConnectedWallet(expectedWalletAddress: String): WalletSessionCandidate?
+    fun watchWalletSession(walletId: String, listener: (WalletRuntimeEvent) -> Unit): WalletSessionSubscription?
     suspend fun requestLoginContext(walletId: String, targetNetwork: WalletNetworkTarget? = null): WalletLoginContext
     suspend fun signMessage(walletId: String, walletAddress: String, message: String): String
     suspend fun sendTransaction(walletId: String, walletAddress: String, request: WalletTransactionRequest): String
@@ -53,6 +75,7 @@ interface WalletProvider {
 
 class InjectedWalletProvider : WalletProvider {
     private val json = Json { ignoreUnknownKeys = true }
+    private var nextWalletWatcherId = 1L
 
     override suspend fun discoverWallets(): List<WalletDescriptor> {
         val payload = awaitJsAsString { discoverWalletsJson() }
@@ -70,6 +93,65 @@ class InjectedWalletProvider : WalletProvider {
                 name = name,
                 rdns = wallet["rdns"]?.jsonPrimitive?.contentOrNull?.trim()?.ifEmpty { null },
                 iconUri = wallet["icon"]?.jsonPrimitive?.contentOrNull?.trim()?.ifEmpty { null },
+            )
+        }
+    }
+
+    override suspend fun findConnectedWallet(expectedWalletAddress: String): WalletSessionCandidate? {
+        val normalizedExpectedAddress = expectedWalletAddress.trim().lowercase()
+        if (normalizedExpectedAddress.isBlank()) {
+            return null
+        }
+        return discoverWallets().firstNotNullOfOrNull { wallet ->
+            val payload = awaitJsAsString { getConnectedWalletAccountsJson(wallet.id) }
+            val accounts = runCatching {
+                json.parseToJsonElement(payload).jsonArray.mapNotNull { accountJson ->
+                    accountJson.jsonPrimitive.contentOrNull?.trim()?.takeIf { it.isNotBlank() }
+                }
+            }.getOrElse {
+                emptyList()
+            }
+            val matchingAddress = accounts.firstOrNull { account ->
+                account.lowercase() == normalizedExpectedAddress
+            }
+            matchingAddress?.let { account ->
+                WalletSessionCandidate(
+                    walletId = wallet.id,
+                    walletAddress = account,
+                )
+            }
+        }
+    }
+
+    override fun watchWalletSession(
+        walletId: String,
+        listener: (WalletRuntimeEvent) -> Unit,
+    ): WalletSessionSubscription? {
+        val watcherId = "bp-wallet-watch-${nextWalletWatcherId++}"
+        val registered = registerWalletSessionListener(
+            walletId = walletId,
+            watcherId = watcherId,
+        ) { eventType, walletAddress ->
+            val runtimeEventType = when (eventType.trim()) {
+                "accountsChanged" -> WalletRuntimeEventType.AccountsChanged
+                "chainChanged" -> WalletRuntimeEventType.ChainChanged
+                "disconnect" -> WalletRuntimeEventType.Disconnect
+                else -> null
+            } ?: return@registerWalletSessionListener
+            listener(
+                WalletRuntimeEvent(
+                    type = runtimeEventType,
+                    walletAddress = walletAddress.trim().ifBlank { null },
+                )
+            )
+        }
+        if (!registered) {
+            return null
+        }
+        return WalletSessionSubscription {
+            unregisterWalletSessionListener(
+                walletId = walletId,
+                watcherId = watcherId,
             )
         }
     }
@@ -444,6 +526,103 @@ async () => {
 """
 )
 private external fun discoverWalletsJson(): Promise<JsAny?>
+
+@JsFun(
+    """
+async (walletId) => {
+  const providerRegistry = globalThis.__bpWalletProviders || {};
+  const provider = providerRegistry[walletId];
+  if (!provider || typeof provider.request !== "function") {
+    return "[]";
+  }
+  try {
+    const accounts = await provider.request({ method: "eth_accounts" });
+    if (!Array.isArray(accounts)) {
+      return "[]";
+    }
+    return JSON.stringify(accounts.map((account) => String(account)));
+  } catch (_) {
+    return "[]";
+  }
+}
+"""
+)
+private external fun getConnectedWalletAccountsJson(walletId: String): Promise<JsAny?>
+
+@JsFun(
+    """
+(walletId, watcherId, listener) => {
+  const providerRegistry = globalThis.__bpWalletProviders || {};
+  const provider = providerRegistry[walletId];
+  if (!provider || typeof provider.on !== "function") {
+    return false;
+  }
+  const listenersRegistry = globalThis.__bpWalletSessionListeners ?? (globalThis.__bpWalletSessionListeners = {});
+  const storageKey = String(walletId) + "::" + String(watcherId);
+  if (listenersRegistry[storageKey]) {
+    return true;
+  }
+  const safeEmit = (eventType, walletAddress) => {
+    try {
+      listener(String(eventType), typeof walletAddress === "string" ? walletAddress : "");
+    } catch (_) {
+    }
+  };
+  const onAccountsChanged = (accounts) => {
+    const firstAccount = Array.isArray(accounts) && accounts.length > 0 ? String(accounts[0]) : "";
+    safeEmit("accountsChanged", firstAccount);
+  };
+  const onChainChanged = () => {
+    safeEmit("chainChanged", "");
+  };
+  const onDisconnect = () => {
+    safeEmit("disconnect", "");
+  };
+  provider.on("accountsChanged", onAccountsChanged);
+  provider.on("chainChanged", onChainChanged);
+  provider.on("disconnect", onDisconnect);
+  listenersRegistry[storageKey] = {
+    provider,
+    onAccountsChanged,
+    onChainChanged,
+    onDisconnect,
+  };
+  return true;
+}
+"""
+)
+private external fun registerWalletSessionListener(
+    walletId: String,
+    watcherId: String,
+    listener: (String, String) -> Unit,
+): Boolean
+
+@JsFun(
+    """
+(walletId, watcherId) => {
+  const listenersRegistry = globalThis.__bpWalletSessionListeners || {};
+  const storageKey = String(walletId) + "::" + String(watcherId);
+  const entry = listenersRegistry[storageKey];
+  if (!entry) {
+    return;
+  }
+  const provider = entry.provider;
+  const remove = typeof provider?.removeListener === "function"
+    ? provider.removeListener.bind(provider)
+    : (typeof provider?.off === "function" ? provider.off.bind(provider) : null);
+  if (remove) {
+    try { remove("accountsChanged", entry.onAccountsChanged); } catch (_) {}
+    try { remove("chainChanged", entry.onChainChanged); } catch (_) {}
+    try { remove("disconnect", entry.onDisconnect); } catch (_) {}
+  }
+  delete listenersRegistry[storageKey];
+}
+"""
+)
+private external fun unregisterWalletSessionListener(
+    walletId: String,
+    watcherId: String,
+)
 
 @JsFun(
     """

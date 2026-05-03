@@ -73,6 +73,8 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetCreate
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetCreatedProblemsUseCaseImpl
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetParticipationProblemsUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetParticipationProblemsUseCaseImpl
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetProblemSummaryByIdUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetProblemSummaryByIdUseCaseImpl
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetProblemSummariesUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetProblemSummariesUseCaseImpl
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.JoinProblemUseCase
@@ -149,6 +151,7 @@ internal fun serverModules(environment: Map<String, String>) = module {
     factory<ConfirmCreateProblemOnChainUseCase> { ConfirmCreateProblemOnChainUseCaseImpl(get(), get(), get(), get(), get(), get(), get()) }
     factory<ValidateCreateProblemUseCase> { ValidateCreateProblemUseCaseImpl(get()) }
     factory<GetProblemSummariesUseCase> { GetProblemSummariesUseCaseImpl(get()) }
+    factory<GetProblemSummaryByIdUseCase> { GetProblemSummaryByIdUseCaseImpl(get()) }
     factory<GetCreatedProblemsUseCase> { GetCreatedProblemsUseCaseImpl(get()) }
     factory<GetParticipationProblemsUseCase> { GetParticipationProblemsUseCaseImpl(get()) }
     factory<JoinProblemUseCase> { JoinProblemUseCaseImpl() }
@@ -162,7 +165,7 @@ internal fun serverModules(environment: Map<String, String>) = module {
     single<GetSubmissionJudgeJobUseCase> { GetSubmissionJudgeJobUseCaseImpl(get(), get(), get()) }
     single { SubmissionJudgeWorker(get(), get(), get()) }
     single { CompetitionSettlementWorker(get(), get(), get(), get(), get()) }
-    factory { ProblemController(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
+    factory { ProblemController(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
 
     single<DashboardDao> { DashboardDaoImpl(get()) }
     single<DashboardReadRepository> { DashboardReadRepositoryImpl(get(), get(), get()) }

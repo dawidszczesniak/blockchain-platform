@@ -208,9 +208,6 @@ private fun MyProblemCard(
     val required = max(1, problem.requiredParticipants)
     val registered = min(problem.registeredParticipants, required)
     val progress = registered.toFloat() / required.toFloat()
-    val canOpenDetails = problem.status == CreatedProblemStatus.Started ||
-        problem.status == CreatedProblemStatus.Waiting
-
     AppSurface(
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -262,21 +259,19 @@ private fun MyProblemCard(
             progress = { progress },
             modifier = Modifier.fillMaxWidth()
         )
-        if (canOpenDetails) {
-            Spacer(Modifier.height(12.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End
+        Spacer(Modifier.height(12.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End
+        ) {
+            Button(
+                onClick = onOpenProblem,
+                enabled = !isOpening,
             ) {
-                Button(
-                    onClick = onOpenProblem,
-                    enabled = !isOpening,
-                ) {
-                    if (isOpening) {
-                        AppInlineLoader()
-                    } else {
-                        Text(stringResource(Res.string.details_action))
-                    }
+                if (isOpening) {
+                    AppInlineLoader()
+                } else {
+                    Text(stringResource(Res.string.details_action))
                 }
             }
         }

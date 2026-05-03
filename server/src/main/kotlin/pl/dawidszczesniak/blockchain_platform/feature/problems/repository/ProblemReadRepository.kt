@@ -46,6 +46,7 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.scheduleC
 
 internal interface ProblemReadRepository {
     fun fetchProblemSummaries(): List<ProblemSummary>
+    fun fetchProblemSummaryById(problemId: Int): ProblemSummary?
     fun fetchCreatedProblemsForUser(userId: Long): List<CreatedProblem>
     fun fetchParticipationProblemsForUser(userId: Long): List<ParticipationProblem>
 }
@@ -73,25 +74,21 @@ internal class ProblemReadRepositoryImpl(
             val today = LocalDate.now()
 
             problemDao.fetchOpenProblemRows().map { row ->
-                val problemId = row[ProblemsTable.problemId]
-                val daysToJoinEnd = daysBetween(today, row[ProblemsTable.joinUntilDate]).coerceAtLeast(0)
-                ProblemSummary(
-                    id = problemId.toInt(),
-                    title = row[ProblemsTable.title],
-                    description = row[ProblemsTable.description],
-                    constraints = row[ProblemsTable.constraintsText],
-                    examples = parseProblemExamples(row[ProblemsTable.examplesJson]),
-                    paymentAsset = paymentAssetCatalog.requireByCode(row[ProblemsTable.paymentAssetCode]).toDto(),
-                    prizeAmountAtomic = row[ProblemsTable.prizeAmountAtomic],
-                    entryFeeAmountAtomic = row[ProblemsTable.entryFeeAmountAtomic],
-                    requiredParticipants = row[ProblemsTable.requiredParticipants],
-                    registeredParticipants = participantCounts[problemId] ?: 0,
-                    daysToStart = daysToJoinEnd,
-                    daysToJoinEnd = daysToJoinEnd,
-                    joinUntilLabel = row[ProblemsTable.joinUntilDate].toString(),
-                    submitUntilLabel = row[ProblemsTable.submitUntilDate].toString(),
+                row.toProblemSummary(
+                    registeredParticipants = participantCounts[row[ProblemsTable.problemId]] ?: 0,
+                    today = today,
                 )
             }
+        }
+    }
+
+    override fun fetchProblemSummaryById(problemId: Int): ProblemSummary? {
+        return transactionRunner.inTransaction {
+            val row = problemDao.fetchProblemRow(problemId.toLong()) ?: return@inTransaction null
+            row.toProblemSummary(
+                registeredParticipants = problemDao.countParticipants(problemId.toLong()),
+                today = LocalDate.now(),
+            )
         }
     }
 
@@ -697,6 +694,29 @@ internal class ProblemReadRepositoryImpl(
             return CreatedProblemStatus.Waiting
         }
         return CreatedProblemStatus.Expired
+    }
+
+    private fun org.jetbrains.exposed.sql.ResultRow.toProblemSummary(
+        registeredParticipants: Int,
+        today: LocalDate,
+    ): ProblemSummary {
+        val daysToJoinEnd = daysBetween(today, this[ProblemsTable.joinUntilDate]).coerceAtLeast(0)
+        return ProblemSummary(
+            id = this[ProblemsTable.problemId].toInt(),
+            title = this[ProblemsTable.title],
+            description = this[ProblemsTable.description],
+            constraints = this[ProblemsTable.constraintsText],
+            examples = parseProblemExamples(this[ProblemsTable.examplesJson]),
+            paymentAsset = paymentAssetCatalog.requireByCode(this[ProblemsTable.paymentAssetCode]).toDto(),
+            prizeAmountAtomic = this[ProblemsTable.prizeAmountAtomic],
+            entryFeeAmountAtomic = this[ProblemsTable.entryFeeAmountAtomic],
+            requiredParticipants = this[ProblemsTable.requiredParticipants],
+            registeredParticipants = registeredParticipants,
+            daysToStart = daysToJoinEnd,
+            daysToJoinEnd = daysToJoinEnd,
+            joinUntilLabel = this[ProblemsTable.joinUntilDate].toString(),
+            submitUntilLabel = this[ProblemsTable.submitUntilDate].toString(),
+        )
     }
 
     private fun daysBetween(fromDate: LocalDate, toDate: LocalDate): Int {

@@ -19,8 +19,7 @@ class ProblemRepositoryImpl(
     }
 
     override suspend fun fetchProblemById(problemId: Int): ProblemSummary {
-        return fetchProblems().firstOrNull { it.id == problemId }
-            ?: error("Problem with id=$problemId not found.")
+        return remoteDataSource.fetchProblemById(problemId).toDomain()
     }
 
     override suspend fun fetchCreatedProblems(): List<CreatedProblem> {

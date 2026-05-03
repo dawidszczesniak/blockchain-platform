@@ -128,7 +128,7 @@ fun appModules() = module {
     factory<GetDashboardUpdatesUseCase> { GetDashboardUpdatesUseCaseImpl(get()) }
     factory<GetPlatformConfigUseCase> { GetPlatformConfigUseCaseImpl(get()) }
     factory<LoginUseCase> { LoginUseCaseImpl(get(), get(), get(), get()) }
-    factory { AppViewModel(get()) }
+    factory { AppViewModel(get(), get(), get()) }
     factory { HomeViewModel(get(), get(), get()) }
     factory { LoginViewModel(get(), get()) }
     factory { SettingsViewModel(get(), get(), get()) }

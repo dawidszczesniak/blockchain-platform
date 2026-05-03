@@ -76,6 +76,27 @@ internal fun Route.problemRoutes() {
             )
         }
     }
+    get("/problems/{problemId}") {
+        val problemId = call.parameters["problemId"]?.toIntOrNull()
+        if (problemId == null) {
+            call.respond(
+                HttpStatusCode.BadRequest,
+                mapOf("message" to "Invalid problem identifier."),
+            )
+            return@get
+        }
+        try {
+            val problem = withContext(Dispatchers.IO) {
+                controller.getProblemSummary(problemId)
+            }
+            call.respond(problem)
+        } catch (error: IllegalArgumentException) {
+            call.respond(
+                HttpStatusCode.NotFound,
+                mapOf("message" to (error.message ?: "Problem not found.")),
+            )
+        }
+    }
     post("/problems") {
         val request = call.receive<CreateProblemRequestDto>()
         try {

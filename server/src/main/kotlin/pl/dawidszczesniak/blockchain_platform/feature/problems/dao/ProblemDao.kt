@@ -24,6 +24,7 @@ internal object ProblemRowColumns {
 
 internal interface ProblemDao {
     fun fetchOpenProblemRows(): List<ResultRow>
+    fun fetchProblemRow(problemId: Long): ResultRow?
     fun fetchOpenProblemRow(problemId: Long): ResultRow?
     fun fetchCreatedProblemRowsForUser(userId: Long): List<ResultRow>
     fun fetchParticipationProblemRowsForUser(userId: Long): List<ResultRow>
@@ -92,11 +93,15 @@ internal class ProblemDaoImpl : ProblemDao {
             .toList()
     }
 
-    override fun fetchOpenProblemRow(problemId: Long): ResultRow? {
+    override fun fetchProblemRow(problemId: Long): ResultRow? {
         return ProblemsTable
             .selectAll()
             .where { ProblemsTable.problemId eq problemId }
             .singleOrNull()
+    }
+
+    override fun fetchOpenProblemRow(problemId: Long): ResultRow? {
+        return fetchProblemRow(problemId)
             ?.takeIf { row ->
                 row[ProblemsTable.problemStatus] == ProblemLifecycleStatus.Open.dbValue
             }

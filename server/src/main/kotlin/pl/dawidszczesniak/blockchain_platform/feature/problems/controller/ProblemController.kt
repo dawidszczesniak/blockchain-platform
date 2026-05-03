@@ -21,6 +21,7 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.EnqueuePr
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetSubmissionJudgeJobUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetCreatedProblemsUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetParticipationProblemsUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetProblemSummaryByIdUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetProblemSummariesUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.JoinProblemUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.RunProblemCodeUseCase
@@ -32,6 +33,7 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.ValidateC
 
 internal class ProblemController(
     private val getProblemSummariesUseCase: GetProblemSummariesUseCase,
+    private val getProblemSummaryByIdUseCase: GetProblemSummaryByIdUseCase,
     private val getCreatedProblemsUseCase: GetCreatedProblemsUseCase,
     private val getParticipationProblemsUseCase: GetParticipationProblemsUseCase,
     private val createProblemUseCase: CreateProblemUseCase,
@@ -47,6 +49,10 @@ internal class ProblemController(
 ) {
     fun getProblemSummaries(): List<ProblemSummaryDto> {
         return getProblemSummariesUseCase().map { it.toDto() }
+    }
+
+    fun getProblemSummary(problemId: Int): ProblemSummaryDto {
+        return getProblemSummaryByIdUseCase(problemId).toDto()
     }
 
     fun getCreatedProblems(userId: Long): List<CreatedProblemDto> {

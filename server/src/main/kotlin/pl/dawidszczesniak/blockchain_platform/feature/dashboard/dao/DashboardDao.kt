@@ -5,6 +5,7 @@ import org.jetbrains.exposed.sql.ResultRow
 import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.selectAll
 import pl.dawidszczesniak.blockchain_platform.db.DashboardMetricsRefresher
+import pl.dawidszczesniak.blockchain_platform.db.ProblemLifecycleStatus
 import pl.dawidszczesniak.blockchain_platform.db.tables.DashboardDailyMetricsTable
 import pl.dawidszczesniak.blockchain_platform.db.tables.ProblemsTable
 
@@ -38,6 +39,7 @@ internal class DashboardDaoImpl(
 
         return ProblemsTable
             .selectAll()
+            .where { ProblemsTable.problemStatus eq ProblemLifecycleStatus.Open.dbValue }
             .orderBy(
                 ProblemsTable.createdAt to SortOrder.DESC,
                 ProblemsTable.problemId to SortOrder.DESC,

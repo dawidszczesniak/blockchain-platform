@@ -35,6 +35,7 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.CreateProblem
 
 interface ProblemRemoteDataSource {
     suspend fun fetchProblems(): List<ProblemSummaryDto>
+    suspend fun fetchProblemById(problemId: Int): ProblemSummaryDto
     suspend fun fetchCreatedProblems(): List<CreatedProblemDto>
     suspend fun fetchParticipationProblems(): List<ParticipationProblemDto>
     suspend fun prepareCreateProblemOnChain(request: CreateProblemRequestDto): PrepareCreateProblemResponseDto
@@ -84,6 +85,12 @@ class ProblemRemoteDataSourceImpl(
                 submitUntilLabel = obj.requiredString("submitUntilLabel"),
             )
         }
+    }
+
+    override suspend fun fetchProblemById(problemId: Int): ProblemSummaryDto {
+        val payload = httpTextClient.get(endpoint(apiBaseUrl, "/problems/$problemId"))
+        val json = Json { ignoreUnknownKeys = true }
+        return json.decodeFromString(ProblemSummaryDto.serializer(), payload)
     }
 
     override suspend fun fetchCreatedProblems(): List<CreatedProblemDto> {
