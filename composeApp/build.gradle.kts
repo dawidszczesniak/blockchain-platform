@@ -102,6 +102,32 @@ val defaultApiBaseUrlProvider = appEnvProvider.map { env ->
     }
 }
 
+val freeLocalFrontendPort by tasks.registering(Exec::class) {
+    description = "Kills the process listening on port 8081 before a local frontend run."
+
+    commandLine(
+        "zsh",
+        "-ic",
+        """
+        pids=$(lsof -tiTCP:$frontendPort -sTCP:LISTEN)
+        if [ -n "${'$'}pids" ]; then
+          kill ${'$'}pids
+        fi
+        """.trimIndent(),
+    )
+}
+
+tasks.named("wasmJsBrowserDevelopmentRun") {
+    mustRunAfter(freeLocalFrontendPort)
+}
+
+tasks.register("runLocalForce8081") {
+    group = "application"
+    description = "Frees port 8081 and starts the WasmJS frontend dev server."
+
+    dependsOn(freeLocalFrontendPort, "wasmJsBrowserDevelopmentRun")
+}
+
 val generatedConfigDir = layout.buildDirectory.dir("generated/appConfig")
 val generateAppConfig by tasks.registering(GenerateAppConfig::class) {
     appEnv.set(appEnvProvider)

@@ -120,7 +120,7 @@ docker compose --env-file .env.local up -d postgres redis sandbox-node-1 sandbox
 4. Start frontend:
 
 ```bash
-./gradlew :composeApp:jsBrowserDevelopmentRun
+./gradlew :composeApp:runLocalForce8081
 ```
 
 Frontend runs on `http://localhost:8081`, backend on `http://localhost:8080`.

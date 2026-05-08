@@ -51,7 +51,6 @@ dependencies {
 }
 
 val freeLocalBackendPort by tasks.registering(Exec::class) {
-    group = "application"
     description = "Kills the process listening on port 8080 before a local backend run."
 
     commandLine(
@@ -64,10 +63,6 @@ val freeLocalBackendPort by tasks.registering(Exec::class) {
         fi
         """.trimIndent(),
     )
-}
-
-tasks.named<JavaExec>("run") {
-    dependsOn(freeLocalBackendPort)
 }
 
 tasks.register<JavaExec>("runLocalForce8080") {
