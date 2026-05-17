@@ -1,6 +1,5 @@
 package pl.dawidszczesniak.blockchain_platform.feature.home
 
-import kotlin.math.roundToInt
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -18,11 +17,9 @@ data class HomeState(
     val showHeroSection: Boolean = true,
     val showStatsSection: Boolean = true,
     val showLatestChallengesSection: Boolean = true,
-    val showJoinBuildersSection: Boolean = true,
     val activeChallenges: Int? = null,
+    val completedChallenges: Int? = null,
     val prizePoolLabel: String? = null,
-    val submissionsToday: Int? = null,
-    val submissionsDayOverDayPercent: Int? = null,
     val updates: List<HomeUpdateItem> = emptyList(),
     val isLoading: Boolean = true,
     val errorMessage: String? = null,
@@ -75,21 +72,15 @@ class HomeViewModel(
                 val updates = getDashboardUpdatesUseCase(limit = updatesLimit)
                 val orderedMetrics = metrics.sortedByDescending { it.metricDate }
                 val latestMetric = orderedMetrics.firstOrNull()
-                val previousMetric = orderedMetrics.getOrNull(1)
 
                 HomeState(
                     showFullDashboardContent = dashboardConfig.showFullDashboardContent,
                     showHeroSection = dashboardConfig.showHeroSection,
                     showStatsSection = dashboardConfig.showStatsSection,
                     showLatestChallengesSection = dashboardConfig.showLatestChallengesSection,
-                    showJoinBuildersSection = dashboardConfig.showJoinBuildersSection,
                     activeChallenges = latestMetric?.activeChallenges,
+                    completedChallenges = latestMetric?.completedChallenges,
                     prizePoolLabel = latestMetric?.prizePoolLabel,
-                    submissionsToday = latestMetric?.submissionsCount,
-                    submissionsDayOverDayPercent = dayOverDayPercent(
-                        currentValue = latestMetric?.submissionsCount,
-                        previousValue = previousMetric?.submissionsCount,
-                    ),
                     updates = updates.map { update ->
                         HomeUpdateItem(
                             id = update.id,
@@ -119,16 +110,7 @@ class HomeViewModel(
             showHeroSection = dashboardConfig.showHeroSection,
             showStatsSection = dashboardConfig.showStatsSection,
             showLatestChallengesSection = dashboardConfig.showLatestChallengesSection,
-            showJoinBuildersSection = dashboardConfig.showJoinBuildersSection,
             isLoading = true,
         )
     }
-}
-
-private fun dayOverDayPercent(currentValue: Int?, previousValue: Int?): Int? {
-    val today = currentValue ?: return null
-    val previous = previousValue ?: return null
-    if (previous <= 0) return null
-    val ratio = (today - previous).toDouble() / previous.toDouble()
-    return (ratio * 100.0).roundToInt()
 }

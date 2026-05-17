@@ -5,7 +5,7 @@
     <string name="nav_create_problem">Create problem</string>
     <string name="nav_my_problems">Created problems</string>
     <string name="nav_my_participation">My participation</string>
-    <string name="nav_home">Dashboard</string>
+    <string name="nav_home">Home</string>
     <string name="theme_dark">Dark</string>
     <string name="theme_light">Light</string>
     <string name="profile">Profile</string>
@@ -77,11 +77,11 @@
     <string name="create_problem_submit_failed">Failed to create problem.</string>
 
     <string name="login_title">Log in</string>
-    <string name="login_subtitle">Sign in with your wallet to access protected actions.</string>
-    <string name="login_required_network">Required network: %1$s</string>
+    <string name="login_subtitle">To be able to use the platform.</string>
     <string name="login_connect_wallet">Connect wallet</string>
     <string name="login_wallet_detecting">Detecting available wallets…</string>
     <string name="login_wallet_not_found">No compatible wallet detected in this browser.</string>
+    <string name="login_wallet_install_hint">Install a compatible wallet such as MetaMask, then refresh the page.</string>
 
     <string name="settings_title">Settings</string>
     <string name="settings_wallet_section">Wallet</string>
@@ -144,10 +144,8 @@
     <string name="home_stat_nodes_title">Prize pool</string>
     <string name="home_stat_nodes_value">148,200</string>
     <string name="home_stat_nodes_note">Across all active contests</string>
-    <string name="home_stat_block_title">Submissions today</string>
-    <string name="home_stat_block_value">312</string>
-    <string name="home_stat_block_note">+9% vs yesterday</string>
-
+    <string name="home_stat_completed_title">Completed challenges</string>
+    <string name="home_stat_completed_note">Completed with prize payout</string>
     <string name="home_updates_title">Latest challenges</string>
     <string name="home_update_title_1">New challenge: ZK Proof Aggregation</string>
     <string name="home_update_body_1">Prize pool 25,000 • 20 participants • 14 days left.</string>
@@ -156,9 +154,6 @@
     <string name="home_update_title_3">Payouts batch finalized</string>
     <string name="home_update_body_3">11 winners paid in the last reward cycle.</string>
 
-    <string name="home_community_title">Join the builders</string>
-    <string name="home_community_body">Discuss challenge ideas, share test suites, and co‑create the platform.</string>
-    <string name="home_community_cta">Builder community</string>
     <string name="my_problem_participants">Participants: %1$d / %2$d</string>
     <string name="my_problem_started_on">Started: %1$s</string>
     <string name="my_problem_submitted">Submissions: %1$d</string>

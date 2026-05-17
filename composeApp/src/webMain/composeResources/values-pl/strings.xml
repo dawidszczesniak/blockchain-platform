@@ -5,7 +5,7 @@
     <string name="nav_create_problem">Utwórz problem</string>
     <string name="nav_my_problems">Utworzone problemy</string>
     <string name="nav_my_participation">Moje uczestnictwo</string>
-    <string name="nav_home">Pulpit</string>
+    <string name="nav_home">Strona główna</string>
     <string name="theme_dark">Ciemny</string>
     <string name="theme_light">Jasny</string>
     <string name="profile">Profil</string>
@@ -77,11 +77,11 @@
     <string name="create_problem_submit_failed">Nie udało się utworzyć problemu.</string>
 
     <string name="login_title">Zaloguj się</string>
-    <string name="login_subtitle">Zaloguj się portfelem, aby używać chronionych akcji.</string>
-    <string name="login_required_network">Wymagana sieć: %1$s</string>
+    <string name="login_subtitle">Aby mieć możliwość korzystania z platformy.</string>
     <string name="login_connect_wallet">Połącz portfel</string>
     <string name="login_wallet_detecting">Wykrywanie dostępnych portfeli…</string>
     <string name="login_wallet_not_found">Nie wykryto kompatybilnego portfela w tej przeglądarce.</string>
+    <string name="login_wallet_install_hint">Zainstaluj kompatybilny portfel, np. MetaMask, a następnie odśwież stronę.</string>
 
     <string name="settings_title">Ustawienia</string>
     <string name="settings_wallet_section">Portfel</string>
@@ -144,10 +144,8 @@
     <string name="home_stat_nodes_title">Pula nagród</string>
     <string name="home_stat_nodes_value">148,200</string>
     <string name="home_stat_nodes_note">Łącznie we wszystkich wyzwaniach</string>
-    <string name="home_stat_block_title">Zgłoszenia dziś</string>
-    <string name="home_stat_block_value">312</string>
-    <string name="home_stat_block_note">+9% w stosunku do wczoraj</string>
-
+    <string name="home_stat_completed_title">Ukończone wyzwania</string>
+    <string name="home_stat_completed_note">Ukończone z wypłaceniem nagrody</string>
     <string name="home_updates_title">Ostatnio dodane wyzwania</string>
     <string name="home_update_title_1">Nowe wyzwanie: ZK Proof Aggregation</string>
     <string name="home_update_body_1">Pula nagród 25,000 • 20 uczestników • 14 dni do końca.</string>
@@ -156,9 +154,6 @@
     <string name="home_update_title_3">Zakończono wypłaty</string>
     <string name="home_update_body_3">11 zwycięzców opłaconych w ostatnim cyklu.</string>
 
-    <string name="home_community_title">Dołącz do twórców</string>
-    <string name="home_community_body">Dyskutuj pomysły na wyzwania, dziel się testami i współtwórz platformę.</string>
-    <string name="home_community_cta">Społeczność builderów</string>
     <string name="my_problem_participants">Uczestnicy: %1$d / %2$d</string>
     <string name="my_problem_started_on">Start: %1$s</string>
     <string name="my_problem_submitted">Zgłoszenia: %1$d</string>

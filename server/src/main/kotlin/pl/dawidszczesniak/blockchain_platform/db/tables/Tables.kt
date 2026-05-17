@@ -181,8 +181,8 @@ internal object ProblemWinnersTable : Table("problem_winners") {
 internal object DashboardDailyMetricsTable : Table("dashboard_daily_metrics") {
     val metricDate = date("metric_date")
     val activeChallenges = integer("active_challenges")
+    val completedChallenges = integer("completed_challenges")
     val prizePoolLabel = text("prize_pool_amount")
-    val submissionsCount = integer("submissions_count")
 
     override val primaryKey = PrimaryKey(metricDate)
 }

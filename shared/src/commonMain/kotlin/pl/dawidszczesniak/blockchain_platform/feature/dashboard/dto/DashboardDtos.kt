@@ -6,8 +6,8 @@ import kotlinx.serialization.Serializable
 data class DashboardMetricDto(
     val metricDate: String,
     val activeChallenges: Int,
+    val completedChallenges: Int,
     val prizePoolLabel: String,
-    val submissionsCount: Int,
 )
 
 @Serializable

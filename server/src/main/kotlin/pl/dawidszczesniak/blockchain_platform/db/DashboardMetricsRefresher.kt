@@ -7,7 +7,6 @@ import org.jetbrains.exposed.sql.ResultRow
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.update
 import pl.dawidszczesniak.blockchain_platform.db.tables.DashboardDailyMetricsTable
-import pl.dawidszczesniak.blockchain_platform.db.tables.ProblemSubmissionsTable
 import pl.dawidszczesniak.blockchain_platform.db.tables.ProblemsTable
 import pl.dawidszczesniak.blockchain_platform.feature.platform.PaymentAssetCatalog
 import pl.dawidszczesniak.blockchain_platform.feature.platform.formatAtomicAmountDisplay
@@ -29,14 +28,14 @@ internal class DashboardMetricsRefresher(
             DashboardDailyMetricsTable.insert {
                 it[metricDate] = snapshot.metricDate
                 it[activeChallenges] = snapshot.activeChallenges
+                it[completedChallenges] = snapshot.completedChallenges
                 it[prizePoolLabel] = snapshot.prizePoolLabel
-                it[submissionsCount] = snapshot.submissionsCount
             }
         } else {
             DashboardDailyMetricsTable.update({ DashboardDailyMetricsTable.metricDate eq today }) {
                 it[activeChallenges] = snapshot.activeChallenges
+                it[completedChallenges] = snapshot.completedChallenges
                 it[prizePoolLabel] = snapshot.prizePoolLabel
-                it[submissionsCount] = snapshot.submissionsCount
             }
         }
     }
@@ -47,19 +46,18 @@ internal class DashboardMetricsRefresher(
             .where { ProblemsTable.problemStatus eq ProblemLifecycleStatus.Open.dbValue }
             .toList()
         val activeChallenges = openProblemRows.size
-        val prizePoolLabel = buildPrizePoolLabel(openProblemRows)
-
-        val submissionsCount = ProblemSubmissionsTable
+        val completedChallenges = ProblemsTable
             .selectAll()
-            .count { row ->
-                row[ProblemSubmissionsTable.submittedAt].toLocalDate() == metricDate
-            }
+            .where { ProblemsTable.onchainSettlementStatus eq CompetitionSettlementStatus.Settled.dbValue }
+            .count()
+            .toInt()
+        val prizePoolLabel = buildPrizePoolLabel(openProblemRows)
 
         return DashboardDailyMetricSnapshot(
             metricDate = metricDate,
             activeChallenges = activeChallenges,
+            completedChallenges = completedChallenges,
             prizePoolLabel = prizePoolLabel,
-            submissionsCount = submissionsCount,
         )
     }
 
@@ -84,6 +82,6 @@ internal class DashboardMetricsRefresher(
 private data class DashboardDailyMetricSnapshot(
     val metricDate: LocalDate,
     val activeChallenges: Int,
+    val completedChallenges: Int,
     val prizePoolLabel: String,
-    val submissionsCount: Int,
 )

@@ -7,5 +7,4 @@ class DashboardConfig(
     val showHeroSection: Boolean = true,
     val showStatsSection: Boolean = true,
     val showLatestChallengesSection: Boolean = true,
-    val showJoinBuildersSection: Boolean = true,
 )

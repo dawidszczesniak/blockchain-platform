@@ -30,9 +30,9 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import blockchain_platform.composeapp.generated.resources.Res
 import blockchain_platform.composeapp.generated.resources.login_connect_wallet
-import blockchain_platform.composeapp.generated.resources.login_required_network
 import blockchain_platform.composeapp.generated.resources.login_subtitle
 import blockchain_platform.composeapp.generated.resources.login_title
+import blockchain_platform.composeapp.generated.resources.login_wallet_install_hint
 import blockchain_platform.composeapp.generated.resources.login_wallet_not_found
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
@@ -73,28 +73,17 @@ fun LoginScreen(onLogin: () -> Unit) {
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                state.requiredNetworkLabel?.let { networkLabel ->
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        text = stringResource(Res.string.login_required_network, networkLabel),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-
                 Spacer(Modifier.height(16.dp))
                 if (state.isLoadingWallets || state.isConnectingWallet) {
                     AppInlineLoader()
                 } else {
                     Box {
                         Button(
-                            enabled = !state.isConnectingWallet && !state.isLoadingWallets,
+                            enabled = !state.isConnectingWallet &&
+                                !state.isLoadingWallets &&
+                                state.wallets.isNotEmpty(),
                             onClick = {
-                                if (state.wallets.isEmpty()) {
-                                    viewModel.refreshWallets()
-                                } else {
-                                    walletMenuExpanded = true
-                                }
+                                walletMenuExpanded = true
                             }
                         ) {
                             Text(stringResource(Res.string.login_connect_wallet))
@@ -127,6 +116,12 @@ fun LoginScreen(onLogin: () -> Unit) {
                     Spacer(Modifier.height(10.dp))
                     Text(
                         text = stringResource(Res.string.login_wallet_not_found),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = stringResource(Res.string.login_wallet_install_hint),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

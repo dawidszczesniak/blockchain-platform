@@ -27,8 +27,8 @@ internal class DashboardReadRepositoryImpl(
                 DashboardMetric(
                     metricDate = row[DashboardDailyMetricsTable.metricDate].toString(),
                     activeChallenges = row[DashboardDailyMetricsTable.activeChallenges],
+                    completedChallenges = row[DashboardDailyMetricsTable.completedChallenges],
                     prizePoolLabel = row[DashboardDailyMetricsTable.prizePoolLabel],
-                    submissionsCount = row[DashboardDailyMetricsTable.submissionsCount],
                 )
             }
         }

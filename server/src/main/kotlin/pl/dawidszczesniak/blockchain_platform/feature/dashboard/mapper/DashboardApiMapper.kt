@@ -9,8 +9,8 @@ internal fun DashboardMetric.toDto(): DashboardMetricDto {
     return DashboardMetricDto(
         metricDate = metricDate,
         activeChallenges = activeChallenges,
+        completedChallenges = completedChallenges,
         prizePoolLabel = prizePoolLabel,
-        submissionsCount = submissionsCount,
     )
 }
 

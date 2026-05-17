@@ -1,15 +1,12 @@
 package pl.dawidszczesniak.blockchain_platform.feature.home
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -39,20 +36,19 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import blockchain_platform.composeapp.generated.resources.Res
-import blockchain_platform.composeapp.generated.resources.home_community_body
-import blockchain_platform.composeapp.generated.resources.home_community_cta
-import blockchain_platform.composeapp.generated.resources.home_community_title
 import blockchain_platform.composeapp.generated.resources.home_hero_description
 import blockchain_platform.composeapp.generated.resources.home_hero_primary_cta
 import blockchain_platform.composeapp.generated.resources.home_hero_secondary_cta
 import blockchain_platform.composeapp.generated.resources.home_hero_title_emphasis
 import blockchain_platform.composeapp.generated.resources.home_hero_title_lead
-import blockchain_platform.composeapp.generated.resources.home_stat_block_title
+import blockchain_platform.composeapp.generated.resources.home_stat_completed_note
+import blockchain_platform.composeapp.generated.resources.home_stat_completed_title
 import blockchain_platform.composeapp.generated.resources.home_stat_nodes_note
 import blockchain_platform.composeapp.generated.resources.home_stat_nodes_title
 import blockchain_platform.composeapp.generated.resources.home_stat_status_note
 import blockchain_platform.composeapp.generated.resources.home_stat_status_title
 import blockchain_platform.composeapp.generated.resources.home_updates_title
+import blockchain_platform.composeapp.generated.resources.nav_home
 import org.jetbrains.compose.resources.stringResource
 import pl.dawidszczesniak.blockchain_platform.di.LocalKoin
 import pl.dawidszczesniak.blockchain_platform.ui.AppInlineLoader
@@ -73,7 +69,7 @@ fun HomeScreen(onNavigateToProblems: () -> Unit) {
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = "dashboard",
+                text = stringResource(Res.string.nav_home),
                 style = MaterialTheme.typography.headlineMedium
             )
         }
@@ -92,11 +88,11 @@ fun HomeScreen(onNavigateToProblems: () -> Unit) {
         if (state.showStatsSection) {
             StatsSection(state = state)
         }
-        if (state.showLatestChallengesSection || state.showJoinBuildersSection) {
-            UpdatesSection(
+        if (state.showLatestChallengesSection) {
+            UpdatesList(
+                modifier = Modifier.fillMaxWidth(),
+                showHeader = true,
                 state = state,
-                showLatestChallenges = state.showLatestChallengesSection,
-                showJoinBuilders = state.showJoinBuildersSection,
             )
         }
     }
@@ -176,18 +172,13 @@ private fun StatsSection(state: HomeState) {
         isLoading = state.isLoading,
         hasError = hasError,
     )
-    val submissionsTodayValue = metricValue(
-        value = state.submissionsToday,
+    val completedChallengesValue = metricValue(
+        value = state.completedChallenges,
         isLoading = state.isLoading,
         hasError = hasError,
     )
     val prizePoolValue = prizePoolLabel(
         label = state.prizePoolLabel,
-        isLoading = state.isLoading,
-        hasError = hasError,
-    )
-    val submissionsTrend = submissionsTrendLabel(
-        submissionsDayOverDayPercent = state.submissionsDayOverDayPercent,
         isLoading = state.isLoading,
         hasError = hasError,
     )
@@ -211,10 +202,10 @@ private fun StatsSection(state: HomeState) {
                     isLoading = state.isLoading,
                 )
                 StatCard(
-                    title = stringResource(Res.string.home_stat_block_title),
-                    value = submissionsTodayValue,
-                    note = submissionsTrend,
-                    badge = "#",
+                    title = stringResource(Res.string.home_stat_completed_title),
+                    value = completedChallengesValue,
+                    note = stringResource(Res.string.home_stat_completed_note),
+                    badge = "C",
                     isLoading = state.isLoading,
                 )
             }
@@ -238,10 +229,10 @@ private fun StatsSection(state: HomeState) {
                 )
                 StatCard(
                     modifier = Modifier.weight(1f),
-                    title = stringResource(Res.string.home_stat_block_title),
-                    value = submissionsTodayValue,
-                    note = submissionsTrend,
-                    badge = "#",
+                    title = stringResource(Res.string.home_stat_completed_title),
+                    value = completedChallengesValue,
+                    note = stringResource(Res.string.home_stat_completed_note),
+                    badge = "C",
                     isLoading = state.isLoading,
                 )
             }
@@ -284,81 +275,6 @@ private fun StatCard(
                     Text(value, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                     Text(note, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-            }
-        }
-    }
-}
-
-@Composable
-private fun UpdatesSection(
-    state: HomeState,
-    showLatestChallenges: Boolean,
-    showJoinBuilders: Boolean,
-) {
-    if (!showLatestChallenges && !showJoinBuilders) {
-        return
-    }
-
-    BoxWithConstraints {
-        val stacked = maxWidth < 900.dp
-        if (stacked) {
-            Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
-                if (showLatestChallenges) {
-                    UpdatesList(state = state)
-                }
-                if (showJoinBuilders) {
-                    CommunityCard()
-                }
-            }
-        } else {
-            if (showLatestChallenges && showJoinBuilders) {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(
-                        text = stringResource(Res.string.home_updates_title),
-                        style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Box(modifier = Modifier.fillMaxWidth()) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(IntrinsicSize.Min),
-                            horizontalArrangement = Arrangement.spacedBy(18.dp),
-                            verticalAlignment = Alignment.Top
-                        ) {
-                            Box(
-                                modifier = Modifier.weight(1.2f),
-                                contentAlignment = Alignment.TopStart
-                            ) {
-                                UpdatesList(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    showHeader = false,
-                                    state = state,
-                                )
-                            }
-                            Box(
-                                modifier = Modifier
-                                    .weight(0.8f)
-                                    .fillMaxHeight(),
-                                contentAlignment = Alignment.TopStart
-                            ) {
-                                CommunityCard(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .fillMaxHeight()
-                                )
-                            }
-                        }
-                    }
-                }
-            } else if (showLatestChallenges) {
-                UpdatesList(
-                    modifier = Modifier.fillMaxWidth(),
-                    showHeader = true,
-                    state = state,
-                )
-            } else if (showJoinBuilders) {
-                CommunityCard(modifier = Modifier.fillMaxWidth())
             }
         }
     }
@@ -455,78 +371,5 @@ private fun prizePoolLabel(
         isLoading -> "..."
         hasError -> "N/A"
         else -> "0"
-    }
-}
-
-private fun submissionsTrendLabel(
-    submissionsDayOverDayPercent: Int?,
-    isLoading: Boolean,
-    hasError: Boolean,
-): String {
-    return when {
-        submissionsDayOverDayPercent != null && submissionsDayOverDayPercent >= 0 ->
-            "+$submissionsDayOverDayPercent% vs previous day"
-
-        submissionsDayOverDayPercent != null ->
-            "$submissionsDayOverDayPercent% vs previous day"
-
-        isLoading -> "Loading trend..."
-        hasError -> "Trend unavailable."
-        else -> "No previous-day data."
-    }
-}
-
-
-@Composable
-private fun CommunityCard(modifier: Modifier = Modifier) {
-    AppSurface(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(28.dp)
-    ) {
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(80.dp)
-                    .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(40.dp))
-                    .border(3.dp, MaterialTheme.colorScheme.onSurface, RoundedCornerShape(40.dp)),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "DC",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            }
-            Spacer(Modifier.height(12.dp))
-            Text(
-                text = stringResource(Res.string.home_community_title),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(Modifier.height(6.dp))
-            Text(
-                text = stringResource(Res.string.home_community_body),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(Modifier.height(16.dp))
-            OutlinedButton(
-                onClick = { },
-                shape = RoundedCornerShape(999.dp),
-                colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = MaterialTheme.colorScheme.onSurface
-                ),
-                border = androidx.compose.foundation.BorderStroke(
-                    1.dp,
-                    MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)
-                )
-            ) {
-                Text(stringResource(Res.string.home_community_cta))
-            }
-        }
     }
 }

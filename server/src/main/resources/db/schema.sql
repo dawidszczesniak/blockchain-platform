@@ -189,8 +189,8 @@ CREATE TABLE IF NOT EXISTS problem_winners (
 CREATE TABLE IF NOT EXISTS dashboard_daily_metrics (
     metric_date DATE PRIMARY KEY,
     active_challenges INTEGER NOT NULL CHECK (active_challenges >= 0),
-    prize_pool_amount TEXT NOT NULL DEFAULT 'Mixed assets',
-    submissions_count INTEGER NOT NULL CHECK (submissions_count >= 0)
+    completed_challenges INTEGER NOT NULL DEFAULT 0 CHECK (completed_challenges >= 0),
+    prize_pool_amount TEXT NOT NULL DEFAULT 'Mixed assets'
 );
 
 ALTER TABLE problems
@@ -204,6 +204,9 @@ ALTER TABLE problem_winners
 
 ALTER TABLE dashboard_daily_metrics
     DROP CONSTRAINT IF EXISTS dashboard_daily_metrics_prize_pool_amount_check;
+
+ALTER TABLE dashboard_daily_metrics
+    ADD COLUMN IF NOT EXISTS completed_challenges INTEGER NOT NULL DEFAULT 0;
 
 ALTER TABLE problems
     ALTER COLUMN prize_amount TYPE TEXT USING prize_amount::TEXT;
@@ -743,6 +746,9 @@ END $$;
 
 ALTER TABLE dashboard_daily_metrics
     DROP COLUMN IF EXISTS created_at;
+
+ALTER TABLE dashboard_daily_metrics
+    DROP COLUMN IF EXISTS submissions_count;
 
 DROP TABLE IF EXISTS website_updates;
 
