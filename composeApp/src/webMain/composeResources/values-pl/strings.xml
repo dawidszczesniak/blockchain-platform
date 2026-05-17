@@ -21,15 +21,9 @@
     <string name="create_problem_entry_fee_label">Koszt wzięcia udziału w konkursie</string>
     <string name="create_problem_title_label">Tytuł problemu</string>
     <string name="create_problem_description_label">Opis problemu</string>
-    <string name="create_problem_constraints_label">Constraints (opcjonalnie)</string>
+    <string name="create_problem_description_template">Treść zadania\n- Opisz, co należy zaimplementować i jaki wynik ma zwrócić rozwiązanie.\n\nWejście\n- Opisz format wejścia i znaczenie wszystkich zmiennych.\n\nWyjście\n- Opisz oczekiwany format wyjścia.\n\nOgraniczenia i założenia\n- Podaj limity danych wejściowych oraz ważne założenia.\n\nDodatkowe uwagi\n- Opcjonalne informacje pomocne dla uczestnika.</string>
+    <string name="create_problem_competition_setup_title">Parametry konkursu</string>
     <string name="create_problem_reference_solution_label">Kod referencyjnego rozwiązania (Kotlin)</string>
-    <string name="create_problem_examples_title">Przykłady (%1$d/%2$d)</string>
-    <string name="create_problem_add_example">Dodaj przykład</string>
-    <string name="create_problem_example_label">Przykład %1$d</string>
-    <string name="create_problem_example_remove">Usuń</string>
-    <string name="create_problem_example_input_label">Input</string>
-    <string name="create_problem_example_output_label">Output</string>
-    <string name="create_problem_example_explanation_label">Explanation</string>
     <string name="create_problem_test_input_label">Input testu</string>
     <string name="create_problem_test_output_label">Oczekiwany output (opcjonalnie)</string>
     <string name="create_problem_test_validator_label">Kod walidatora (opcjonalnie)</string>
@@ -190,7 +184,7 @@
     <string name="problem_details_back">Powrót do listy</string>
     <string name="problem_details_title">Widok problemu</string>
     <string name="problem_details_statement">Treść zadania</string>
-    <string name="problem_details_constraints_title">Constraints</string>
+    <string name="problem_details_constraints_title">Ograniczenia</string>
     <string name="problem_details_examples_title">Przykłady</string>
     <string name="problem_details_example_label">Przykład %1$d</string>
     <string name="problem_details_example_input">Input: %1$s</string>

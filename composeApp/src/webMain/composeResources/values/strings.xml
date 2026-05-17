@@ -21,15 +21,9 @@
     <string name="create_problem_entry_fee_label">Cost of joining the contest</string>
     <string name="create_problem_title_label">Problem title</string>
     <string name="create_problem_description_label">Problem description</string>
-    <string name="create_problem_constraints_label">Constraints (optional)</string>
+    <string name="create_problem_description_template">Problem statement\n- Describe what needs to be implemented and what result the solution should return.\n\nInput\n- Describe the input format and the meaning of all variables.\n\nOutput\n- Describe the expected output format.\n\nConstraints and assumptions\n- Provide the input limits and any important assumptions.\n\nAdditional notes\n- Optional information that may help participants.</string>
+    <string name="create_problem_competition_setup_title">Competition setup</string>
     <string name="create_problem_reference_solution_label">Reference solution code (Kotlin)</string>
-    <string name="create_problem_examples_title">Examples (%1$d/%2$d)</string>
-    <string name="create_problem_add_example">Add example</string>
-    <string name="create_problem_example_label">Example %1$d</string>
-    <string name="create_problem_example_remove">Remove</string>
-    <string name="create_problem_example_input_label">Input</string>
-    <string name="create_problem_example_output_label">Output</string>
-    <string name="create_problem_example_explanation_label">Explanation</string>
     <string name="create_problem_test_input_label">Test input</string>
     <string name="create_problem_test_output_label">Expected output (optional)</string>
     <string name="create_problem_test_validator_label">Validator code (optional)</string>

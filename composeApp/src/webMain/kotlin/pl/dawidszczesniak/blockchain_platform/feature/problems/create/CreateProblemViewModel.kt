@@ -100,7 +100,6 @@ data class CreateProblemState(
     val entryFee: String = "",
     val title: String = "",
     val description: String = "",
-    val constraints: String = "",
     val referenceSolutionCode: String = "",
     val joinUntilDate: LocalDate? = null,
     val submitUntilDate: LocalDate? = null,
@@ -183,7 +182,6 @@ sealed interface CreateProblemIntent {
     data class EntryFeeChanged(val value: String) : CreateProblemIntent
     data class TitleChanged(val value: String) : CreateProblemIntent
     data class DescriptionChanged(val value: String) : CreateProblemIntent
-    data class ConstraintsChanged(val value: String) : CreateProblemIntent
     data class ReferenceSolutionChanged(val value: String) : CreateProblemIntent
     data class JoinUntilChanged(val value: LocalDate) : CreateProblemIntent
     data class SubmitUntilChanged(val value: LocalDate) : CreateProblemIntent
@@ -251,12 +249,6 @@ class CreateProblemViewModel(
             is CreateProblemIntent.DescriptionChanged -> {
                 _state.update { current ->
                     current.copy(description = intent.value).clearSubmissionFeedback()
-                }
-            }
-
-            is CreateProblemIntent.ConstraintsChanged -> {
-                _state.update { current ->
-                    current.copy(constraints = intent.value).clearSubmissionFeedback()
                 }
             }
 
@@ -473,7 +465,6 @@ class CreateProblemViewModel(
                     entryFee = "",
                     title = "",
                     description = "",
-                    constraints = "",
                     referenceSolutionCode = "",
                     joinUntilDate = null,
                     submitUntilDate = null,
@@ -779,7 +770,7 @@ private fun CreateProblemState.toCreateProblemRequest(): CreateProblemRequestDto
     return CreateProblemRequestDto(
         title = title.trim(),
         description = description.trim(),
-        constraints = constraints.trim(),
+        constraints = "",
         examples = emptyList(),
         referenceSolutionCode = referenceSolutionCode,
         referenceSolutionLanguage = "kotlin",
