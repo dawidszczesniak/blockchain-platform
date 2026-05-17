@@ -87,11 +87,17 @@ import blockchain_platform.composeapp.generated.resources.create_problem_profit_
 import blockchain_platform.composeapp.generated.resources.create_problem_profit_winner
 import blockchain_platform.composeapp.generated.resources.create_problem_prize_label
 import blockchain_platform.composeapp.generated.resources.create_problem_reference_solution_label
+import blockchain_platform.composeapp.generated.resources.create_problem_run_error_reference_solution_required
+import blockchain_platform.composeapp.generated.resources.create_problem_run_error_incomplete_results
+import blockchain_platform.composeapp.generated.resources.create_problem_run_error_missing_result
+import blockchain_platform.composeapp.generated.resources.create_problem_run_error_test_input_required
 import blockchain_platform.composeapp.generated.resources.create_problem_run_all
 import blockchain_platform.composeapp.generated.resources.create_problem_run_output
 import blockchain_platform.composeapp.generated.resources.create_problem_run_running
 import blockchain_platform.composeapp.generated.resources.create_problem_run_status
 import blockchain_platform.composeapp.generated.resources.create_problem_run_test
+import blockchain_platform.composeapp.generated.resources.create_problem_schedule_title
+import blockchain_platform.composeapp.generated.resources.create_problem_submit_error_test_input_required
 import blockchain_platform.composeapp.generated.resources.create_problem_submit_failed
 import blockchain_platform.composeapp.generated.resources.create_problem_submit_success
 import blockchain_platform.composeapp.generated.resources.create_problem_submit_until_label
@@ -102,6 +108,8 @@ import blockchain_platform.composeapp.generated.resources.create_problem_test_in
 import blockchain_platform.composeapp.generated.resources.create_problem_test_label
 import blockchain_platform.composeapp.generated.resources.create_problem_test_remove
 import blockchain_platform.composeapp.generated.resources.create_problem_tests_title
+import blockchain_platform.composeapp.generated.resources.create_problem_tests_section_title
+import blockchain_platform.composeapp.generated.resources.create_problem_title
 import blockchain_platform.composeapp.generated.resources.create_problem_title_label
 import blockchain_platform.composeapp.generated.resources.create_problem_validation_date_order
 import blockchain_platform.composeapp.generated.resources.create_problem_validation_amount
@@ -251,7 +259,7 @@ private fun CreateProblemWorkspace(
     isCompact: Boolean,
 ) {
     if (isCompact) {
-        EditorPane(title = "Create Problem") {
+        EditorPane(title = stringResource(Res.string.create_problem_title)) {
             CreateProblemForm(
                 state = state,
                 onPaymentAssetChange = onPaymentAssetChange,
@@ -271,7 +279,7 @@ private fun CreateProblemWorkspace(
                 onSubmit = onSubmit,
             )
         }
-        EditorPane(title = "Profit Preview") {
+        EditorPane(title = stringResource(Res.string.create_problem_profit_title)) {
             ProfitPanel(state = state)
         }
         EditorPane(title = stringResource(Res.string.create_problem_payment_asset_label)) {
@@ -288,7 +296,7 @@ private fun CreateProblemWorkspace(
                 onEntryFeeChange = onEntryFeeChange,
             )
         }
-        EditorPane(title = "Schedule") {
+        EditorPane(title = stringResource(Res.string.create_problem_schedule_title)) {
             SchedulePanel(
                 state = state,
                 onJoinUntilChange = onJoinUntilChange,
@@ -302,7 +310,7 @@ private fun CreateProblemWorkspace(
                     modifier = Modifier.weight(2f),
                     verticalArrangement = Arrangement.spacedBy(18.dp)
                 ) {
-                    EditorPane(title = "Create Problem") {
+                    EditorPane(title = stringResource(Res.string.create_problem_title)) {
                     CreateProblemForm(
                         state = state,
                         onPaymentAssetChange = onPaymentAssetChange,
@@ -327,7 +335,7 @@ private fun CreateProblemWorkspace(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(18.dp)
                 ) {
-                    EditorPane(title = "Profit Preview") {
+                    EditorPane(title = stringResource(Res.string.create_problem_profit_title)) {
                         ProfitPanel(state = state)
                     }
                     EditorPane(title = stringResource(Res.string.create_problem_payment_asset_label)) {
@@ -344,7 +352,7 @@ private fun CreateProblemWorkspace(
                             onEntryFeeChange = onEntryFeeChange,
                         )
                     }
-                    EditorPane(title = "Schedule") {
+                    EditorPane(title = stringResource(Res.string.create_problem_schedule_title)) {
                         SchedulePanel(
                             state = state,
                             onJoinUntilChange = onJoinUntilChange,
@@ -484,8 +492,10 @@ private fun CreateProblemForm(
         visible = state.submitAttempted,
         error = validation.description,
     )
+    val showReferenceSolutionError = state.submitAttempted ||
+        state.runErrorMessage == CREATE_PROBLEM_RUN_ERROR_REFERENCE_SOLUTION_REQUIRED
     val referenceSolutionError = validationMessage(
-        visible = state.submitAttempted,
+        visible = showReferenceSolutionError,
         error = validation.referenceSolution,
     )
     val publicTestsError = validationMessage(
@@ -526,7 +536,7 @@ private fun CreateProblemForm(
             errorText = referenceSolutionError,
         )
 
-        EditorSection("Tests")
+        EditorSection(stringResource(Res.string.create_problem_tests_section_title))
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
@@ -582,7 +592,7 @@ private fun CreateProblemForm(
         )
         state.runErrorMessage?.let { runErrorMessage ->
             Text(
-                text = runErrorMessage,
+                text = createProblemRunErrorMessage(runErrorMessage),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error,
             )
@@ -617,7 +627,8 @@ private fun CreateProblemForm(
                 text = if (state.requiresFreshValidationForSubmit) {
                     stringResource(Res.string.create_problem_validation_run_required)
                 } else {
-                    state.submitErrorMessage ?: stringResource(Res.string.create_problem_submit_failed)
+                    state.submitErrorMessage?.let { createProblemSubmitErrorMessage(it) }
+                        ?: stringResource(Res.string.create_problem_submit_failed)
                 },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error,
@@ -653,6 +664,38 @@ private fun CreateProblemForm(
                 )
             )
         }
+    }
+}
+
+@Composable
+private fun createProblemRunErrorMessage(raw: String): String {
+    return when (raw) {
+        CREATE_PROBLEM_RUN_ERROR_REFERENCE_SOLUTION_REQUIRED -> {
+            stringResource(Res.string.create_problem_run_error_reference_solution_required)
+        }
+        CREATE_PROBLEM_SUBMIT_ERROR_TEST_INPUT_REQUIRED -> {
+            stringResource(Res.string.create_problem_run_error_test_input_required)
+        }
+        "Validation returned incomplete test results." -> {
+            stringResource(Res.string.create_problem_run_error_incomplete_results)
+        }
+        else -> {
+            if (raw.startsWith("Validation returned no result for test ")) {
+                stringResource(Res.string.create_problem_run_error_missing_result)
+            } else {
+                raw
+            }
+        }
+    }
+}
+
+@Composable
+private fun createProblemSubmitErrorMessage(raw: String): String {
+    return when (raw) {
+        CREATE_PROBLEM_SUBMIT_ERROR_TEST_INPUT_REQUIRED -> {
+            stringResource(Res.string.create_problem_submit_error_test_input_required)
+        }
+        else -> raw
     }
 }
 

@@ -23,7 +23,9 @@
     <string name="create_problem_description_label">Problem description</string>
     <string name="create_problem_description_template">Problem statement\n- Describe what needs to be implemented and what result the solution should return.\n\nInput\n- Describe the input format and the meaning of all variables.\n\nOutput\n- Describe the expected output format.\n\nConstraints and assumptions\n- Provide the input limits and any important assumptions.\n\nAdditional notes\n- Optional information that may help participants.</string>
     <string name="create_problem_competition_setup_title">Competition setup</string>
+    <string name="create_problem_schedule_title">Schedule</string>
     <string name="create_problem_reference_solution_label">Reference solution code (Kotlin)</string>
+    <string name="create_problem_tests_section_title">Tests</string>
     <string name="create_problem_test_input_label">Test input</string>
     <string name="create_problem_test_output_label">Expected output (optional)</string>
     <string name="create_problem_test_validator_label">Validator code (optional)</string>
@@ -37,8 +39,13 @@
     <string name="create_problem_run_all">Run all</string>
     <string name="create_problem_run_test">Run</string>
     <string name="create_problem_run_running">Running...</string>
+    <string name="create_problem_run_error_reference_solution_required">Add the reference solution code before running tests.</string>
+    <string name="create_problem_run_error_test_input_required">Fill in the input for every test before running tests.</string>
+    <string name="create_problem_run_error_missing_result">Could not read the test result. Try again.</string>
+    <string name="create_problem_run_error_incomplete_results">Could not fetch all test results. Try again.</string>
     <string name="create_problem_run_status">Status: %1$s (%2$d ms)</string>
     <string name="create_problem_run_output">Output: %1$s</string>
+    <string name="create_problem_submit_error_test_input_required">Fill in the input for every test before creating the problem.</string>
     <string name="create_problem_profit_title">Profit estimate</string>
     <string name="create_problem_profit_note">Calculated from prize, entry fee, participants, and 2% platform fee. Gas for deposits/withdrawals is not covered by the platform.</string>
     <string name="create_problem_profit_creator">Problem creator profit</string>

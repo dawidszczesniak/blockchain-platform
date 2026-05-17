@@ -33,6 +33,8 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.PrepareCr
 const val MAX_CREATE_PROBLEM_TESTS = 50
 const val MIN_CREATE_PROBLEM_TESTS = 1
 const val MIN_PUBLIC_CREATE_PROBLEM_TESTS = 1
+const val CREATE_PROBLEM_RUN_ERROR_REFERENCE_SOLUTION_REQUIRED = "__create_problem_run_error_reference_solution_required__"
+const val CREATE_PROBLEM_SUBMIT_ERROR_TEST_INPUT_REQUIRED = "__create_problem_submit_error_test_input_required__"
 
 data class CreateProblemTest(
     val id: Int,
@@ -532,6 +534,18 @@ class CreateProblemViewModel(
         if (snapshot.isRunningAllTests || snapshot.runningTestIds.contains(testId) || snapshot.isSubmitting) {
             return
         }
+        if (snapshot.referenceSolutionCode.trim().isEmpty()) {
+            _state.update { current ->
+                current.copy(
+                    runErrorMessage = CREATE_PROBLEM_RUN_ERROR_REFERENCE_SOLUTION_REQUIRED,
+                    submitFailed = false,
+                    requiresFreshValidationForSubmit = false,
+                    submitErrorMessage = null,
+                    submitSuccessProblemId = null,
+                )
+            }
+            return
+        }
         val selectedTest = snapshot.tests.firstOrNull { it.id == testId } ?: return
         val requestSnapshotHash = snapshot.validationSnapshotHash
         val request = snapshot.toValidateCreateProblemRequest(selectedTestIds = setOf(testId))
@@ -587,6 +601,18 @@ class CreateProblemViewModel(
     private fun runAllTests() {
         val snapshot = state.value
         if (snapshot.isRunningAllTests || snapshot.runningTestIds.isNotEmpty() || snapshot.isSubmitting) {
+            return
+        }
+        if (snapshot.referenceSolutionCode.trim().isEmpty()) {
+            _state.update { current ->
+                current.copy(
+                    runErrorMessage = CREATE_PROBLEM_RUN_ERROR_REFERENCE_SOLUTION_REQUIRED,
+                    submitFailed = false,
+                    requiresFreshValidationForSubmit = false,
+                    submitErrorMessage = null,
+                    submitSuccessProblemId = null,
+                )
+            }
             return
         }
         val requestSnapshotHash = snapshot.validationSnapshotHash
@@ -879,10 +905,21 @@ private fun extractReadableErrorMessage(error: Throwable): String? {
                 ?.trim()
         }.getOrNull()
         if (!parsed.isNullOrEmpty()) {
-            return parsed
+            return humanizeCreateProblemErrorMessage(parsed)
         }
     }
-    return raw
+    return humanizeCreateProblemErrorMessage(raw)
+}
+
+private fun humanizeCreateProblemErrorMessage(raw: String): String {
+    return when {
+        raw.contains("testcases[", ignoreCase = true) &&
+            raw.contains("input", ignoreCase = true) &&
+            raw.contains("required", ignoreCase = true) -> {
+            CREATE_PROBLEM_SUBMIT_ERROR_TEST_INPUT_REQUIRED
+        }
+        else -> raw
+    }
 }
 
 private fun parseAmount(value: String): Double {
