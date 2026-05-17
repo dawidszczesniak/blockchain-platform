@@ -19,7 +19,7 @@
     <string name="create_problem_participants_label">Liczba uczestników</string>
     <string name="create_problem_payment_asset_label">Asset płatności</string>
     <string name="create_problem_entry_fee_label">Koszt wzięcia udziału w konkursie</string>
-    <string name="create_problem_title_label">Tytuł problemu (opcjonalnie)</string>
+    <string name="create_problem_title_label">Tytuł problemu</string>
     <string name="create_problem_description_label">Opis problemu</string>
     <string name="create_problem_constraints_label">Constraints (opcjonalnie)</string>
     <string name="create_problem_reference_solution_label">Kod referencyjnego rozwiązania (Kotlin)</string>

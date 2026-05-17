@@ -121,6 +121,9 @@ internal class CreateProblemDraftFactory(
 ) {
     fun build(request: CreateProblemRequestDto, creatorWalletAddress: String): ValidatedCreateProblemDraft {
         val rawTitle = request.title.trim()
+        if (rawTitle.isBlank()) {
+            throw CreateProblemValidationException("Title is required.")
+        }
         if (rawTitle.length > MAX_TITLE_LENGTH) {
             throw CreateProblemValidationException("Title is too long. Max length is $MAX_TITLE_LENGTH characters.")
         }
@@ -218,7 +221,7 @@ internal class CreateProblemDraftFactory(
             }
 
         val normalizedReferenceSolutionCode = request.referenceSolutionCode.trim()
-        val title = if (rawTitle.isNotBlank()) rawTitle else deriveTitle(description)
+        val title = rawTitle
         val normalizedJoinDate = joinUntilDate.toJavaLocalDate()
         val normalizedSubmitDate = submitUntilDate.toJavaLocalDate()
         val competitionKey = buildCompetitionKey(
@@ -255,15 +258,6 @@ internal class CreateProblemDraftFactory(
             tests = computedTests,
             competitionKey = competitionKey,
         )
-    }
-
-    private fun deriveTitle(description: String): String {
-        val base = description
-            .lineSequence()
-            .firstOrNull { it.isNotBlank() }
-            ?.trim()
-            ?: description.trim()
-        return base.take(MAX_TITLE_LENGTH)
     }
 
     private fun buildCompetitionKey(

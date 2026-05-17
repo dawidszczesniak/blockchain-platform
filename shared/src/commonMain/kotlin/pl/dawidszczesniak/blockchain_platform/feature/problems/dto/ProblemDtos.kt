@@ -64,7 +64,7 @@ data class ProblemExampleDto(
 
 @Serializable
 data class CreateProblemRequestDto(
-    val title: String = "",
+    val title: String,
     val description: String,
     val constraints: String = "",
     val examples: List<ProblemExampleDto> = emptyList(),
