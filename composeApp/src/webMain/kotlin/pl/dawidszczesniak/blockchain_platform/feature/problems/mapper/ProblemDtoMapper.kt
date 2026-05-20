@@ -23,6 +23,10 @@ internal fun ProblemSummaryDto.toDomain(): ProblemSummary {
                 explanation = example.explanation,
             )
         },
+        referenceSolutionCode = referenceSolutionCode,
+        referenceRuntimeMs = referenceRuntimeMs,
+        referenceMemoryUsedKb = referenceMemoryUsedKb,
+        referenceConsensusNodes = referenceConsensusNodes,
         paymentAsset = paymentAsset,
         prizeAmountAtomic = prizeAmountAtomic,
         entryFeeAmountAtomic = entryFeeAmountAtomic,

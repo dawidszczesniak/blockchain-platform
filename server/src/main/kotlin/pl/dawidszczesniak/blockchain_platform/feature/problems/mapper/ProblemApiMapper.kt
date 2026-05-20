@@ -21,6 +21,10 @@ internal fun ProblemSummary.toDto(): ProblemSummaryDto {
                 explanation = example.explanation,
             )
         },
+        referenceSolutionCode = referenceSolutionCode,
+        referenceRuntimeMs = referenceRuntimeMs,
+        referenceMemoryUsedKb = referenceMemoryUsedKb,
+        referenceConsensusNodes = referenceConsensusNodes,
         paymentAsset = paymentAsset,
         prizeAmountAtomic = prizeAmountAtomic,
         entryFeeAmountAtomic = entryFeeAmountAtomic,

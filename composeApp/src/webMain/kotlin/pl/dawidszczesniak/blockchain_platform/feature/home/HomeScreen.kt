@@ -1,5 +1,6 @@
 package pl.dawidszczesniak.blockchain_platform.feature.home
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -55,7 +56,10 @@ import pl.dawidszczesniak.blockchain_platform.ui.AppInlineLoader
 import pl.dawidszczesniak.blockchain_platform.ui.AppSurface
 
 @Composable
-fun HomeScreen(onNavigateToProblems: () -> Unit) {
+fun HomeScreen(
+    onNavigateToProblems: () -> Unit,
+    onOpenProblem: (Long) -> Unit,
+) {
     val koin = LocalKoin.current
     val viewModel = remember { koin.get<HomeViewModel>() }
     DisposableEffect(viewModel) {
@@ -93,6 +97,7 @@ fun HomeScreen(onNavigateToProblems: () -> Unit) {
                 modifier = Modifier.fillMaxWidth(),
                 showHeader = true,
                 state = state,
+                onOpenProblem = onOpenProblem,
             )
         }
     }
@@ -285,6 +290,7 @@ private fun UpdatesList(
     modifier: Modifier = Modifier,
     showHeader: Boolean = true,
     state: HomeState,
+    onOpenProblem: (Long) -> Unit,
 ) {
     Column(modifier = modifier) {
         if (showHeader) {
@@ -321,7 +327,9 @@ private fun UpdatesList(
 
         updates.forEachIndexed { index, update ->
             AppSurface(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onOpenProblem(update.id) },
                 shape = RoundedCornerShape(20.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {

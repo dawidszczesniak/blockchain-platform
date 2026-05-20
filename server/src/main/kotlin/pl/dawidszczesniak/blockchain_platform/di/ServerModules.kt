@@ -96,10 +96,15 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.RunProble
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.SubmissionJudgeService
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.SubmitProblemCodeUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.SubmitProblemCodeUseCaseImpl
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.SandboxConsensusEvaluator
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.ValidateCreateProblemUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.ValidateCreateProblemUseCaseImpl
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.CreateProblemReferenceValidationService
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.CreateProblemReferenceValidationServiceImpl
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.CancelCreateProblemValidationUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.CancelCreateProblemValidationUseCaseImpl
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.CreateProblemValidationCancellationRegistry
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.CreateProblemValidationCancellationRegistryImpl
 import pl.dawidszczesniak.blockchain_platform.redis.RedisConfig
 import pl.dawidszczesniak.blockchain_platform.redis.RedisFactory
 
@@ -138,10 +143,12 @@ internal fun serverModules(environment: Map<String, String>) = module {
     single { PaymentAssetCatalog.fromEnvironment(environment, get()) }
     single { BlockchainPlatformContractConfig.fromEnvironment(environment, get()) }
     single<SandboxClient> { SandboxHttpClient(get()) }
+    single { SandboxConsensusEvaluator(get()) }
+    single<CreateProblemValidationCancellationRegistry> { CreateProblemValidationCancellationRegistryImpl() }
     single<SubmissionJudgeJobRepository> { SubmissionJudgeJobRepositoryImpl(get()) }
     single<SubmissionJudgeQueue> { RedisSubmissionJudgeQueue(get()) }
     single { SubmissionJudgeJobMapper() }
-    single<CreateProblemReferenceValidationService> { CreateProblemReferenceValidationServiceImpl(get()) }
+    single<CreateProblemReferenceValidationService> { CreateProblemReferenceValidationServiceImpl(get(), get()) }
     single { CreateProblemDraftFactory(get(), get()) }
     single<CompetitionIntentStore> { RedisCompetitionIntentStore(get(), get()) }
     single<BlockchainPlatformContractClient> { EthereumBlockchainPlatformContractClient(get(), get()) }
@@ -149,7 +156,8 @@ internal fun serverModules(environment: Map<String, String>) = module {
     factory<CreateProblemUseCase> { CreateProblemUseCaseImpl() }
     factory<PrepareCreateProblemOnChainUseCase> { PrepareCreateProblemOnChainUseCaseImpl(get(), get(), get(), get(), get()) }
     factory<ConfirmCreateProblemOnChainUseCase> { ConfirmCreateProblemOnChainUseCaseImpl(get(), get(), get(), get(), get(), get(), get()) }
-    factory<ValidateCreateProblemUseCase> { ValidateCreateProblemUseCaseImpl(get()) }
+    factory<ValidateCreateProblemUseCase> { ValidateCreateProblemUseCaseImpl(get(), get()) }
+    factory<CancelCreateProblemValidationUseCase> { CancelCreateProblemValidationUseCaseImpl(get()) }
     factory<GetProblemSummariesUseCase> { GetProblemSummariesUseCaseImpl(get()) }
     factory<GetProblemSummaryByIdUseCase> { GetProblemSummaryByIdUseCaseImpl(get()) }
     factory<GetCreatedProblemsUseCase> { GetCreatedProblemsUseCaseImpl(get()) }
@@ -158,14 +166,14 @@ internal fun serverModules(environment: Map<String, String>) = module {
     factory<PrepareJoinProblemOnChainUseCase> { PrepareJoinProblemOnChainUseCaseImpl(get(), get(), get(), get(), get()) }
     factory<ConfirmJoinProblemOnChainUseCase> { ConfirmJoinProblemOnChainUseCaseImpl(get(), get(), get(), get()) }
     factory<RunProblemCodeUseCase> { RunProblemCodeUseCaseImpl(get(), get()) }
-    single { SubmitProblemCodeUseCaseImpl(get(), get(), get(), get(), get()) }
+    single { SubmitProblemCodeUseCaseImpl(get(), get(), get(), get(), get(), get()) }
     single<SubmitProblemCodeUseCase> { get<SubmitProblemCodeUseCaseImpl>() }
     single<SubmissionJudgeService> { get<SubmitProblemCodeUseCaseImpl>() }
     single<EnqueueProblemSubmissionUseCase> { EnqueueProblemSubmissionUseCaseImpl(get(), get(), get()) }
     single<GetSubmissionJudgeJobUseCase> { GetSubmissionJudgeJobUseCaseImpl(get(), get(), get()) }
     single { SubmissionJudgeWorker(get(), get(), get()) }
     single { CompetitionSettlementWorker(get(), get(), get(), get(), get()) }
-    factory { ProblemController(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
+    factory { ProblemController(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
 
     single<DashboardDao> { DashboardDaoImpl(get()) }
     single<DashboardReadRepository> { DashboardReadRepositoryImpl(get(), get(), get()) }

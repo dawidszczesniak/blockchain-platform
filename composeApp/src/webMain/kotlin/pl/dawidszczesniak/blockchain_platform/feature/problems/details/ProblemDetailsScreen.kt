@@ -312,6 +312,10 @@ private fun ProblemStatementPane(
                     ExampleBlock(index = index, example = example)
                 }
             }
+            if (problem.referenceSolutionCode.isNotBlank()) {
+                Spacer(Modifier.height(4.dp))
+                PublicReferenceSolutionSection(problem = problem)
+            }
             Spacer(Modifier.height(4.dp))
             DetailLine(stringResource(Res.string.problem_details_requirement_participants, problem.requiredParticipants))
             DetailLine(

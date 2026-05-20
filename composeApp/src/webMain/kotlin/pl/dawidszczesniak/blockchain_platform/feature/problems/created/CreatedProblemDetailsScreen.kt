@@ -60,6 +60,7 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.CreatedPro
 import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.CreatedProblemStatus
 import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.ProblemExample
 import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.ProblemSummary
+import pl.dawidszczesniak.blockchain_platform.feature.problems.details.PublicReferenceSolutionSection
 import pl.dawidszczesniak.blockchain_platform.feature.problems.statement.ProblemStatementContent
 import pl.dawidszczesniak.blockchain_platform.feature.problems.statement.decodeProblemDescription
 import pl.dawidszczesniak.blockchain_platform.ui.AppSurface
@@ -206,6 +207,10 @@ private fun CreatedProblemStatementPane(
                 statementContent.examples.forEachIndexed { index, example ->
                     CreatedProblemExampleBlock(index = index, example = example)
                 }
+            }
+            if (problem.referenceSolutionCode.isNotBlank()) {
+                Spacer(Modifier.height(4.dp))
+                PublicReferenceSolutionSection(problem = problem)
             }
         }
     }

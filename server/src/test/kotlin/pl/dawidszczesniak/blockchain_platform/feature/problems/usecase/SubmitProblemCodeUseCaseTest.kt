@@ -141,7 +141,7 @@ class SubmitProblemCodeUseCaseTest {
     }
 
     @Test
-    fun `stores suite execution time as submission runtime`() {
+    fun `stores max test execution time as submission runtime`() {
         val repository = FakeProblemWriteRepository(
             executionContext = ProblemExecutionContext(
                 problemId = 7,
@@ -234,8 +234,8 @@ class SubmitProblemCodeUseCaseTest {
             ),
         )
 
-        assertEquals(24, result.runtimeMs)
-        assertEquals(24, assertNotNull(repository.lastSubmissionDraft).runtimeMs)
+        assertEquals(19, result.runtimeMs)
+        assertEquals(19, assertNotNull(repository.lastSubmissionDraft).runtimeMs)
     }
 
     @Test
@@ -336,7 +336,7 @@ class SubmitProblemCodeUseCaseTest {
     }
 
     @Test
-    fun `uses median runtime and memory from consensus nodes as official metrics`() {
+    fun `uses median worst case runtime and memory from consensus nodes as official metrics`() {
         val repository = FakeProblemWriteRepository(
             executionContext = ProblemExecutionContext(
                 problemId = 7,
@@ -391,21 +391,30 @@ class SubmitProblemCodeUseCaseTest {
                     nodeId = "sandbox-node-1",
                     nodeUrl = "http://sandbox-node-1",
                     secret = secrets.getValue("sandbox-node-1"),
-                    results = acceptedAdditionResults(maxMemoryUsedKb = 1_000),
+                    results = acceptedAdditionResults(
+                        maxMemoryUsedKb = 1_000,
+                        maxExecutionTimeMs = 90,
+                    ),
                     suiteExecutionTimeMs = 100,
                 ),
                 validNodeRun(
                     nodeId = "sandbox-node-2",
                     nodeUrl = "http://sandbox-node-2",
                     secret = secrets.getValue("sandbox-node-2"),
-                    results = acceptedAdditionResults(maxMemoryUsedKb = 1_100),
+                    results = acceptedAdditionResults(
+                        maxMemoryUsedKb = 1_100,
+                        maxExecutionTimeMs = 105,
+                    ),
                     suiteExecutionTimeMs = 105,
                 ),
                 validNodeRun(
                     nodeId = "sandbox-node-3",
                     nodeUrl = "http://sandbox-node-3",
                     secret = secrets.getValue("sandbox-node-3"),
-                    results = acceptedAdditionResults(maxMemoryUsedKb = 3_000),
+                    results = acceptedAdditionResults(
+                        maxMemoryUsedKb = 3_000,
+                        maxExecutionTimeMs = 300,
+                    ),
                     suiteExecutionTimeMs = 300,
                 ),
             )
@@ -524,6 +533,8 @@ private class FakeSandboxClient(
         sourceCode: String,
         language: String,
         tests: List<SandboxRunInput>,
+        runId: String?,
+        cancellation: SandboxRunCancellation?,
     ): List<SandboxNodeRunOutput> = nodeRuns
 }
 
@@ -627,7 +638,10 @@ private fun validNodeRun(
     )
 }
 
-private fun acceptedAdditionResults(maxMemoryUsedKb: Int): List<SandboxRunTestOutput> {
+private fun acceptedAdditionResults(
+    maxMemoryUsedKb: Int,
+    maxExecutionTimeMs: Int = 19,
+): List<SandboxRunTestOutput> {
     return listOf(
         SandboxRunTestOutput(
             id = 101,
@@ -635,7 +649,7 @@ private fun acceptedAdditionResults(maxMemoryUsedKb: Int): List<SandboxRunTestOu
             status = "OK",
             output = "4",
             passed = true,
-            executionTimeMs = 11,
+            executionTimeMs = (maxExecutionTimeMs - 8).coerceAtLeast(1),
             memoryUsedKb = maxMemoryUsedKb - 100,
             message = null,
         ),
@@ -645,7 +659,7 @@ private fun acceptedAdditionResults(maxMemoryUsedKb: Int): List<SandboxRunTestOu
             status = "OK",
             output = "12",
             passed = true,
-            executionTimeMs = 19,
+            executionTimeMs = maxExecutionTimeMs,
             memoryUsedKb = maxMemoryUsedKb,
             message = null,
         ),

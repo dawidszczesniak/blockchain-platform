@@ -39,11 +39,15 @@
     <string name="create_problem_run_all">Uruchom wszystkie</string>
     <string name="create_problem_run_test">Uruchom</string>
     <string name="create_problem_run_running">Uruchamianie...</string>
+    <string name="create_problem_run_all_loading">Uruchamianie testów %1$d/%2$d</string>
+    <string name="create_problem_run_all_success">Testy zostały zwalidowane</string>
+    <string name="create_problem_run_test_loading">Uruchamianie testu</string>
+    <string name="create_problem_run_test_success">Test %1$d został zwalidowany</string>
     <string name="create_problem_run_error_reference_solution_required">Aby uruchomić testy, uzupełnij kod referencyjnego rozwiązania.</string>
     <string name="create_problem_run_error_test_input_required">Uzupełnij input dla każdego testu przed uruchomieniem testów.</string>
     <string name="create_problem_run_error_missing_result">Nie udało się odczytać wyniku testu. Spróbuj ponownie.</string>
     <string name="create_problem_run_error_incomplete_results">Nie udało się pobrać wyników wszystkich testów. Spróbuj ponownie.</string>
-    <string name="create_problem_run_status">Status: %1$s (%2$d ms)</string>
+    <string name="create_problem_run_status">Status: %1$s</string>
     <string name="create_problem_run_output">Output: %1$s</string>
     <string name="create_problem_submit_error_test_input_required">Uzupełnij input dla każdego testu przed utworzeniem problemu.</string>
     <string name="create_problem_profit_title">Szacowany zysk</string>
@@ -193,6 +197,10 @@
     <string name="problem_details_statement">Treść zadania</string>
     <string name="problem_details_constraints_title">Ograniczenia</string>
     <string name="problem_details_examples_title">Przykłady</string>
+    <string name="problem_details_reference_code_title">Kod referencyjnego rozwiązania</string>
+    <string name="problem_details_reference_runtime">Czas referencyjny: %1$d ms</string>
+    <string name="problem_details_reference_memory">Pamięć referencyjna: %1$d KB</string>
+    <string name="problem_details_reference_consensus">Konsensus referencyjny: %1$d nody</string>
     <string name="problem_details_example_label">Przykład %1$d</string>
     <string name="problem_details_example_input">Input: %1$s</string>
     <string name="problem_details_example_output">Output: %1$s</string>

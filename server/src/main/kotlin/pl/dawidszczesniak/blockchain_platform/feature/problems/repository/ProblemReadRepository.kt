@@ -77,6 +77,7 @@ internal class ProblemReadRepositoryImpl(
                 row.toProblemSummary(
                     registeredParticipants = participantCounts[row[ProblemsTable.problemId]] ?: 0,
                     today = today,
+                    includeReferenceDetails = false,
                 )
             }
         }
@@ -88,6 +89,7 @@ internal class ProblemReadRepositoryImpl(
             row.toProblemSummary(
                 registeredParticipants = problemDao.countParticipants(problemId.toLong()),
                 today = LocalDate.now(),
+                includeReferenceDetails = true,
             )
         }
     }
@@ -192,7 +194,11 @@ internal class ProblemReadRepositoryImpl(
                 description = draft.description,
                 constraints = draft.constraints,
                 examplesJson = serializeProblemExamples(draft.examples),
+                referenceSolutionCode = draft.referenceSolutionCode,
                 referenceSolutionHash = draft.referenceSolutionHash,
+                referenceRuntimeMs = draft.referenceRuntimeMs,
+                referenceMemoryUsedKb = draft.referenceMemoryUsedKb,
+                referenceConsensusNodes = draft.referenceConsensusNodes,
                 validationNodeId = draft.validationNodeId,
                 validationRunHash = draft.validationRunHash,
                 validationResultHash = draft.validationResultHash,
@@ -699,6 +705,7 @@ internal class ProblemReadRepositoryImpl(
     private fun org.jetbrains.exposed.sql.ResultRow.toProblemSummary(
         registeredParticipants: Int,
         today: LocalDate,
+        includeReferenceDetails: Boolean,
     ): ProblemSummary {
         val daysToJoinEnd = daysBetween(today, this[ProblemsTable.joinUntilDate]).coerceAtLeast(0)
         return ProblemSummary(
@@ -707,6 +714,10 @@ internal class ProblemReadRepositoryImpl(
             description = this[ProblemsTable.description],
             constraints = this[ProblemsTable.constraintsText],
             examples = parseProblemExamples(this[ProblemsTable.examplesJson]),
+            referenceSolutionCode = if (includeReferenceDetails) this[ProblemsTable.referenceSolutionCode] else "",
+            referenceRuntimeMs = if (includeReferenceDetails) this[ProblemsTable.referenceRuntimeMs] else null,
+            referenceMemoryUsedKb = if (includeReferenceDetails) this[ProblemsTable.referenceMemoryUsedKb] else null,
+            referenceConsensusNodes = if (includeReferenceDetails) this[ProblemsTable.referenceConsensusNodes] else null,
             paymentAsset = paymentAssetCatalog.requireByCode(this[ProblemsTable.paymentAssetCode]).toDto(),
             prizeAmountAtomic = this[ProblemsTable.prizeAmountAtomic],
             entryFeeAmountAtomic = this[ProblemsTable.entryFeeAmountAtomic],

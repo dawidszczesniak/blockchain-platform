@@ -40,6 +40,9 @@ class ProblemRepositoryImpl(
     override suspend fun validateCreateProblem(request: ValidateCreateProblemRequestDto) =
         remoteDataSource.validateCreateProblem(request)
 
+    override suspend fun cancelCreateProblemValidation(runId: String) =
+        remoteDataSource.cancelCreateProblemValidation(runId)
+
     override suspend fun prepareJoinProblemOnChain(problemId: Int) =
         remoteDataSource.prepareJoinProblemOnChain(problemId)
 

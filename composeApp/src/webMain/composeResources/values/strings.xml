@@ -39,11 +39,15 @@
     <string name="create_problem_run_all">Run all</string>
     <string name="create_problem_run_test">Run</string>
     <string name="create_problem_run_running">Running...</string>
+    <string name="create_problem_run_all_loading">Running tests %1$d/%2$d</string>
+    <string name="create_problem_run_all_success">Tests have been validated</string>
+    <string name="create_problem_run_test_loading">Running test</string>
+    <string name="create_problem_run_test_success">Test %1$d has been validated</string>
     <string name="create_problem_run_error_reference_solution_required">Add the reference solution code before running tests.</string>
     <string name="create_problem_run_error_test_input_required">Fill in the input for every test before running tests.</string>
     <string name="create_problem_run_error_missing_result">Could not read the test result. Try again.</string>
     <string name="create_problem_run_error_incomplete_results">Could not fetch all test results. Try again.</string>
-    <string name="create_problem_run_status">Status: %1$s (%2$d ms)</string>
+    <string name="create_problem_run_status">Status: %1$s</string>
     <string name="create_problem_run_output">Output: %1$s</string>
     <string name="create_problem_submit_error_test_input_required">Fill in the input for every test before creating the problem.</string>
     <string name="create_problem_profit_title">Profit estimate</string>
@@ -193,6 +197,10 @@
     <string name="problem_details_statement">Problem statement</string>
     <string name="problem_details_constraints_title">Constraints</string>
     <string name="problem_details_examples_title">Examples</string>
+    <string name="problem_details_reference_code_title">Reference solution code</string>
+    <string name="problem_details_reference_runtime">Reference runtime: %1$d ms</string>
+    <string name="problem_details_reference_memory">Reference memory: %1$d KB</string>
+    <string name="problem_details_reference_consensus">Reference consensus: %1$d nodes</string>
     <string name="problem_details_example_label">Example %1$d</string>
     <string name="problem_details_example_input">Input: %1$s</string>
     <string name="problem_details_example_output">Output: %1$s</string>

@@ -23,7 +23,11 @@ CREATE TABLE IF NOT EXISTS problems (
     description TEXT NOT NULL,
     constraints_text TEXT NOT NULL DEFAULT '',
     examples_json TEXT NOT NULL DEFAULT '[]',
+    reference_solution_code TEXT NOT NULL DEFAULT '',
     reference_solution_hash VARCHAR(66) NOT NULL DEFAULT '0x',
+    reference_runtime_ms INTEGER CHECK (reference_runtime_ms >= 0),
+    reference_memory_used_kb INTEGER CHECK (reference_memory_used_kb >= 0),
+    reference_consensus_nodes INTEGER CHECK (reference_consensus_nodes >= 0),
     validation_node_id VARCHAR(128),
     validation_run_hash VARCHAR(66),
     validation_result_hash VARCHAR(66),
@@ -224,7 +228,19 @@ ALTER TABLE problems
     ADD COLUMN IF NOT EXISTS examples_json TEXT;
 
 ALTER TABLE problems
+    ADD COLUMN IF NOT EXISTS reference_solution_code TEXT;
+
+ALTER TABLE problems
     ADD COLUMN IF NOT EXISTS reference_solution_hash VARCHAR(66);
+
+ALTER TABLE problems
+    ADD COLUMN IF NOT EXISTS reference_runtime_ms INTEGER;
+
+ALTER TABLE problems
+    ADD COLUMN IF NOT EXISTS reference_memory_used_kb INTEGER;
+
+ALTER TABLE problems
+    ADD COLUMN IF NOT EXISTS reference_consensus_nodes INTEGER;
 
 ALTER TABLE problems
     ADD COLUMN IF NOT EXISTS validation_node_id VARCHAR(128);
@@ -302,6 +318,10 @@ WHERE constraints_text IS NULL;
 UPDATE problems
 SET examples_json = COALESCE(NULLIF(examples_json, ''), '[]')
 WHERE examples_json IS NULL OR examples_json = '';
+
+UPDATE problems
+SET reference_solution_code = COALESCE(reference_solution_code, '')
+WHERE reference_solution_code IS NULL;
 
 UPDATE problems
 SET reference_solution_hash = COALESCE(NULLIF(reference_solution_hash, ''), '0x')
@@ -382,6 +402,9 @@ ALTER TABLE problems
     ALTER COLUMN examples_json SET DEFAULT '[]';
 
 ALTER TABLE problems
+    ALTER COLUMN reference_solution_code SET DEFAULT '';
+
+ALTER TABLE problems
     ALTER COLUMN onchain_settlement_status SET DEFAULT 'disabled';
 
 ALTER TABLE problems
@@ -409,6 +432,9 @@ ALTER TABLE problems
 
 ALTER TABLE problems
     ALTER COLUMN examples_json SET NOT NULL;
+
+ALTER TABLE problems
+    ALTER COLUMN reference_solution_code SET NOT NULL;
 
 ALTER TABLE problems
     ALTER COLUMN reference_solution_hash SET NOT NULL;

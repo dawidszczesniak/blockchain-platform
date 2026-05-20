@@ -31,6 +31,8 @@ ATTESTATION_SECRET = os.getenv("SANDBOX_ATTESTATION_SECRET", "")
 PORT = int(os.getenv("SANDBOX_PORT", "8080"))
 
 RUNNER_FILE_HASH = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+ACTIVE_RUNS: Dict[str, "RunControl"] = {}
+ACTIVE_RUNS_LOCK = threading.Lock()
 
 HARNESS_CODE = """\
 import kotlin.system.exitProcess
@@ -149,6 +151,65 @@ fun main() {
 """
 
 
+class RunCancelled(Exception):
+    pass
+
+
+class RunControl:
+    def __init__(self) -> None:
+        self.cancelled = threading.Event()
+        self._lock = threading.Lock()
+        self._processes: List[subprocess.Popen[str]] = []
+
+    def register_process(self, process: subprocess.Popen[str]) -> None:
+        with self._lock:
+            if self.cancelled.is_set():
+                raise RunCancelled("Run cancelled.")
+            self._processes.append(process)
+
+    def unregister_process(self, process: subprocess.Popen[str]) -> None:
+        with self._lock:
+            self._processes = [active for active in self._processes if active is not process]
+
+    def throw_if_cancelled(self) -> None:
+        if self.cancelled.is_set():
+            raise RunCancelled("Run cancelled.")
+
+    def cancel(self) -> None:
+        if self.cancelled.is_set():
+            return
+        self.cancelled.set()
+        with self._lock:
+            processes = list(self._processes)
+        for process in processes:
+            try:
+                process.kill()
+            except Exception:
+                pass
+
+
+def _register_run(run_id: str) -> RunControl:
+    control = RunControl()
+    with ACTIVE_RUNS_LOCK:
+        ACTIVE_RUNS[run_id] = control
+    return control
+
+
+def _finish_run(run_id: str, control: RunControl) -> None:
+    with ACTIVE_RUNS_LOCK:
+        if ACTIVE_RUNS.get(run_id) is control:
+            ACTIVE_RUNS.pop(run_id, None)
+
+
+def _cancel_run(run_id: str) -> bool:
+    with ACTIVE_RUNS_LOCK:
+        control = ACTIVE_RUNS.pop(run_id, None)
+    if control is None:
+        return False
+    control.cancel()
+    return True
+
+
 def _json_response(handler: BaseHTTPRequestHandler, status: int, payload: Dict[str, Any]) -> None:
     raw = json.dumps(payload, ensure_ascii=False).encode("utf-8")
     handler.send_response(status)
@@ -221,7 +282,79 @@ def _sign_attestation(payload_hash: str) -> str | None:
     return "0x" + signature
 
 
-def _compile_solution(workdir: Path, source_code: str, language: str) -> Dict[str, Any]:
+def _run_subprocess(
+    command: List[str],
+    cwd: str,
+    input_text: str | None = None,
+    timeout_seconds: float | None = None,
+    run_control: RunControl | None = None,
+) -> Dict[str, Any]:
+    process = subprocess.Popen(
+        command,
+        stdin=subprocess.PIPE if input_text is not None else None,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        cwd=cwd,
+    )
+    if run_control is not None:
+        try:
+            run_control.register_process(process)
+        except RunCancelled:
+            process.kill()
+            process.wait(timeout=0.5)
+            raise
+
+    result: Dict[str, Any] = {}
+
+    def communicate() -> None:
+        try:
+            stdout, stderr = process.communicate(input=input_text)
+            result["stdout"] = stdout
+            result["stderr"] = stderr
+        except Exception as exc:
+            result["exception"] = exc
+
+    worker = threading.Thread(target=communicate, daemon=True)
+    worker.start()
+    started = time.perf_counter()
+
+    try:
+        while worker.is_alive():
+            if run_control is not None and run_control.cancelled.is_set():
+                process.kill()
+                worker.join(timeout=0.5)
+                raise RunCancelled("Run cancelled.")
+            if timeout_seconds is not None and (time.perf_counter() - started) >= timeout_seconds:
+                process.kill()
+                worker.join(timeout=0.5)
+                return {
+                    "timed_out": True,
+                    "returncode": process.returncode,
+                    "stdout": result.get("stdout", ""),
+                    "stderr": result.get("stderr", ""),
+                }
+            worker.join(timeout=0.01)
+        worker.join(timeout=0.01)
+        if "exception" in result:
+            raise result["exception"]
+        return {
+            "timed_out": False,
+            "returncode": process.returncode,
+            "stdout": result.get("stdout", ""),
+            "stderr": result.get("stderr", ""),
+        }
+    finally:
+        if run_control is not None:
+            run_control.unregister_process(process)
+
+
+def _compile_solution(
+    workdir: Path,
+    source_code: str,
+    language: str,
+    run_control: RunControl | None = None,
+) -> Dict[str, Any]:
     normalized_language = language.strip().lower()
     classes_path = workdir / "classes"
     classes_path.mkdir(parents=True, exist_ok=True)
@@ -231,15 +364,13 @@ def _compile_solution(workdir: Path, source_code: str, language: str) -> Dict[st
         harness_path = workdir / "Harness.kt"
         source_path.write_text(source_code, encoding="utf-8")
         harness_path.write_text(HARNESS_CODE, encoding="utf-8")
-        process = subprocess.run(
-            ["kotlinc", str(source_path), str(harness_path), "-d", str(classes_path)],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
+        process = _run_subprocess(
+            command=["kotlinc", str(source_path), str(harness_path), "-d", str(classes_path)],
             cwd=str(workdir),
+            run_control=run_control,
         )
-        if process.returncode != 0:
-            message = (process.stderr or process.stdout or "Compilation failed.").strip()
+        if process["returncode"] != 0:
+            message = (process["stderr"] or process["stdout"] or "Compilation failed.").strip()
             return {"ok": False, "message": message}
         return {
             "ok": True,
@@ -253,15 +384,13 @@ def _compile_solution(workdir: Path, source_code: str, language: str) -> Dict[st
         harness_path = workdir / "Harness.java"
         source_path.write_text(source_code, encoding="utf-8")
         harness_path.write_text(JAVA_HARNESS_CODE, encoding="utf-8")
-        process = subprocess.run(
-            ["javac", "-d", str(classes_path), str(source_path), str(harness_path)],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
+        process = _run_subprocess(
+            command=["javac", "-d", str(classes_path), str(source_path), str(harness_path)],
             cwd=str(workdir),
+            run_control=run_control,
         )
-        if process.returncode != 0:
-            message = (process.stderr or process.stdout or "Compilation failed.").strip()
+        if process["returncode"] != 0:
+            message = (process["stderr"] or process["stdout"] or "Compilation failed.").strip()
             return {"ok": False, "message": message}
         return {
             "ok": True,
@@ -273,7 +402,13 @@ def _compile_solution(workdir: Path, source_code: str, language: str) -> Dict[st
     return {"ok": False, "message": f"Unsupported language '{language}'."}
 
 
-def _compile_validator(workdir: Path, validator_code: str, validator_language: str, validator_hash: str) -> Dict[str, Any]:
+def _compile_validator(
+    workdir: Path,
+    validator_code: str,
+    validator_language: str,
+    validator_hash: str,
+    run_control: RunControl | None = None,
+) -> Dict[str, Any]:
     if validator_language.lower() != "kotlin":
         return {"ok": False, "message": f"Unsupported validator language '{validator_language}'."}
 
@@ -283,15 +418,13 @@ def _compile_validator(workdir: Path, validator_code: str, validator_language: s
     validator_source.write_text(validator_code, encoding="utf-8")
     validator_harness.write_text(VALIDATOR_HARNESS_CODE, encoding="utf-8")
 
-    process = subprocess.run(
-        ["kotlinc", str(validator_source), str(validator_harness), "-include-runtime", "-d", str(validator_jar)],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
+    process = _run_subprocess(
+        command=["kotlinc", str(validator_source), str(validator_harness), "-include-runtime", "-d", str(validator_jar)],
         cwd=str(workdir),
+        run_control=run_control,
     )
-    if process.returncode != 0:
-        message = (process.stderr or process.stdout or "Validator compilation failed.").strip()
+    if process["returncode"] != 0:
+        message = (process["stderr"] or process["stdout"] or "Validator compilation failed.").strip()
         return {"ok": False, "message": message}
     return {"ok": True, "jar_path": str(validator_jar)}
 
@@ -321,6 +454,7 @@ def _communicate_with_metrics(
     input_text: str,
     cwd: str,
     timeout_seconds: float,
+    run_control: RunControl | None = None,
 ) -> Dict[str, Any]:
     started = time.perf_counter()
     process = subprocess.Popen(
@@ -331,6 +465,13 @@ def _communicate_with_metrics(
         text=True,
         cwd=cwd,
     )
+    if run_control is not None:
+        try:
+            run_control.register_process(process)
+        except RunCancelled:
+            process.kill()
+            process.wait(timeout=0.5)
+            raise
     peak_memory_kb = 0
     stop_sampling = threading.Event()
     initial_sample = _read_process_memory_kb(process.pid)
@@ -352,18 +493,43 @@ def _communicate_with_metrics(
 
     sampler = threading.Thread(target=sample_memory, daemon=True)
     sampler.start()
+    result: Dict[str, Any] = {}
+
+    def communicate() -> None:
+        try:
+            stdout, stderr = process.communicate(input=input_text)
+            result["stdout"] = stdout
+            result["stderr"] = stderr
+        except Exception as exc:
+            result["exception"] = exc
+
+    worker = threading.Thread(target=communicate, daemon=True)
+    worker.start()
+    timed_out = False
+
     try:
-        stdout, stderr = process.communicate(input=input_text, timeout=timeout_seconds)
-        timed_out = False
-        returncode = process.returncode
-    except subprocess.TimeoutExpired:
-        process.kill()
-        stdout, stderr = process.communicate()
-        timed_out = True
+        while worker.is_alive():
+            if run_control is not None and run_control.cancelled.is_set():
+                process.kill()
+                worker.join(timeout=0.5)
+                raise RunCancelled("Run cancelled.")
+            if (time.perf_counter() - started) >= timeout_seconds:
+                process.kill()
+                worker.join(timeout=0.5)
+                timed_out = True
+                break
+            worker.join(timeout=0.01)
+        worker.join(timeout=0.01)
+        if "exception" in result:
+            raise result["exception"]
+        stdout = result.get("stdout", "")
+        stderr = result.get("stderr", "")
         returncode = process.returncode
     finally:
         stop_sampling.set()
         sampler.join(timeout=0.2)
+        if run_control is not None:
+            run_control.unregister_process(process)
 
     return {
         "timed_out": timed_out,
@@ -375,7 +541,12 @@ def _communicate_with_metrics(
     }
 
 
-def _execute_test(command: List[str], test: Dict[str, Any], workdir: str) -> Dict[str, Any]:
+def _execute_test(
+    command: List[str],
+    test: Dict[str, Any],
+    workdir: str,
+    run_control: RunControl | None = None,
+) -> Dict[str, Any]:
     timeout_ms = _normalize_timeout_ms(test.get("timeoutMs"))
     memory_limit_mb = _normalize_memory_limit_mb(test.get("memoryLimitMb"))
     base_command = list(command)
@@ -389,6 +560,7 @@ def _execute_test(command: List[str], test: Dict[str, Any], workdir: str) -> Dic
             input_text=str(test.get("inputData", "")),
             cwd=workdir,
             timeout_seconds=timeout_ms / 1000.0,
+            run_control=run_control,
         )
         if execution["timed_out"]:
             return {
@@ -424,6 +596,8 @@ def _execute_test(command: List[str], test: Dict[str, Any], workdir: str) -> Dic
             "memoryUsedKb": execution["memoryUsedKb"],
             "message": None,
         }
+    except RunCancelled:
+        raise
     except Exception as exc:
         return {
             "id": int(test["id"]),
@@ -441,6 +615,7 @@ def _execute_validator(
     validator_jar_path: str,
     test: Dict[str, Any],
     actual_output: str,
+    run_control: RunControl | None = None,
 ) -> Dict[str, Any]:
     timeout_ms = min(_normalize_timeout_ms(test.get("timeoutMs")), MAX_VALIDATOR_TIMEOUT_MS)
     encoded_input = base64.b64encode(str(test.get("inputData", "")).encode("utf-8")).decode("ascii")
@@ -449,19 +624,20 @@ def _execute_validator(
     payload = f"{encoded_input}\n{encoded_expected}\n{encoded_actual}\n"
     started = time.perf_counter()
     try:
-        result = subprocess.run(
-            ["java", "-jar", validator_jar_path],
-            input=payload,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            timeout=timeout_ms / 1000.0,
+        result = _run_subprocess(
+            command=["java", "-jar", validator_jar_path],
+            cwd=str(Path(validator_jar_path).parent),
+            input_text=payload,
+            timeout_seconds=timeout_ms / 1000.0,
+            run_control=run_control,
         )
         elapsed_ms = int((time.perf_counter() - started) * 1000)
-        if result.returncode != 0:
-            message = (result.stderr or result.stdout or "Validator execution failed.").strip()
+        if result["timed_out"]:
+            return {"ok": False, "passed": False, "message": "Validator timed out.", "executionTimeMs": elapsed_ms}
+        if result["returncode"] != 0:
+            message = (result["stderr"] or result["stdout"] or "Validator execution failed.").strip()
             return {"ok": False, "passed": False, "message": message, "executionTimeMs": elapsed_ms}
-        verdict_raw = (result.stdout or "").strip().lower()
+        verdict_raw = (result["stdout"] or "").strip().lower()
         if verdict_raw == "true":
             return {"ok": True, "passed": True, "message": None, "executionTimeMs": elapsed_ms}
         if verdict_raw == "false":
@@ -472,9 +648,8 @@ def _execute_validator(
             "message": f"Validator returned invalid verdict '{verdict_raw}'.",
             "executionTimeMs": elapsed_ms,
         }
-    except subprocess.TimeoutExpired:
-        elapsed_ms = int((time.perf_counter() - started) * 1000)
-        return {"ok": False, "passed": False, "message": "Validator timed out.", "executionTimeMs": elapsed_ms}
+    except RunCancelled:
+        raise
     except Exception as exc:
         elapsed_ms = int((time.perf_counter() - started) * 1000)
         return {"ok": False, "passed": False, "message": str(exc), "executionTimeMs": elapsed_ms}
@@ -485,6 +660,7 @@ def _judge_test_result(
     test: Dict[str, Any],
     validator_jars_by_key: Dict[str, str],
     validator_compile_errors: Dict[str, str],
+    run_control: RunControl | None = None,
 ) -> Dict[str, Any]:
     if execution.get("status") != "OK":
         execution["passed"] = False
@@ -510,6 +686,7 @@ def _judge_test_result(
             validator_jar_path=validator_jar,
             test=test,
             actual_output=str(execution.get("output") or ""),
+            run_control=run_control,
         )
         execution["executionTimeMs"] = int(execution.get("executionTimeMs", 0)) + int(verdict.get("executionTimeMs", 0))
         if not verdict["ok"]:
@@ -534,6 +711,7 @@ def _judge_test_result(
 
 
 def _run_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
+    run_id = str(payload.get("runId", "") or "").strip() or None
     source_code = str(payload.get("sourceCode", "")).strip()
     if not source_code:
         raise ValueError("sourceCode is required.")
@@ -577,71 +755,82 @@ def _run_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
         )
 
     run_hash = _compute_run_hash({"sourceCode": source_code, "language": language, "tests": normalized_tests})
+    run_control = _register_run(run_id) if run_id is not None else None
+    try:
+        if run_control is not None:
+            run_control.throw_if_cancelled()
+        with tempfile.TemporaryDirectory(prefix="sandbox_run_") as tmp:
+            workdir = Path(tmp)
+            compiled = _compile_solution(workdir, source_code, language, run_control=run_control)
+            suite_execution_time_ms = 0
+            if not compiled["ok"]:
+                results = [
+                    {
+                        "id": test["id"],
+                        "order": test["order"],
+                        "status": "ERROR",
+                        "output": None,
+                        "passed": False,
+                        "executionTimeMs": 0,
+                        "memoryUsedKb": None,
+                        "message": compiled["message"],
+                    }
+                    for test in normalized_tests
+                ]
+            else:
+                validator_jars_by_key: Dict[str, str] = {}
+                validator_compile_errors: Dict[str, str] = {}
+                unique_validators = {}
+                for test in normalized_tests:
+                    validator_code = test["validatorCode"]
+                    if not validator_code:
+                        continue
+                    validator_language = test["validatorLanguage"]
+                    validator_hash = hashlib.sha256(validator_code.encode("utf-8")).hexdigest()
+                    key = f"{validator_language}:{validator_hash}"
+                    if key in unique_validators:
+                        continue
+                    unique_validators[key] = (validator_code, validator_language, validator_hash)
 
-    with tempfile.TemporaryDirectory(prefix="sandbox_run_") as tmp:
-        workdir = Path(tmp)
-        compiled = _compile_solution(workdir, source_code, language)
-        suite_execution_time_ms = 0
-        if not compiled["ok"]:
-            results = [
-                {
-                    "id": test["id"],
-                    "order": test["order"],
-                    "status": "ERROR",
-                    "output": None,
-                    "passed": False,
-                    "executionTimeMs": 0,
-                    "memoryUsedKb": None,
-                    "message": compiled["message"],
-                }
-                for test in normalized_tests
-            ]
-        else:
-            validator_jars_by_key: Dict[str, str] = {}
-            validator_compile_errors: Dict[str, str] = {}
-            unique_validators = {}
-            for test in normalized_tests:
-                validator_code = test["validatorCode"]
-                if not validator_code:
-                    continue
-                validator_language = test["validatorLanguage"]
-                validator_hash = hashlib.sha256(validator_code.encode("utf-8")).hexdigest()
-                key = f"{validator_language}:{validator_hash}"
-                if key in unique_validators:
-                    continue
-                unique_validators[key] = (validator_code, validator_language, validator_hash)
+                for key, (validator_code, validator_language, validator_hash) in unique_validators.items():
+                    if run_control is not None:
+                        run_control.throw_if_cancelled()
+                    compiled_validator = _compile_validator(
+                        workdir=workdir,
+                        validator_code=validator_code,
+                        validator_language=validator_language,
+                        validator_hash=validator_hash,
+                        run_control=run_control,
+                    )
+                    if compiled_validator["ok"]:
+                        validator_jars_by_key[key] = str(compiled_validator["jar_path"])
+                    else:
+                        validator_compile_errors[key] = str(compiled_validator["message"])
 
-            for key, (validator_code, validator_language, validator_hash) in unique_validators.items():
-                compiled_validator = _compile_validator(
-                    workdir=workdir,
-                    validator_code=validator_code,
-                    validator_language=validator_language,
-                    validator_hash=validator_hash,
-                )
-                if compiled_validator["ok"]:
-                    validator_jars_by_key[key] = str(compiled_validator["jar_path"])
-                else:
-                    validator_compile_errors[key] = str(compiled_validator["message"])
-
-            suite_started = time.perf_counter()
-            raw_results = [
-                _execute_test(
-                    command=list(compiled["command"]),
-                    test=test,
-                    workdir=str(workdir),
-                )
-                for test in normalized_tests
-            ]
-            suite_execution_time_ms = int((time.perf_counter() - suite_started) * 1000)
-            results = [
-                _judge_test_result(
-                    execution=execution,
-                    test=test,
-                    validator_jars_by_key=validator_jars_by_key,
-                    validator_compile_errors=validator_compile_errors,
-                )
-                for execution, test in zip(raw_results, normalized_tests, strict=True)
-            ]
+                suite_started = time.perf_counter()
+                raw_results = [
+                    _execute_test(
+                        command=list(compiled["command"]),
+                        test=test,
+                        workdir=str(workdir),
+                        run_control=run_control,
+                    )
+                    for test in normalized_tests
+                ]
+                suite_execution_time_ms = int((time.perf_counter() - suite_started) * 1000)
+                results = [
+                    _judge_test_result(
+                        execution=execution,
+                        test=test,
+                        validator_jars_by_key=validator_jars_by_key,
+                        validator_compile_errors=validator_compile_errors,
+                        run_control=run_control,
+                    )
+                    for execution, test in zip(raw_results, normalized_tests, strict=True)
+                ]
+    finally:
+        if run_id is not None and run_control is not None:
+            _finish_run(run_id, run_control)
 
     result_hash = _compute_result_hash(results)
     executed_at = datetime.now(timezone.utc).isoformat()
@@ -688,6 +877,27 @@ class SandboxHandler(BaseHTTPRequestHandler):
         _json_response(self, 404, {"message": "Not found."})
 
     def do_POST(self) -> None:  # noqa: N802
+        if self.path == "/cancel":
+            content_length = self.headers.get("Content-Length")
+            try:
+                length = int(content_length or "0")
+            except ValueError:
+                length = 0
+            if length <= 0 or length > MAX_BODY_BYTES:
+                _json_response(self, 400, {"message": "Invalid request size."})
+                return
+            raw = self.rfile.read(length)
+            try:
+                payload = json.loads(raw.decode("utf-8"))
+            except ValueError as exc:
+                _json_response(self, 400, {"message": str(exc)})
+                return
+            run_id = str(payload.get("runId", "") or "").strip()
+            if not run_id:
+                _json_response(self, 400, {"message": "runId is required."})
+                return
+            _json_response(self, 202, {"cancelled": _cancel_run(run_id)})
+            return
         if self.path != "/run":
             _json_response(self, 404, {"message": "Not found."})
             return
@@ -708,6 +918,9 @@ class SandboxHandler(BaseHTTPRequestHandler):
             result = _run_payload(payload)
         except ValueError as exc:
             _json_response(self, 400, {"message": str(exc)})
+            return
+        except RunCancelled as exc:
+            _json_response(self, 409, {"message": str(exc)})
             return
         except Exception as exc:
             _json_response(self, 500, {"message": f"Sandbox execution error: {exc}"})

@@ -39,7 +39,11 @@ class BrowserHttpTextClient : HttpTextClient {
 
     override suspend fun postJson(url: String, body: String): String {
         return suspendCancellableCoroutine { continuation ->
-            postJsonText(url = url, body = body).then(
+            val abortController = createAbortController()
+            continuation.invokeOnCancellation {
+                abortRequest(abortController)
+            }
+            postJsonText(url = url, body = body, abortController = abortController).then(
                 onFulfilled = { responseBody ->
                     if (continuation.isActive) {
                         continuation.resume(jsAnyToString(responseBody))
@@ -64,9 +68,15 @@ class BrowserHttpTextClient : HttpTextClient {
 private external fun fetchText(url: String): Promise<JsAny?>
 
 @JsFun(
-    "(url, body) => fetch(url, { method: 'POST', cache: 'no-store', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body }).then(async r => { const text = await r.text(); if (!r.ok) { throw new Error(text || ('HTTP ' + r.status)); } return text; })"
+    "(url, body, abortController) => fetch(url, { method: 'POST', cache: 'no-store', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body, signal: abortController.signal }).then(async r => { const text = await r.text(); if (!r.ok) { throw new Error(text || ('HTTP ' + r.status)); } return text; })"
 )
-private external fun postJsonText(url: String, body: String): Promise<JsAny?>
+private external fun postJsonText(url: String, body: String, abortController: JsAny): Promise<JsAny?>
+
+@JsFun("() => new AbortController()")
+private external fun createAbortController(): JsAny
+
+@JsFun("(abortController) => abortController.abort()")
+private external fun abortRequest(abortController: JsAny)
 
 @JsFun("(value) => String(value)")
 private external fun jsAnyToString(value: JsAny?): String

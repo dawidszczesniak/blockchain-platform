@@ -93,13 +93,30 @@ fun AppShell(
                     }
                 } else {
                     when (val route = currentRoute) {
-                        Route.Home -> HomeScreen(onNavigateToProblems = { onNavigate(Route.Problems) })
+                        Route.Home -> HomeScreen(
+                            onNavigateToProblems = { onNavigate(Route.Problems) },
+                            onOpenProblem = { problemId ->
+                                scope.launch {
+                                    runCatching { problemRepository.fetchProblemById(problemId.toInt()) }
+                                        .onSuccess { problemSummary ->
+                                            onNavigate(Route.ProblemDetails(problemSummary))
+                                        }
+                                }
+                            }
+                        )
                         Route.Problems -> {
                             val problemsListViewModel = remember { koin.get<ProblemsListViewModel>() }
                             ProblemsListScreen(
                                 viewModel = problemsListViewModel,
                                 onCreateProblem = { onNavigate(Route.CreateProblem) },
-                                onOpenProblem = { onNavigate(Route.ProblemDetails(it)) }
+                                onOpenProblem = { problem ->
+                                    scope.launch {
+                                        runCatching { problemRepository.fetchProblemById(problem.id) }
+                                            .onSuccess { problemSummary ->
+                                                onNavigate(Route.ProblemDetails(problemSummary))
+                                            }
+                                    }
+                                }
                             )
                         }
                         is Route.ProblemDetails -> {

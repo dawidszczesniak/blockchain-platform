@@ -2,8 +2,6 @@ package pl.dawidszczesniak.blockchain_platform.feature.problems.usecase
 
 import java.security.MessageDigest
 import java.time.Instant
-import javax.crypto.Mac
-import javax.crypto.spec.SecretKeySpec
 import org.web3j.crypto.Hash
 import org.web3j.utils.Numeric
 import pl.dawidszczesniak.blockchain_platform.db.SubmissionAttemptStatus
@@ -26,7 +24,6 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.Submis
 import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.SubmissionRecordDraft
 import pl.dawidszczesniak.blockchain_platform.feature.problems.sandbox.SandboxClient
 import pl.dawidszczesniak.blockchain_platform.feature.problems.sandbox.SandboxConfig
-import pl.dawidszczesniak.blockchain_platform.feature.problems.sandbox.SandboxNodeRunOutput
 import pl.dawidszczesniak.blockchain_platform.feature.problems.sandbox.SandboxRunTestOutput
 
 internal class SubmitProblemValidationException(
@@ -56,6 +53,7 @@ internal class SubmitProblemCodeUseCaseImpl(
     private val sandboxConfig: SandboxConfig,
     private val contractConfig: BlockchainPlatformContractConfig,
     private val contractClient: BlockchainPlatformContractClient,
+    private val sandboxConsensusEvaluator: SandboxConsensusEvaluator = SandboxConsensusEvaluator(sandboxConfig),
 ) : SubmitProblemCodeUseCase, SubmissionJudgeService {
     override fun invoke(userId: Long, problemId: Int, request: RunProblemRequestDto): SubmitProblemResponseDto {
         return when (val outcome = judge(userId, problemId, request)) {
@@ -100,26 +98,20 @@ internal class SubmitProblemCodeUseCaseImpl(
             throw SubmitProblemValidationException("No sandbox nodes are configured.")
         }
 
-        val evaluatedNodes = nodeRuns.map { node ->
-            evaluateNodeRun(node)
-        }
-
-        val validNodeGroups = evaluatedNodes
-            .filter { it.isValid && !it.resultHash.isNullOrBlank() }
-            .groupBy { it.resultHash!! to (it.imageHash ?: "") }
-        val consensusEntry = validNodeGroups.entries.maxByOrNull { it.value.size }
-            ?: throw SubmitProblemValidationException("No valid node attestation was returned by the sandbox cluster.")
-        val consensusReached = consensusEntry.value.size
-        if (consensusReached < sandboxConfig.requiredConsensus) {
+        val consensus = runCatching {
+            sandboxConsensusEvaluator.evaluate(nodeRuns)
+        }.getOrElse { error ->
             throw SubmitProblemValidationException(
-                "Sandbox consensus not reached: got $consensusReached/${sandboxConfig.requiredConsensus} valid matching nodes."
+                error.message?.ifBlank { "Sandbox consensus could not be established." }
+                    ?: "Sandbox consensus could not be established."
             )
         }
-
-        val consensusResultHash = consensusEntry.key.first
-        val consensusImageHash = consensusEntry.key.second.takeIf { it.isNotBlank() }
-        val consensusNodeIds = consensusEntry.value.map { it.nodeId }.toSet()
-        val consensusNode = consensusEntry.value.first()
+        val evaluatedNodes = consensus.evaluatedNodes
+        val consensusReached = consensus.consensusReached
+        val consensusResultHash = consensus.resultHash
+        val consensusImageHash = consensus.imageHash
+        val consensusNodeIds = consensus.consensusNodeIds
+        val consensusNode = consensus.representativeNode
 
         val executionByTestId = consensusNode.results.associateBy { it.id }
         val evaluatedTests = context.tests.map { test ->
@@ -133,17 +125,8 @@ internal class SubmitProblemCodeUseCaseImpl(
 
         val passedCount = evaluatedTests.count { it.apiResult.passed }
         val allPassed = passedCount == evaluatedTests.size
-        // Correctness requires full consensus; ranking metrics use median to reduce node jitter.
-        val runtimeMs = medianInt(
-            consensusEntry.value.mapNotNull { node ->
-                node.suiteExecutionTimeMs ?: node.results.maxOfOrNull { it.executionTimeMs }
-            }
-        ) ?: 0
-        val reportedMemoryUsedKb = medianInt(
-            consensusEntry.value.mapNotNull { node ->
-                node.results.mapNotNull { it.memoryUsedKb }.maxOrNull()
-            }
-        )
+        val runtimeMs = consensus.runtimeMs
+        val reportedMemoryUsedKb = consensus.memoryUsedKb
         if (!allPassed) {
             val failedCount = evaluatedTests.size - passedCount
             return SubmissionJudgeOutcome.Rejected(
@@ -272,184 +255,7 @@ internal class SubmitProblemCodeUseCaseImpl(
             )
         )
     }
-
-    private fun evaluateNodeRun(node: SandboxNodeRunOutput): EvaluatedNodeRun {
-        val nodeId = node.nodeId?.trim().orEmpty().ifBlank { "unknown-node" }
-        if (!node.errorMessage.isNullOrBlank()) {
-            return EvaluatedNodeRun(
-                nodeId = nodeId,
-                nodeUrl = node.nodeUrl,
-                imageHash = node.imageHash,
-                runHash = node.runHash,
-                resultHash = node.resultHash,
-                suiteExecutionTimeMs = node.suiteExecutionTimeMs,
-                attestationPayloadHash = node.attestationPayloadHash,
-                attestationSignature = node.attestationSignature,
-                attestationScheme = node.attestationScheme,
-                results = emptyList(),
-                status = SubmissionAttestationStatus.Error,
-                isValid = false,
-                message = node.errorMessage,
-            )
-        }
-        val computedResultHash = computeSandboxResultHash(node.results)
-        if (computedResultHash != node.resultHash) {
-            return EvaluatedNodeRun(
-                nodeId = nodeId,
-                nodeUrl = node.nodeUrl,
-                imageHash = node.imageHash,
-                runHash = node.runHash,
-                resultHash = node.resultHash,
-                suiteExecutionTimeMs = node.suiteExecutionTimeMs,
-                attestationPayloadHash = node.attestationPayloadHash,
-                attestationSignature = node.attestationSignature,
-                attestationScheme = node.attestationScheme,
-                results = node.results,
-                status = SubmissionAttestationStatus.Invalid,
-                isValid = false,
-                message = "Node result hash does not match recomputed value.",
-            )
-        }
-
-        val imageHash = node.imageHash.orEmpty()
-        val runHash = node.runHash.orEmpty()
-        val executedAt = node.executedAt.orEmpty()
-        if (imageHash.isBlank() || runHash.isBlank() || executedAt.isBlank()) {
-            return EvaluatedNodeRun(
-                nodeId = nodeId,
-                nodeUrl = node.nodeUrl,
-                imageHash = node.imageHash,
-                runHash = node.runHash,
-                resultHash = computedResultHash,
-                suiteExecutionTimeMs = node.suiteExecutionTimeMs,
-                attestationPayloadHash = node.attestationPayloadHash,
-                attestationSignature = node.attestationSignature,
-                attestationScheme = node.attestationScheme,
-                results = node.results,
-                status = SubmissionAttestationStatus.Invalid,
-                isValid = false,
-                message = "Node attestation metadata is incomplete.",
-            )
-        }
-
-        val scheme = node.attestationScheme?.trim()?.lowercase().orEmpty()
-        if (scheme != DEFAULT_ATTESTATION_SCHEME) {
-            return EvaluatedNodeRun(
-                nodeId = nodeId,
-                nodeUrl = node.nodeUrl,
-                imageHash = node.imageHash,
-                runHash = node.runHash,
-                resultHash = computedResultHash,
-                suiteExecutionTimeMs = node.suiteExecutionTimeMs,
-                attestationPayloadHash = node.attestationPayloadHash,
-                attestationSignature = node.attestationSignature,
-                attestationScheme = node.attestationScheme,
-                results = node.results,
-                status = SubmissionAttestationStatus.Invalid,
-                isValid = false,
-                message = "Unsupported attestation scheme '$scheme'.",
-            )
-        }
-
-        val sharedSecret = sandboxConfig.nodeAttestationSecrets[nodeId].orEmpty()
-        if (sharedSecret.isBlank()) {
-            return EvaluatedNodeRun(
-                nodeId = nodeId,
-                nodeUrl = node.nodeUrl,
-                imageHash = node.imageHash,
-                runHash = node.runHash,
-                resultHash = computedResultHash,
-                suiteExecutionTimeMs = node.suiteExecutionTimeMs,
-                attestationPayloadHash = node.attestationPayloadHash,
-                attestationSignature = node.attestationSignature,
-                attestationScheme = node.attestationScheme,
-                results = node.results,
-                status = SubmissionAttestationStatus.Invalid,
-                isValid = false,
-                message = "No shared attestation secret configured for node '$nodeId'.",
-            )
-        }
-
-        val expectedPayloadHash = computeAttestationPayloadHash(
-            nodeId = nodeId,
-            imageHash = imageHash,
-            runHash = runHash,
-            resultHash = computedResultHash,
-            executedAt = executedAt,
-        )
-        if (expectedPayloadHash != node.attestationPayloadHash) {
-            return EvaluatedNodeRun(
-                nodeId = nodeId,
-                nodeUrl = node.nodeUrl,
-                imageHash = node.imageHash,
-                runHash = node.runHash,
-                resultHash = computedResultHash,
-                suiteExecutionTimeMs = node.suiteExecutionTimeMs,
-                attestationPayloadHash = node.attestationPayloadHash,
-                attestationSignature = node.attestationSignature,
-                attestationScheme = node.attestationScheme,
-                results = node.results,
-                status = SubmissionAttestationStatus.Invalid,
-                isValid = false,
-                message = "Attestation payload hash mismatch.",
-            )
-        }
-
-        val expectedSignature = hmacSha256Hex(
-            secret = sharedSecret,
-            payloadHash = expectedPayloadHash,
-        )
-        if (!constantTimeEquals(expectedSignature, node.attestationSignature.orEmpty())) {
-            return EvaluatedNodeRun(
-                nodeId = nodeId,
-                nodeUrl = node.nodeUrl,
-                imageHash = node.imageHash,
-                runHash = node.runHash,
-                resultHash = computedResultHash,
-                suiteExecutionTimeMs = node.suiteExecutionTimeMs,
-                attestationPayloadHash = node.attestationPayloadHash,
-                attestationSignature = node.attestationSignature,
-                attestationScheme = node.attestationScheme,
-                results = node.results,
-                status = SubmissionAttestationStatus.Invalid,
-                isValid = false,
-                message = "Attestation signature mismatch.",
-            )
-        }
-
-        return EvaluatedNodeRun(
-            nodeId = nodeId,
-            nodeUrl = node.nodeUrl,
-            imageHash = node.imageHash,
-            runHash = node.runHash,
-            resultHash = computedResultHash,
-            suiteExecutionTimeMs = node.suiteExecutionTimeMs,
-            attestationPayloadHash = node.attestationPayloadHash,
-            attestationSignature = node.attestationSignature,
-            attestationScheme = node.attestationScheme,
-            results = node.results,
-            status = SubmissionAttestationStatus.Ok,
-            isValid = true,
-            message = null,
-        )
-    }
 }
-
-private data class EvaluatedNodeRun(
-    val nodeId: String,
-    val nodeUrl: String,
-    val imageHash: String?,
-    val runHash: String?,
-    val resultHash: String?,
-    val suiteExecutionTimeMs: Int? = null,
-    val attestationPayloadHash: String?,
-    val attestationSignature: String?,
-    val attestationScheme: String?,
-    val results: List<SandboxRunTestOutput>,
-    val status: SubmissionAttestationStatus,
-    val isValid: Boolean,
-    val message: String?,
-)
 
 private data class EvaluatedSubmissionTest(
     val problemTestId: Long,
@@ -612,49 +418,14 @@ private fun buildCommitmentHash(
     return keccakHex(payload)
 }
 
-private fun medianInt(values: List<Int>): Int? {
-    if (values.isEmpty()) return null
-    val sorted = values.sorted()
-    val middle = sorted.size / 2
-    return if (sorted.size % 2 == 1) {
-        sorted[middle]
-    } else {
-        ((sorted[middle - 1].toLong() + sorted[middle].toLong()) / 2L).toInt()
-    }
-}
-
 internal fun computeSandboxResultHash(results: List<SandboxRunTestOutput>): String {
     val canonical = results
         .sortedBy { it.order }
         .joinToString("\n") { result ->
             // Consensus must be stable across nodes, so runtime metrics stay outside the hash.
             "${result.id}|${result.order}|${result.status}|${result.output.orEmpty()}|${result.passed ?: false}|${result.message.orEmpty()}"
-        }
+    }
     return sha256Hex(canonical)
-}
-
-private fun computeAttestationPayloadHash(
-    nodeId: String,
-    imageHash: String,
-    runHash: String,
-    resultHash: String,
-    executedAt: String,
-): String {
-    val payload = "$nodeId|$imageHash|$runHash|$resultHash|$executedAt"
-    return sha256Hex(payload)
-}
-
-private fun hmacSha256Hex(secret: String, payloadHash: String): String {
-    val mac = Mac.getInstance("HmacSHA256")
-    mac.init(SecretKeySpec(secret.toByteArray(Charsets.UTF_8), "HmacSHA256"))
-    val digest = mac.doFinal(payloadHash.toByteArray(Charsets.UTF_8))
-    return "0x${Numeric.toHexStringNoPrefix(digest).lowercase()}"
-}
-
-private fun constantTimeEquals(expectedHex: String, actualHex: String): Boolean {
-    val expected = normalizeHashHex(expectedHex).removePrefix("0x").toByteArray(Charsets.UTF_8)
-    val actual = normalizeHashHex(actualHex).removePrefix("0x").toByteArray(Charsets.UTF_8)
-    return MessageDigest.isEqual(expected, actual)
 }
 
 private fun sha256Hex(text: String): String {
@@ -665,11 +436,6 @@ private fun sha256Hex(text: String): String {
 private fun keccakHex(text: String): String {
     val digest = Hash.sha3(text.toByteArray(Charsets.UTF_8))
     return "0x${Numeric.toHexStringNoPrefix(digest).lowercase()}"
-}
-
-private fun normalizeHashHex(raw: String): String {
-    val trimmed = raw.trim().lowercase()
-    return if (trimmed.startsWith("0x")) trimmed else "0x$trimmed"
 }
 
 private const val MAX_SOURCE_CODE_CHARS = 120_000

@@ -18,6 +18,7 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.CreateProblem
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.CreatedProblemDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ConfirmCreateProblemRequestDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ConfirmJoinProblemRequestDto
+import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.CancelCreateProblemValidationRequestDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.JoinProblemResponseDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ParticipationProblemDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.PrepareCreateProblemResponseDto
@@ -41,6 +42,7 @@ interface ProblemRemoteDataSource {
     suspend fun prepareCreateProblemOnChain(request: CreateProblemRequestDto): PrepareCreateProblemResponseDto
     suspend fun confirmCreateProblemOnChain(request: ConfirmCreateProblemRequestDto): CreateProblemResponseDto
     suspend fun validateCreateProblem(request: ValidateCreateProblemRequestDto): ValidateCreateProblemResponseDto
+    suspend fun cancelCreateProblemValidation(runId: String)
     suspend fun prepareJoinProblemOnChain(problemId: Int): PrepareJoinProblemResponseDto
     suspend fun confirmJoinProblemOnChain(problemId: Int, request: ConfirmJoinProblemRequestDto): JoinProblemResponseDto
     suspend fun runProblemCode(problemId: Int, request: RunProblemRequestDto): RunProblemResponseDto
@@ -167,10 +169,21 @@ class ProblemRemoteDataSourceImpl(
             successful = obj.requiredInt("successful"),
             allSuccessful = obj.requiredBoolean("allSuccessful"),
             results = results,
+            runtimeMs = obj.optionalInt("runtimeMs") ?: 0,
+            memoryUsedKb = obj.optionalInt("memoryUsedKb"),
             sandboxNodeId = obj.optionalString("sandboxNodeId"),
             sandboxImageHash = obj.optionalString("sandboxImageHash"),
             sandboxRunHash = obj.optionalString("sandboxRunHash"),
         )
+    }
+
+    override suspend fun cancelCreateProblemValidation(runId: String) {
+        val json = Json { ignoreUnknownKeys = true }
+        val body = json.encodeToString(
+            CancelCreateProblemValidationRequestDto.serializer(),
+            CancelCreateProblemValidationRequestDto(validationRunId = runId),
+        )
+        httpTextClient.postJson(endpoint(apiBaseUrl, "/problems/create/validate/cancel"), body)
     }
 
     override suspend fun prepareJoinProblemOnChain(problemId: Int): PrepareJoinProblemResponseDto {

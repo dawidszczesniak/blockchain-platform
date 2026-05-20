@@ -26,6 +26,9 @@ internal data class CreateProblemReferenceValidationEvidence(
     val runHash: String?,
     val resultHash: String?,
     val imageHash: String?,
+    val consensusNodes: Int,
+    val runtimeMs: Int,
+    val memoryUsedKb: Int?,
     val validatedAt: Instant,
 )
 
@@ -43,45 +46,55 @@ internal interface CreateProblemReferenceValidationService {
         referenceSolutionCode: String,
         testCases: List<CreateProblemTestCaseDto>,
         requireDeterminism: Boolean,
+        validationRunId: String? = null,
+        cancellation: SandboxRunCancellation? = null,
     ): CreateProblemReferenceValidationResult
 }
 
 internal class CreateProblemReferenceValidationServiceImpl(
     private val sandboxClient: SandboxClient,
+    private val sandboxConsensusEvaluator: SandboxConsensusEvaluator,
 ) : CreateProblemReferenceValidationService {
     override fun validateReferenceSolution(
         referenceSolutionLanguage: String,
         referenceSolutionCode: String,
         testCases: List<CreateProblemTestCaseDto>,
         requireDeterminism: Boolean,
+        validationRunId: String?,
+        cancellation: SandboxRunCancellation?,
     ): CreateProblemReferenceValidationResult {
         val normalizedLanguage = referenceSolutionLanguage.trim().lowercase()
         if (normalizedLanguage != CREATE_PROBLEM_SUPPORTED_LANGUAGE) {
             throw CreateProblemValidationException("Only Kotlin reference solution is supported.")
         }
 
-        val normalizedCode = referenceSolutionCode.trim()
-        if (normalizedCode.isBlank()) {
+        if (referenceSolutionCode.trim().isBlank()) {
             throw CreateProblemValidationException("referenceSolutionCode is required.")
         }
-        if (normalizedCode.length > MAX_REFERENCE_SOLUTION_CHARS) {
+        if (referenceSolutionCode.length > MAX_REFERENCE_SOLUTION_CHARS) {
             throw CreateProblemValidationException(
                 "Reference solution is too long. Max length is $MAX_REFERENCE_SOLUTION_CHARS characters."
             )
         }
 
         val tests = parseStructuredTests(testCases)
+        cancellation?.throwIfCancelled()
         val firstRun = executeReferenceSolution(
-            referenceSolutionCode = normalizedCode,
+            referenceSolutionCode = referenceSolutionCode,
             tests = tests,
+            validationRunId = validationRunId,
+            cancellation = cancellation,
         )
         if (!requireDeterminism || !firstRun.allSuccessful) {
             return firstRun
         }
 
+        cancellation?.throwIfCancelled()
         val secondRun = executeReferenceSolution(
-            referenceSolutionCode = normalizedCode,
+            referenceSolutionCode = referenceSolutionCode,
             tests = tests,
+            validationRunId = validationRunId,
+            cancellation = cancellation,
         )
         val firstOutputs = firstRun.tests.map { it.output }
         val secondOutputs = secondRun.tests.map { it.output }
@@ -141,6 +154,8 @@ internal class CreateProblemReferenceValidationServiceImpl(
     private fun executeReferenceSolution(
         referenceSolutionCode: String,
         tests: List<NewProblemTestDraft>,
+        validationRunId: String?,
+        cancellation: SandboxRunCancellation?,
     ): CreateProblemReferenceValidationResult {
         val sandboxInputs = tests.mapIndexed { index, test ->
             SandboxRunInput(
@@ -155,19 +170,35 @@ internal class CreateProblemReferenceValidationServiceImpl(
             )
         }
         val sandboxResult = runCatching {
-            sandboxClient.runSolution(
+            sandboxClient.runSolutionOnAllNodes(
                 sourceCode = referenceSolutionCode,
                 language = CREATE_PROBLEM_SUPPORTED_LANGUAGE,
                 tests = sandboxInputs,
+                runId = validationRunId,
+                cancellation = cancellation,
             )
         }.getOrElse { error ->
+            if (error is CreateProblemValidationCancelledException) {
+                throw error
+            }
+            throw CreateProblemValidationException(
+                error.message?.ifBlank { "Reference solution execution failed." }
+                    ?: "Reference solution execution failed."
+            )
+        }
+        val consensus = runCatching {
+            sandboxConsensusEvaluator.evaluate(sandboxResult)
+        }.getOrElse { error ->
+            if (error is CreateProblemValidationCancelledException) {
+                throw error
+            }
             throw CreateProblemValidationException(
                 error.message?.ifBlank { "Reference solution execution failed." }
                     ?: "Reference solution execution failed."
             )
         }
 
-        val executionByOrder = sandboxResult.results.associateBy { it.order }
+        val executionByOrder = consensus.representativeNode.results.associateBy { it.order }
         val testResults = tests.indices.map { index ->
             val humanIndex = index + 1
             val execution = executionByOrder[humanIndex]
@@ -213,10 +244,13 @@ internal class CreateProblemReferenceValidationServiceImpl(
         return CreateProblemReferenceValidationResult(
             tests = testResults,
             evidence = CreateProblemReferenceValidationEvidence(
-                nodeId = sandboxResult.nodeId,
-                runHash = sandboxResult.runHash,
-                resultHash = sandboxResult.resultHash,
-                imageHash = sandboxResult.imageHash,
+                nodeId = consensus.representativeNode.nodeId,
+                runHash = consensus.representativeNode.runHash,
+                resultHash = consensus.resultHash,
+                imageHash = consensus.imageHash,
+                consensusNodes = consensus.consensusReached,
+                runtimeMs = consensus.runtimeMs,
+                memoryUsedKb = consensus.memoryUsedKb,
                 validatedAt = Instant.now(),
             ),
         )

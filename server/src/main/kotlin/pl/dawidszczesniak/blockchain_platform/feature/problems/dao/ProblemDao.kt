@@ -48,7 +48,11 @@ internal interface ProblemDao {
         description: String,
         constraints: String,
         examplesJson: String,
+        referenceSolutionCode: String,
         referenceSolutionHash: String,
+        referenceRuntimeMs: Int,
+        referenceMemoryUsedKb: Int?,
+        referenceConsensusNodes: Int,
         validationNodeId: String?,
         validationRunHash: String?,
         validationResultHash: String?,
@@ -222,7 +226,11 @@ internal class ProblemDaoImpl : ProblemDao {
         description: String,
         constraints: String,
         examplesJson: String,
+        referenceSolutionCode: String,
         referenceSolutionHash: String,
+        referenceRuntimeMs: Int,
+        referenceMemoryUsedKb: Int?,
+        referenceConsensusNodes: Int,
         validationNodeId: String?,
         validationRunHash: String?,
         validationResultHash: String?,
@@ -249,7 +257,11 @@ internal class ProblemDaoImpl : ProblemDao {
             it[ProblemsTable.description] = description
             it[ProblemsTable.constraintsText] = constraints
             it[ProblemsTable.examplesJson] = examplesJson
+            it[ProblemsTable.referenceSolutionCode] = referenceSolutionCode
             it[ProblemsTable.referenceSolutionHash] = referenceSolutionHash
+            it[ProblemsTable.referenceRuntimeMs] = referenceRuntimeMs
+            it[ProblemsTable.referenceMemoryUsedKb] = referenceMemoryUsedKb
+            it[ProblemsTable.referenceConsensusNodes] = referenceConsensusNodes
             it[ProblemsTable.validationNodeId] = validationNodeId
             it[ProblemsTable.validationRunHash] = validationRunHash
             it[ProblemsTable.validationResultHash] = validationResultHash

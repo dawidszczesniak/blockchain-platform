@@ -5,11 +5,16 @@ import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.time.Duration
+import java.util.concurrent.CancellationException
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CompletionException
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.CreateProblemValidationCancelledException
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.SandboxRunCancellation
 
 internal data class SandboxRunInput(
     val id: Long,
@@ -73,6 +78,8 @@ internal interface SandboxClient {
         sourceCode: String,
         language: String,
         tests: List<SandboxRunInput>,
+        runId: String? = null,
+        cancellation: SandboxRunCancellation? = null,
     ): List<SandboxNodeRunOutput>
 }
 
@@ -167,12 +174,16 @@ internal class SandboxHttpClient(
         sourceCode: String,
         language: String,
         tests: List<SandboxRunInput>,
+        runId: String?,
+        cancellation: SandboxRunCancellation?,
     ): List<SandboxNodeRunOutput> {
         if (tests.isEmpty()) {
             error("Sandbox requires at least one test.")
         }
+        cancellation?.throwIfCancelled()
         val payload = json.encodeToString(
             SandboxRunRequest(
+                runId = runId,
                 sourceCode = sourceCode,
                 language = language,
                 tests = tests.map { test ->
@@ -189,9 +200,23 @@ internal class SandboxHttpClient(
                 },
             )
         )
+        val nodeCalls = config.nodes.associateWith { node ->
+            callNodeAsync(node, payload)
+        }
+        if (!runId.isNullOrBlank() && cancellation != null) {
+            cancellation.registerCancellationAction {
+                nodeCalls.values.forEach { future ->
+                    future.cancel(true)
+                }
+                config.nodes.forEach { node ->
+                    runCatching { cancelNode(node, runId) }
+                }
+            }
+        }
+        cancellation?.throwIfCancelled()
         return config.nodes.map { node ->
             runCatching {
-                callNode(node, payload)
+                nodeCalls.getValue(node).join()
             }.fold(
                 onSuccess = { response ->
                     val imageHashMismatch = !config.expectedImageHash.isNullOrBlank() &&
@@ -241,6 +266,13 @@ internal class SandboxHttpClient(
                     }
                 },
                 onFailure = { error ->
+                    val rootCause = when (error) {
+                        is CompletionException -> error.cause ?: error
+                        else -> error
+                    }
+                    if (rootCause is CancellationException || cancellation?.isCancelled == true) {
+                        throw CreateProblemValidationCancelledException()
+                    }
                     SandboxNodeRunOutput(
                         nodeId = null,
                         nodeUrl = node,
@@ -253,11 +285,28 @@ internal class SandboxHttpClient(
                         attestationScheme = null,
                         executedAt = null,
                         results = emptyList(),
-                        errorMessage = error.message?.ifBlank { null } ?: "Sandbox node call failed.",
+                        errorMessage = rootCause.message?.ifBlank { null } ?: "Sandbox node call failed.",
                     )
                 },
             )
         }
+    }
+
+    private fun callNodeAsync(nodeBaseUrl: String, payload: String): CompletableFuture<SandboxRunResponse> {
+        val request = HttpRequest.newBuilder()
+            .uri(URI.create("$nodeBaseUrl/run"))
+            .timeout(Duration.ofMillis(config.requestTimeoutMs))
+            .header("Content-Type", "application/json")
+            .POST(HttpRequest.BodyPublishers.ofString(payload))
+            .build()
+        return http.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+            .thenApply { response ->
+                if (response.statusCode() !in 200..299) {
+                    val body = response.body().trim().ifBlank { "HTTP ${response.statusCode()}" }
+                    throw IllegalStateException("Sandbox node '$nodeBaseUrl' failed: $body")
+                }
+                json.decodeFromString<SandboxRunResponse>(response.body())
+            }
     }
 
     private fun callNode(nodeBaseUrl: String, payload: String): SandboxRunResponse {
@@ -274,13 +323,31 @@ internal class SandboxHttpClient(
         }
         return json.decodeFromString(SandboxRunResponse.serializer(), response.body())
     }
+
+    private fun cancelNode(nodeBaseUrl: String, runId: String) {
+        val request = HttpRequest.newBuilder()
+            .uri(URI.create("$nodeBaseUrl/cancel"))
+            .timeout(Duration.ofMillis(config.connectTimeoutMs))
+            .header("Content-Type", "application/json")
+            .POST(HttpRequest.BodyPublishers.ofString(json.encodeToString(SandboxCancelRequest(runId = runId))))
+            .build()
+        runCatching {
+            http.send(request, HttpResponse.BodyHandlers.discarding())
+        }
+    }
 }
 
 @Serializable
 private data class SandboxRunRequest(
+    val runId: String? = null,
     val sourceCode: String,
     val language: String,
     val tests: List<SandboxRunRequestTest>,
+)
+
+@Serializable
+private data class SandboxCancelRequest(
+    val runId: String,
 )
 
 @Serializable

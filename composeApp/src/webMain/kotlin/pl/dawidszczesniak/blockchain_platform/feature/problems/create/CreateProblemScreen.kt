@@ -24,14 +24,17 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -49,9 +52,11 @@ import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -61,7 +66,11 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import blockchain_platform.composeapp.generated.resources.Res
@@ -92,10 +101,14 @@ import blockchain_platform.composeapp.generated.resources.create_problem_run_err
 import blockchain_platform.composeapp.generated.resources.create_problem_run_error_missing_result
 import blockchain_platform.composeapp.generated.resources.create_problem_run_error_test_input_required
 import blockchain_platform.composeapp.generated.resources.create_problem_run_all
+import blockchain_platform.composeapp.generated.resources.create_problem_run_all_loading
+import blockchain_platform.composeapp.generated.resources.create_problem_run_all_success
 import blockchain_platform.composeapp.generated.resources.create_problem_run_output
 import blockchain_platform.composeapp.generated.resources.create_problem_run_running
 import blockchain_platform.composeapp.generated.resources.create_problem_run_status
 import blockchain_platform.composeapp.generated.resources.create_problem_run_test
+import blockchain_platform.composeapp.generated.resources.create_problem_run_test_loading
+import blockchain_platform.composeapp.generated.resources.create_problem_run_test_success
 import blockchain_platform.composeapp.generated.resources.create_problem_schedule_title
 import blockchain_platform.composeapp.generated.resources.create_problem_submit_error_test_input_required
 import blockchain_platform.composeapp.generated.resources.create_problem_submit_failed
@@ -121,10 +134,13 @@ import blockchain_platform.composeapp.generated.resources.create_problem_validat
 import blockchain_platform.composeapp.generated.resources.create_problem_validation_required
 import blockchain_platform.composeapp.generated.resources.create_problem_validation_run_required
 import blockchain_platform.composeapp.generated.resources.create_problem_validation_ready
+import blockchain_platform.composeapp.generated.resources.problem_details_reference_memory
+import blockchain_platform.composeapp.generated.resources.problem_details_reference_runtime
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.toLocalDateTime
+import kotlinx.coroutines.delay
 import kotlin.time.Instant
 import org.jetbrains.compose.resources.stringResource
 import pl.dawidszczesniak.blockchain_platform.di.LocalKoin
@@ -159,6 +175,18 @@ private fun EditorFieldLabelText(text: String) {
     )
 }
 
+private sealed interface CreateProblemRunOverlayState {
+    data class RunningAll(
+        val currentTestNumber: Int,
+        val testCount: Int,
+    ) : CreateProblemRunOverlayState
+    data class RunningSingle(val testNumber: Int) : CreateProblemRunOverlayState
+    data class Submitting(val message: String) : CreateProblemRunOverlayState
+    data class SuccessAll(val testCount: Int) : CreateProblemRunOverlayState
+    data class SuccessSingle(val testNumber: Int) : CreateProblemRunOverlayState
+    data object SubmitSuccess : CreateProblemRunOverlayState
+}
+
 @Composable
 fun CreateProblemScreen() {
     val koin = LocalKoin.current
@@ -167,18 +195,47 @@ fun CreateProblemScreen() {
         onDispose { viewModel.close() }
     }
     val state by viewModel.state.collectAsState()
+    val runOverlayState = rememberRunOverlayState(state)
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(18.dp)
-    ) {
-        BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-            val isCompact = maxWidth < 980.dp
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(18.dp)
+        ) {
+            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                val isCompact = maxWidth < 980.dp
 
-            if (isCompact) {
-                Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                if (isCompact) {
+                    Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                        CreateProblemWorkspace(
+                            state = state,
+                            onPaymentAssetChange = { viewModel.onIntent(CreateProblemIntent.PaymentAssetChanged(it)) },
+                            onPrizeChange = { viewModel.onIntent(CreateProblemIntent.PrizeChanged(it)) },
+                            onParticipantsChange = { viewModel.onIntent(CreateProblemIntent.ParticipantsChanged(it)) },
+                            onEntryFeeChange = { viewModel.onIntent(CreateProblemIntent.EntryFeeChanged(it)) },
+                            onTitleChange = { viewModel.onIntent(CreateProblemIntent.TitleChanged(it)) },
+                            onDescriptionChange = { viewModel.onIntent(CreateProblemIntent.DescriptionChanged(it)) },
+                            onReferenceSolutionChange = { viewModel.onIntent(CreateProblemIntent.ReferenceSolutionChanged(it)) },
+                            onAddTest = { viewModel.onIntent(CreateProblemIntent.AddTest) },
+                            onToggleTest = { id -> viewModel.onIntent(CreateProblemIntent.ToggleTest(id)) },
+                            onRemoveTest = { id -> viewModel.onIntent(CreateProblemIntent.RemoveTest(id)) },
+                            onTestInputChange = { id, value ->
+                                viewModel.onIntent(CreateProblemIntent.TestInputChanged(id, value))
+                            },
+                            onTestHiddenChange = { id, value ->
+                                viewModel.onIntent(CreateProblemIntent.TestHiddenChanged(id, value))
+                            },
+                            onRunSingleTest = { id -> viewModel.onIntent(CreateProblemIntent.RunSingleTest(id)) },
+                            onRunAllTests = { viewModel.onIntent(CreateProblemIntent.RunAllTests) },
+                            onJoinUntilChange = { viewModel.onIntent(CreateProblemIntent.JoinUntilChanged(it)) },
+                            onSubmitUntilChange = { viewModel.onIntent(CreateProblemIntent.SubmitUntilChanged(it)) },
+                            onSubmit = { viewModel.onIntent(CreateProblemIntent.Submit) },
+                            isCompact = true,
+                        )
+                    }
+                } else {
                     CreateProblemWorkspace(
                         state = state,
                         onPaymentAssetChange = { viewModel.onIntent(CreateProblemIntent.PaymentAssetChanged(it)) },
@@ -202,37 +259,19 @@ fun CreateProblemScreen() {
                         onJoinUntilChange = { viewModel.onIntent(CreateProblemIntent.JoinUntilChanged(it)) },
                         onSubmitUntilChange = { viewModel.onIntent(CreateProblemIntent.SubmitUntilChanged(it)) },
                         onSubmit = { viewModel.onIntent(CreateProblemIntent.Submit) },
-                        isCompact = true,
+                        isCompact = false,
                     )
                 }
-            } else {
-                CreateProblemWorkspace(
-                    state = state,
-                    onPaymentAssetChange = { viewModel.onIntent(CreateProblemIntent.PaymentAssetChanged(it)) },
-                    onPrizeChange = { viewModel.onIntent(CreateProblemIntent.PrizeChanged(it)) },
-                    onParticipantsChange = { viewModel.onIntent(CreateProblemIntent.ParticipantsChanged(it)) },
-                    onEntryFeeChange = { viewModel.onIntent(CreateProblemIntent.EntryFeeChanged(it)) },
-                    onTitleChange = { viewModel.onIntent(CreateProblemIntent.TitleChanged(it)) },
-                    onDescriptionChange = { viewModel.onIntent(CreateProblemIntent.DescriptionChanged(it)) },
-                    onReferenceSolutionChange = { viewModel.onIntent(CreateProblemIntent.ReferenceSolutionChanged(it)) },
-                    onAddTest = { viewModel.onIntent(CreateProblemIntent.AddTest) },
-                    onToggleTest = { id -> viewModel.onIntent(CreateProblemIntent.ToggleTest(id)) },
-                    onRemoveTest = { id -> viewModel.onIntent(CreateProblemIntent.RemoveTest(id)) },
-                    onTestInputChange = { id, value ->
-                        viewModel.onIntent(CreateProblemIntent.TestInputChanged(id, value))
-                    },
-                    onTestHiddenChange = { id, value ->
-                        viewModel.onIntent(CreateProblemIntent.TestHiddenChanged(id, value))
-                    },
-                    onRunSingleTest = { id -> viewModel.onIntent(CreateProblemIntent.RunSingleTest(id)) },
-                    onRunAllTests = { viewModel.onIntent(CreateProblemIntent.RunAllTests) },
-                    onJoinUntilChange = { viewModel.onIntent(CreateProblemIntent.JoinUntilChanged(it)) },
-                    onSubmitUntilChange = { viewModel.onIntent(CreateProblemIntent.SubmitUntilChanged(it)) },
-                    onSubmit = { viewModel.onIntent(CreateProblemIntent.Submit) },
-                    isCompact = false,
-                )
             }
         }
+        CreateProblemRunOverlay(
+            state = runOverlayState.value,
+            onDismiss = { runOverlayState.value = null },
+            onCancel = {
+                viewModel.onIntent(CreateProblemIntent.CancelRun)
+                runOverlayState.value = null
+            },
+        )
     }
 }
 
@@ -590,12 +629,18 @@ private fun CreateProblemForm(
             style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
             color = if (state.isValidationFresh) IntelliJCodePalette.Success else IntelliJCodePalette.Comment,
         )
+        ReferenceValidationBenchmark(
+            runtimeMs = state.validatedRuntimeMs,
+            memoryUsedKb = state.validatedMemoryUsedKb,
+        )
         state.runErrorMessage?.let { runErrorMessage ->
-            Text(
-                text = createProblemRunErrorMessage(runErrorMessage),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
-            )
+            SelectionContainer {
+                Text(
+                    text = createProblemRunErrorMessage(runErrorMessage),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
         }
         state.tests.forEachIndexed { index, test ->
             key(test.id) {
@@ -608,7 +653,8 @@ private fun CreateProblemForm(
                     onInputChange = { value -> onTestInputChange(test.id, value) },
                     onHiddenChange = { value -> onTestHiddenChange(test.id, value) },
                     onRun = { onRunSingleTest(test.id) },
-                    isRunning = state.isRunningAllTests || test.id in state.runningTestIds,
+                    isRunAllInProgress = state.isRunningAllTests,
+                    isSingleRunInProgress = test.id in state.runningTestIds,
                     runResult = state.testRunResultsById[test.id],
                     validation = if (state.submitAttempted) {
                         state.validation.testsById[test.id]
@@ -623,32 +669,19 @@ private fun CreateProblemForm(
         }
 
         if (state.submitFailed) {
-            Text(
-                text = if (state.requiresFreshValidationForSubmit) {
-                    stringResource(Res.string.create_problem_validation_run_required)
-                } else {
-                    state.submitErrorMessage?.let { createProblemSubmitErrorMessage(it) }
-                        ?: stringResource(Res.string.create_problem_submit_failed)
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
-            )
+            SelectionContainer {
+                Text(
+                    text = if (state.requiresFreshValidationForSubmit) {
+                        stringResource(Res.string.create_problem_validation_run_required)
+                    } else {
+                        state.submitErrorMessage?.let { createProblemSubmitErrorMessage(it) }
+                            ?: stringResource(Res.string.create_problem_submit_failed)
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
         }
-        if (state.isSubmitting && !state.submitStatusMessage.isNullOrBlank()) {
-            Text(
-                text = state.submitStatusMessage,
-                style = MaterialTheme.typography.bodySmall,
-                color = IntelliJCodePalette.Accent,
-            )
-        }
-        if (state.submitSuccessProblemId != null) {
-            Text(
-                text = stringResource(Res.string.create_problem_submit_success),
-                style = MaterialTheme.typography.bodySmall,
-                color = IntelliJCodePalette.Success,
-            )
-        }
-
         Button(
             onClick = onSubmit,
             enabled = state.canAttemptSubmit,
@@ -662,6 +695,32 @@ private fun CreateProblemForm(
                         Res.string.create_problem_action_create
                     }
                 )
+            )
+        }
+    }
+}
+
+@Composable
+private fun ReferenceValidationBenchmark(
+    runtimeMs: Int?,
+    memoryUsedKb: Int?,
+) {
+    if (runtimeMs == null && memoryUsedKb == null) {
+        return
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        runtimeMs?.let {
+            Text(
+                text = stringResource(Res.string.problem_details_reference_runtime, it),
+                style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                color = IntelliJCodePalette.Comment,
+            )
+        }
+        memoryUsedKb?.let {
+            Text(
+                text = stringResource(Res.string.problem_details_reference_memory, it),
+                style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                color = IntelliJCodePalette.Comment,
             )
         }
     }
@@ -1243,7 +1302,8 @@ private fun TestCaseCard(
     onInputChange: (String) -> Unit,
     onHiddenChange: (Boolean) -> Unit,
     onRun: () -> Unit,
-    isRunning: Boolean,
+    isRunAllInProgress: Boolean,
+    isSingleRunInProgress: Boolean,
     runResult: CreateProblemTestRunResult?,
     validation: CreateProblemTestValidation?,
 ) {
@@ -1272,11 +1332,11 @@ private fun TestCaseCard(
                 Spacer(Modifier.weight(1f))
                 OutlinedButton(
                     onClick = onRun,
-                    enabled = !isRunning,
+                    enabled = !isRunAllInProgress && !isSingleRunInProgress,
                 ) {
                     Text(
                         stringResource(
-                            if (isRunning) {
+                            if (isRunAllInProgress || isSingleRunInProgress) {
                                 Res.string.create_problem_run_running
                             } else {
                                 Res.string.create_problem_run_test
@@ -1336,26 +1396,18 @@ private fun TestCaseCard(
                     )
                 }
                 runResult?.let { result ->
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        text = stringResource(
-                            Res.string.create_problem_run_status,
-                            result.status,
-                            result.executionTimeMs,
-                        ),
-                        style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                        color = when (result.status.uppercase()) {
-                            "OK" -> IntelliJCodePalette.Success
-                            "TIMEOUT", "ERROR" -> MaterialTheme.colorScheme.error
-                            else -> MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                    )
-                    result.memoryUsedKb?.let { memoryUsedKb ->
-                        Spacer(Modifier.height(4.dp))
+                    if (!result.status.equals("OK", ignoreCase = true)) {
+                        Spacer(Modifier.height(8.dp))
                         Text(
-                            text = "Memory: ${memoryUsedKb} KB",
+                            text = stringResource(
+                                Res.string.create_problem_run_status,
+                                result.status,
+                            ),
                             style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = when (result.status.uppercase()) {
+                                "TIMEOUT", "ERROR" -> MaterialTheme.colorScheme.error
+                                else -> MaterialTheme.colorScheme.onSurfaceVariant
+                            },
                         )
                     }
                     result.output?.let { output ->
@@ -1370,14 +1422,287 @@ private fun TestCaseCard(
                     }
                     result.message?.let { message ->
                         Spacer(Modifier.height(4.dp))
-                        Text(
-                            text = message,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error,
-                        )
+                        SelectionContainer {
+                            Text(
+                                text = message,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        }
                     }
                 }
             }
         }
     }
+}
+
+@Composable
+private fun rememberRunOverlayState(state: CreateProblemState): androidx.compose.runtime.MutableState<CreateProblemRunOverlayState?> {
+    val overlayStateState = remember { mutableStateOf<CreateProblemRunOverlayState?>(null) }
+    var previousIsRunningAll by remember { mutableStateOf(false) }
+    var previousRunningTestId by remember { mutableStateOf<Int?>(null) }
+    var previousIsSubmitting by remember { mutableStateOf(false) }
+    var previousSubmitQueuedAfterValidation by remember { mutableStateOf(false) }
+    val creatingLabel = stringResource(Res.string.create_problem_action_creating)
+
+    LaunchedEffect(
+        state.isSubmitting,
+        state.submitStatusMessage,
+        state.submitSuccessProblemId,
+        state.submitFailed,
+        state.submitQueuedAfterValidation,
+        state.isRunningAllTests,
+        state.runningTestIds,
+        state.isValidationFresh,
+        state.runErrorMessage,
+        state.testRunResultsById,
+        state.tests,
+        state.runCancelled,
+    ) {
+        val overlayState = overlayStateState.value
+        val currentRunningTestId = state.runningTestIds.firstOrNull()
+
+        when {
+            state.isSubmitting -> {
+                overlayStateState.value = CreateProblemRunOverlayState.Submitting(
+                    message = state.submitStatusMessage ?: creatingLabel,
+                )
+            }
+            state.isRunningAllTests -> {
+                overlayStateState.value = CreateProblemRunOverlayState.RunningAll(
+                    currentTestNumber = state.runningAllCurrentTestNumber ?: 1,
+                    testCount = state.tests.size
+                )
+            }
+            currentRunningTestId != null -> {
+                overlayStateState.value = CreateProblemRunOverlayState.RunningSingle(
+                    testNumber = state.testNumberForId(currentRunningTestId)
+                )
+            }
+            previousIsRunningAll -> {
+                overlayStateState.value = if (previousSubmitQueuedAfterValidation) {
+                    if (overlayState is CreateProblemRunOverlayState.RunningAll) {
+                        null
+                    } else {
+                        overlayState
+                    }
+                } else if (!state.runCancelled && state.isValidationFresh && state.runErrorMessage == null) {
+                    CreateProblemRunOverlayState.SuccessAll(testCount = state.tests.size)
+                } else if (overlayState is CreateProblemRunOverlayState.RunningAll) {
+                    null
+                } else {
+                    overlayState
+                }
+            }
+            previousIsSubmitting -> {
+                overlayStateState.value = if (!state.submitFailed && state.submitSuccessProblemId != null) {
+                    CreateProblemRunOverlayState.SubmitSuccess
+                } else if (overlayState is CreateProblemRunOverlayState.Submitting) {
+                    null
+                } else {
+                    overlayState
+                }
+            }
+            previousRunningTestId != null -> {
+                val finishedTestId = requireNotNull(previousRunningTestId)
+                val finishedTestNumber = state.testNumberForId(finishedTestId)
+                overlayStateState.value = if (
+                    !state.runCancelled &&
+                    state.runErrorMessage == null &&
+                    state.testRunResultsById[finishedTestId]?.status.equals("OK", ignoreCase = true)
+                ) {
+                    CreateProblemRunOverlayState.SuccessSingle(finishedTestNumber)
+                } else if (overlayState is CreateProblemRunOverlayState.RunningSingle) {
+                    null
+                } else {
+                    overlayState
+                }
+            }
+        }
+
+        previousIsRunningAll = state.isRunningAllTests
+        previousRunningTestId = currentRunningTestId
+        previousIsSubmitting = state.isSubmitting
+        previousSubmitQueuedAfterValidation = state.submitQueuedAfterValidation
+    }
+    return overlayStateState
+}
+
+@Composable
+private fun CreateProblemRunOverlay(
+    state: CreateProblemRunOverlayState?,
+    onDismiss: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    if (state == null) {
+        return
+    }
+    val loadingDotsCount = rememberOverlayLoadingDotsCount(state)
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.48f)),
+        contentAlignment = Alignment.Center,
+    ) {
+        OutlinedCard(
+            modifier = Modifier
+                .widthIn(min = 320.dp, max = 380.dp)
+                .padding(horizontal = 24.dp),
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.outlinedCardColors(
+                containerColor = IntelliJCodePalette.Panel
+            ),
+            border = androidx.compose.foundation.BorderStroke(1.dp, IntelliJCodePalette.Border)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 22.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                when (state) {
+                    is CreateProblemRunOverlayState.RunningAll,
+                    is CreateProblemRunOverlayState.RunningSingle,
+                    is CreateProblemRunOverlayState.Submitting -> {
+                        CircularProgressIndicator(
+                            modifier = Modifier.height(24.dp).width(24.dp),
+                            strokeWidth = 2.dp,
+                            color = IntelliJCodePalette.Keyword,
+                        )
+                        Text(
+                            text = overlayRunningLabelWithDots(
+                                state = state,
+                                loadingDotsCount = loadingDotsCount,
+                            ),
+                            style = editorMonospaceTextStyle(),
+                            color = IntelliJCodePalette.Identifier,
+                            textAlign = TextAlign.Center,
+                        )
+                        if (state is CreateProblemRunOverlayState.RunningAll || state is CreateProblemRunOverlayState.RunningSingle) {
+                            OutlinedButton(
+                                onClick = onCancel,
+                                border = androidx.compose.foundation.BorderStroke(
+                                    1.dp,
+                                    IntelliJCodePalette.Keyword,
+                                ),
+                            ) {
+                                Text(text = stringResource(Res.string.create_problem_date_picker_dismiss))
+                            }
+                        }
+                    }
+                    is CreateProblemRunOverlayState.SuccessAll,
+                    is CreateProblemRunOverlayState.SuccessSingle,
+                    CreateProblemRunOverlayState.SubmitSuccess -> {
+                        Box(
+                            modifier = Modifier
+                                .background(IntelliJCodePalette.Success, RoundedCornerShape(999.dp))
+                                .padding(6.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                Icons.Outlined.Check,
+                                null,
+                                modifier = Modifier.width(18.dp),
+                                tint = Color.White,
+                            )
+                        }
+                        Text(
+                            text = overlaySuccessLabel(state),
+                            style = editorMonospaceTextStyle(),
+                            color = IntelliJCodePalette.Success,
+                        )
+                        OutlinedButton(
+                            onClick = onDismiss,
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                IntelliJCodePalette.Keyword,
+                            ),
+                        ) {
+                            Text(text = stringResource(Res.string.create_problem_date_picker_confirm))
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun rememberOverlayLoadingDotsCount(state: CreateProblemRunOverlayState?): Int {
+    var dotsCount by remember(state) { mutableIntStateOf(0) }
+    LaunchedEffect(state) {
+        if (
+            state is CreateProblemRunOverlayState.RunningAll ||
+            state is CreateProblemRunOverlayState.RunningSingle ||
+            state is CreateProblemRunOverlayState.Submitting
+        ) {
+            while (true) {
+                dotsCount = (dotsCount + 1) % 4
+                delay(350)
+            }
+        } else {
+            dotsCount = 0
+        }
+    }
+    return dotsCount
+}
+
+@Composable
+private fun overlayRunningLabel(state: CreateProblemRunOverlayState): String {
+    return when (state) {
+        is CreateProblemRunOverlayState.RunningAll -> {
+            stringResource(
+                Res.string.create_problem_run_all_loading,
+                state.currentTestNumber,
+                state.testCount,
+            )
+        }
+        is CreateProblemRunOverlayState.RunningSingle -> stringResource(Res.string.create_problem_run_test_loading)
+        is CreateProblemRunOverlayState.Submitting -> state.message
+        else -> ""
+    }
+}
+
+@Composable
+private fun overlayRunningLabelWithDots(
+    state: CreateProblemRunOverlayState,
+    loadingDotsCount: Int,
+) = buildAnnotatedString {
+    append(overlayRunningLabel(state))
+    append(" ")
+    repeat(3) { index ->
+        withStyle(
+            SpanStyle(
+                color = if (index < loadingDotsCount) {
+                    IntelliJCodePalette.Identifier
+                } else {
+                    Color.Transparent
+                }
+            )
+        ) {
+            append(".")
+        }
+    }
+}
+
+@Composable
+private fun overlaySuccessLabel(state: CreateProblemRunOverlayState): String {
+    return when (state) {
+        is CreateProblemRunOverlayState.SuccessAll -> {
+            if (state.testCount > 1) {
+                stringResource(Res.string.create_problem_run_all_success)
+            } else {
+                stringResource(Res.string.create_problem_run_test_success, 1)
+            }
+        }
+        is CreateProblemRunOverlayState.SuccessSingle -> stringResource(Res.string.create_problem_run_test_success, state.testNumber)
+        CreateProblemRunOverlayState.SubmitSuccess -> stringResource(Res.string.create_problem_submit_success)
+        else -> ""
+    }
+}
+
+private fun CreateProblemState.testNumberForId(testId: Int): Int {
+    val index = tests.indexOfFirst { it.id == testId }
+    return if (index >= 0) index + 1 else testId
 }

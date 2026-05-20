@@ -2,6 +2,7 @@ package pl.dawidszczesniak.blockchain_platform.feature.problems.controller
 
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ConfirmCreateProblemRequestDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ConfirmJoinProblemRequestDto
+import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.CancelCreateProblemValidationRequestDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.CreateProblemRequestDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.CreateProblemResponseDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.CreatedProblemDto
@@ -17,6 +18,7 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ValidateCreat
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ValidateCreateProblemResponseDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.mapper.toDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.CreateProblemUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.CancelCreateProblemValidationUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.EnqueueProblemSubmissionUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetSubmissionJudgeJobUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetCreatedProblemsUseCase
@@ -40,6 +42,7 @@ internal class ProblemController(
     private val prepareCreateProblemOnChainUseCase: PrepareCreateProblemOnChainUseCase,
     private val confirmCreateProblemOnChainUseCase: ConfirmCreateProblemOnChainUseCase,
     private val validateCreateProblemUseCase: ValidateCreateProblemUseCase,
+    private val cancelCreateProblemValidationUseCase: CancelCreateProblemValidationUseCase,
     private val joinProblemUseCase: JoinProblemUseCase,
     private val prepareJoinProblemOnChainUseCase: PrepareJoinProblemOnChainUseCase,
     private val confirmJoinProblemOnChainUseCase: ConfirmJoinProblemOnChainUseCase,
@@ -89,6 +92,13 @@ internal class ProblemController(
         request: ValidateCreateProblemRequestDto,
     ): ValidateCreateProblemResponseDto {
         return validateCreateProblemUseCase(userId, request)
+    }
+
+    fun cancelCreateProblemValidation(
+        userId: Long,
+        request: CancelCreateProblemValidationRequestDto,
+    ) {
+        cancelCreateProblemValidationUseCase(userId, request.validationRunId)
     }
 
     fun joinProblem(userId: Long, problemId: Int): JoinProblemResponseDto {

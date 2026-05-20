@@ -22,6 +22,7 @@ interface ProblemRepository {
     suspend fun prepareCreateProblemOnChain(request: CreateProblemRequestDto): PrepareCreateProblemResponseDto
     suspend fun confirmCreateProblemOnChain(request: ConfirmCreateProblemRequestDto): Int
     suspend fun validateCreateProblem(request: ValidateCreateProblemRequestDto): ValidateCreateProblemResponseDto
+    suspend fun cancelCreateProblemValidation(runId: String)
     suspend fun prepareJoinProblemOnChain(problemId: Int): PrepareJoinProblemResponseDto
     suspend fun confirmJoinProblemOnChain(problemId: Int, request: ConfirmJoinProblemRequestDto): JoinProblemResponseDto
     suspend fun runProblemCode(problemId: Int, sourceCode: String, language: String): RunProblemResponseDto

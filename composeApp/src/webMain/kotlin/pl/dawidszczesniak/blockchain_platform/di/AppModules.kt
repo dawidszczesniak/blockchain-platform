@@ -64,6 +64,8 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.participation.MyP
 import pl.dawidszczesniak.blockchain_platform.feature.problems.participation.ParticipationSyncStore
 import pl.dawidszczesniak.blockchain_platform.feature.problems.created.MyProblemsViewModel
 import pl.dawidszczesniak.blockchain_platform.feature.problems.list.ProblemsListViewModel
+import pl.dawidszczesniak.blockchain_platform.feature.problems.create.CancelCreateProblemValidationUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.problems.create.CancelCreateProblemValidationUseCaseImpl
 import pl.dawidszczesniak.blockchain_platform.feature.settings.SettingsViewModel
 import pl.dawidszczesniak.blockchain_platform.feature.settings.AppLanguageStore
 import pl.dawidszczesniak.blockchain_platform.network.BrowserHttpTextClient
@@ -116,6 +118,7 @@ fun appModules() = module {
     factory<GetProblemListUseCase> { GetProblemListUseCaseImpl(get()) }
     factory<GetCreatedProblemsUseCase> { GetCreatedProblemsUseCaseImpl(get()) }
     factory<GetParticipationProblemsUseCase> { GetParticipationProblemsUseCaseImpl(get()) }
+    factory<CancelCreateProblemValidationUseCase> { CancelCreateProblemValidationUseCaseImpl(get()) }
     factory<PrepareJoinProblemOnChainUseCase> { PrepareJoinProblemOnChainUseCaseImpl(get()) }
     factory<ConfirmJoinProblemOnChainUseCase> { ConfirmJoinProblemOnChainUseCaseImpl(get()) }
     factory<RunProblemCodeUseCase> { RunProblemCodeUseCaseImpl(get()) }
@@ -134,7 +137,7 @@ fun appModules() = module {
     factory { SettingsViewModel(get(), get(), get()) }
     factory { BackendHealthViewModel(get()) }
     factory { BackendMaintenanceViewModel() }
-    factory { CreateProblemViewModel(get(), get(), get(), get(), get(), get()) }
+    factory { CreateProblemViewModel(get(), get(), get(), get(), get(), get(), get()) }
     factory { ProblemDetailsViewModel(get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     factory { ProblemsListViewModel(get()) }
     factory { MyProblemsViewModel(get()) }

@@ -10,14 +10,25 @@ internal interface ValidateCreateProblemUseCase {
 
 internal class ValidateCreateProblemUseCaseImpl(
     private val referenceValidationService: CreateProblemReferenceValidationService,
+    private val cancellationRegistry: CreateProblemValidationCancellationRegistry,
 ) : ValidateCreateProblemUseCase {
     override fun invoke(userId: Long, request: ValidateCreateProblemRequestDto): ValidateCreateProblemResponseDto {
-        val validationResult = referenceValidationService.validateReferenceSolution(
-            referenceSolutionLanguage = request.referenceSolutionLanguage,
-            referenceSolutionCode = request.referenceSolutionCode,
-            testCases = request.testCases,
-            requireDeterminism = false,
-        )
+        val validationRunId = request.validationRunId?.trim()?.ifBlank { null }
+        val cancellation = validationRunId?.let { cancellationRegistry.open(userId = userId, runId = it) }
+        val validationResult = try {
+            referenceValidationService.validateReferenceSolution(
+                referenceSolutionLanguage = request.referenceSolutionLanguage,
+                referenceSolutionCode = request.referenceSolutionCode,
+                testCases = request.testCases,
+                requireDeterminism = false,
+                validationRunId = validationRunId,
+                cancellation = cancellation,
+            )
+        } finally {
+            if (validationRunId != null) {
+                cancellationRegistry.finish(userId = userId, runId = validationRunId)
+            }
+        }
         val results = validationResult.tests.map { test ->
             CreateProblemValidationTestResultDto(
                 index = test.index,
@@ -34,6 +45,8 @@ internal class ValidateCreateProblemUseCaseImpl(
             successful = successful,
             allSuccessful = successful == results.size,
             results = results,
+            runtimeMs = validationResult.evidence.runtimeMs,
+            memoryUsedKb = validationResult.evidence.memoryUsedKb,
             sandboxNodeId = validationResult.evidence.nodeId,
             sandboxImageHash = validationResult.evidence.imageHash,
             sandboxRunHash = validationResult.evidence.runHash,

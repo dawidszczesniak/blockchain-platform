@@ -24,7 +24,11 @@ OpenZeppelin references used for this setup:
   - stores all persistent state
   - keeps the user-facing contract address stable across upgrades
 - `server`
-  - Ktor backend for prepare/create/join verification, settlement, refunds, and accepted result recording
+  - Ktor backend exposing auth, platform, dashboard, and problem APIs
+  - prepares and confirms on-chain create/join flows
+  - judges submissions through sandbox consensus
+  - records accepted submission results on-chain
+  - runs background settlement/cancellation workers
 - `composeApp`
   - Compose Multiplatform web frontend
 - `sandbox-runner`
@@ -76,8 +80,8 @@ Added:
 
 Removed:
 
-- Hardhat config
-- Hardhat JS deploy/upgrade/validate scripts
+- project-root Hardhat config
+- project-root Hardhat JS deploy/upgrade/validate scripts
 
 ## Requirements
 
@@ -129,6 +133,8 @@ Frontend runs on `http://localhost:8081`, backend on `http://localhost:8080`.
 
 Backend, frontend build, Docker Compose, and Foundry scripts use one configuration source: [`.env.local`](/Users/computer.account/Desktop/blockchain-platform/.env.local).
 
+`.env.local` is mandatory for local development, must keep `APP_ENV=local`, and must define the local DB, Redis, auth, Ethereum, and sandbox settings the backend loads at startup.
+
 Before running `forge script`, export that file into your shell:
 
 ```bash
@@ -138,6 +144,8 @@ set +a
 ```
 
 Do not use a second env file, Gradle properties, or process env overrides for project configuration. Keep all configurable values in `.env.local`.
+
+If a value should come from Google Secret Manager, keep the target key blank and provide `GCP_SECRET_<KEY>`. When the secret reference is not a fully qualified `projects/...` path, also set `GCP_PROJECT_ID` or `GOOGLE_CLOUD_PROJECT`.
 
 For `ETH + USDC` the important blockchain entries are:
 
@@ -216,22 +224,22 @@ That is the OpenZeppelin-safe path for preserving proxy storage across upgrades.
 
 ## Backend Flow
 
-Create competition:
+Current on-chain create flow (`/problems/create/prepare` -> `/problems/create/confirm`):
 
 1. frontend calls backend prepare endpoint
 2. backend returns prepared wallet tx for `createCompetition(...)`
 3. if asset is ERC-20, backend may also return an approval tx that must be signed first
 4. user signs wallet transaction(s)
-5. backend verifies calldata, value, and `CompetitionCreated`
+5. backend confirm step verifies calldata, transferred value, and `CompetitionCreated`
 6. backend persists on-chain competition id
 
-Join competition:
+Current on-chain join flow (`/problems/{problemId}/join/prepare` -> `/problems/{problemId}/join/confirm`):
 
 1. frontend calls backend prepare endpoint
 2. backend returns prepared wallet tx for `joinCompetition(...)`
 3. if asset is ERC-20, backend may also return an approval tx that must be signed first
 4. user signs wallet transaction(s)
-5. backend verifies `CompetitionJoined`
+5. backend confirm step verifies `CompetitionJoined`
 6. backend records participation
 
 Accepted submission:
@@ -254,6 +262,12 @@ Backend tests:
 
 ```bash
 ./gradlew test
+```
+
+Frontend compile:
+
+```bash
+./gradlew :composeApp:compileKotlinWasmJs
 ```
 
 Foundry compile:

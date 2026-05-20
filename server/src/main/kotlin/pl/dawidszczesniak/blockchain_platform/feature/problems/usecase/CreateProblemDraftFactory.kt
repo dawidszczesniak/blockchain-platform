@@ -21,7 +21,11 @@ internal data class ValidatedCreateProblemDraft(
     val description: String,
     val constraints: String,
     val examples: List<StoredProblemExampleDraft>,
+    val referenceSolutionCode: String,
     val referenceSolutionHash: String,
+    val referenceRuntimeMs: Int,
+    val referenceMemoryUsedKb: Int?,
+    val referenceConsensusNodes: Int,
     val validationNodeId: String?,
     val validationRunHash: String?,
     val validationResultHash: String?,
@@ -55,7 +59,11 @@ internal data class ValidatedCreateProblemDraft(
                     explanation = example.explanation,
                 )
             },
+            referenceSolutionCode = referenceSolutionCode,
             referenceSolutionHash = referenceSolutionHash,
+            referenceRuntimeMs = referenceRuntimeMs,
+            referenceMemoryUsedKb = referenceMemoryUsedKb,
+            referenceConsensusNodes = referenceConsensusNodes,
             validationNodeId = validationNodeId,
             validationRunHash = validationRunHash,
             validationResultHash = validationResultHash,
@@ -96,7 +104,11 @@ internal data class ValidatedCreateProblemDraft(
             description = description,
             constraints = constraints,
             examples = examples,
+            referenceSolutionCode = referenceSolutionCode,
             referenceSolutionHash = referenceSolutionHash,
+            referenceRuntimeMs = referenceRuntimeMs,
+            referenceMemoryUsedKb = referenceMemoryUsedKb,
+            referenceConsensusNodes = referenceConsensusNodes,
             validationNodeId = validationNodeId,
             validationRunHash = validationRunHash,
             validationResultHash = validationResultHash,
@@ -220,7 +232,8 @@ internal class CreateProblemDraftFactory(
                 )
             }
 
-        val normalizedReferenceSolutionCode = request.referenceSolutionCode.trim()
+        val referenceSolutionCode = request.referenceSolutionCode
+        val referenceSolutionHash = createProblemSha256Hex(referenceSolutionCode)
         val title = rawTitle
         val normalizedJoinDate = joinUntilDate.toJavaLocalDate()
         val normalizedSubmitDate = submitUntilDate.toJavaLocalDate()
@@ -229,7 +242,7 @@ internal class CreateProblemDraftFactory(
             title = title,
             description = description,
             constraints = constraints,
-            referenceSolutionHash = createProblemSha256Hex(normalizedReferenceSolutionCode),
+            referenceSolutionHash = referenceSolutionHash,
             paymentAssetCode = paymentAsset.code,
             prizeAmountAtomic = prizeAmountAtomic,
             entryFeeAmountAtomic = entryFeeAmountAtomic,
@@ -243,7 +256,11 @@ internal class CreateProblemDraftFactory(
             description = description,
             constraints = constraints,
             examples = examples,
-            referenceSolutionHash = createProblemSha256Hex(normalizedReferenceSolutionCode),
+            referenceSolutionCode = referenceSolutionCode,
+            referenceSolutionHash = referenceSolutionHash,
+            referenceRuntimeMs = validationResult.evidence.runtimeMs,
+            referenceMemoryUsedKb = validationResult.evidence.memoryUsedKb,
+            referenceConsensusNodes = validationResult.evidence.consensusNodes,
             validationNodeId = validationResult.evidence.nodeId,
             validationRunHash = validationResult.evidence.runHash,
             validationResultHash = validationResult.evidence.resultHash,

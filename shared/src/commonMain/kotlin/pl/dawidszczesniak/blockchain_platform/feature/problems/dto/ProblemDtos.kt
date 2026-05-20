@@ -11,6 +11,10 @@ data class ProblemSummaryDto(
     val description: String,
     val constraints: String = "",
     val examples: List<ProblemExampleDto> = emptyList(),
+    val referenceSolutionCode: String = "",
+    val referenceRuntimeMs: Int? = null,
+    val referenceMemoryUsedKb: Int? = null,
+    val referenceConsensusNodes: Int? = null,
     val paymentAsset: PaymentAssetDto,
     val prizeAmountAtomic: String,
     val entryFeeAmountAtomic: String,
@@ -85,6 +89,12 @@ data class ValidateCreateProblemRequestDto(
     val referenceSolutionCode: String,
     val referenceSolutionLanguage: String = "kotlin",
     val testCases: List<CreateProblemTestCaseDto> = emptyList(),
+    val validationRunId: String? = null,
+)
+
+@Serializable
+data class CancelCreateProblemValidationRequestDto(
+    val validationRunId: String,
 )
 
 @Serializable
@@ -103,6 +113,8 @@ data class ValidateCreateProblemResponseDto(
     val successful: Int,
     val allSuccessful: Boolean,
     val results: List<CreateProblemValidationTestResultDto>,
+    val runtimeMs: Int = 0,
+    val memoryUsedKb: Int? = null,
     val sandboxNodeId: String? = null,
     val sandboxImageHash: String? = null,
     val sandboxRunHash: String? = null,

@@ -2,8 +2,11 @@ package pl.dawidszczesniak.blockchain_platform.feature.problems.create
 
 import kotlin.math.abs
 import kotlin.math.round
+import kotlin.random.Random
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -110,15 +113,21 @@ data class CreateProblemState(
             id = 1,
             input = "",
             isHidden = false,
-            expanded = false,
+            expanded = true,
         ),
     ),
     val nextTestId: Int = 2,
     val runningTestIds: Set<Int> = emptySet(),
     val isRunningAllTests: Boolean = false,
+    val runningAllCurrentTestNumber: Int? = null,
+    val runningAllTotalTests: Int? = null,
+    val runCancelled: Boolean = false,
     val runErrorMessage: String? = null,
     val testRunResultsById: Map<Int, CreateProblemTestRunResult> = emptyMap(),
     val validatedSnapshotHash: String? = null,
+    val validatedRuntimeMs: Int? = null,
+    val validatedMemoryUsedKb: Int? = null,
+    val submitQueuedAfterValidation: Boolean = false,
     val submitAttempted: Boolean = false,
     val isSubmitting: Boolean = false,
     val submitFailed: Boolean = false,
@@ -194,6 +203,7 @@ sealed interface CreateProblemIntent {
     data class TestHiddenChanged(val id: Int, val value: Boolean) : CreateProblemIntent
     data class RunSingleTest(val id: Int) : CreateProblemIntent
     data object RunAllTests : CreateProblemIntent
+    data object CancelRun : CreateProblemIntent
     data object Submit : CreateProblemIntent
 }
 
@@ -201,11 +211,14 @@ class CreateProblemViewModel(
     private val prepareCreateProblemOnChainUseCase: PrepareCreateProblemOnChainUseCase,
     private val confirmCreateProblemOnChainUseCase: ConfirmCreateProblemOnChainUseCase,
     private val validateCreateProblemUseCase: ValidateCreateProblemUseCase,
+    private val cancelCreateProblemValidationUseCase: CancelCreateProblemValidationUseCase,
     private val getPlatformConfigUseCase: GetPlatformConfigUseCase,
     private val walletProvider: WalletProvider,
     private val walletSessionStore: WalletSessionStore,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private var activeRunJob: Job? = null
+    private var activeValidationRunId: String? = null
     private val _state = MutableStateFlow(CreateProblemState())
     val state: StateFlow<CreateProblemState> = _state.asStateFlow()
 
@@ -282,7 +295,7 @@ class CreateProblemViewModel(
                                 id = current.nextTestId,
                                 input = "",
                                 isHidden = true,
-                                expanded = false,
+                                expanded = true,
                             ),
                             nextTestId = current.nextTestId + 1,
                         ).clearSubmissionAndValidationFeedback()
@@ -346,11 +359,13 @@ class CreateProblemViewModel(
 
             is CreateProblemIntent.RunSingleTest -> runSingleTest(intent.id)
             CreateProblemIntent.RunAllTests -> runAllTests()
+            CreateProblemIntent.CancelRun -> cancelActiveRun()
             CreateProblemIntent.Submit -> submit()
         }
     }
 
     fun close() {
+        activeRunJob?.cancel()
         scope.cancel()
     }
 
@@ -373,13 +388,15 @@ class CreateProblemViewModel(
             _state.update { current ->
                 current.copy(
                     submitAttempted = true,
-                    submitFailed = true,
-                    requiresFreshValidationForSubmit = true,
+                    submitFailed = false,
+                    requiresFreshValidationForSubmit = false,
                     submitStatusMessage = null,
                     submitErrorMessage = null,
                     submitSuccessProblemId = null,
+                    submitQueuedAfterValidation = true,
                 )
             }
+            runAllTests(submitAfterSuccess = true)
             return
         }
 
@@ -387,6 +404,7 @@ class CreateProblemViewModel(
         _state.update { current ->
             current.copy(
                 submitAttempted = true,
+                submitQueuedAfterValidation = false,
                 isSubmitting = true,
                 submitFailed = false,
                 requiresFreshValidationForSubmit = false,
@@ -475,15 +493,21 @@ class CreateProblemViewModel(
                             id = 1,
                             input = "",
                             isHidden = false,
-                            expanded = false,
+                            expanded = true,
                         ),
                     ),
                     nextTestId = 2,
                     runningTestIds = emptySet(),
                     isRunningAllTests = false,
+                    runningAllCurrentTestNumber = null,
+                    runningAllTotalTests = null,
+                    runCancelled = false,
                     runErrorMessage = null,
                     testRunResultsById = emptyMap(),
                     validatedSnapshotHash = null,
+                    validatedRuntimeMs = null,
+                    validatedMemoryUsedKb = null,
+                    submitQueuedAfterValidation = false,
                     submitAttempted = false,
                     isSubmitting = false,
                     submitFailed = false,
@@ -496,6 +520,7 @@ class CreateProblemViewModel(
                 _state.update { current ->
                     current.copy(
                         isSubmitting = false,
+                        submitQueuedAfterValidation = false,
                         submitFailed = true,
                         requiresFreshValidationForSubmit = false,
                         submitStatusMessage = null,
@@ -548,11 +573,17 @@ class CreateProblemViewModel(
         }
         val selectedTest = snapshot.tests.firstOrNull { it.id == testId } ?: return
         val requestSnapshotHash = snapshot.validationSnapshotHash
-        val request = snapshot.toValidateCreateProblemRequest(selectedTestIds = setOf(testId))
+        val validationRunId = newValidationRunId()
+        activeValidationRunId = validationRunId
+        val request = snapshot.toValidateCreateProblemRequest(
+            selectedTestIds = setOf(testId),
+            validationRunId = validationRunId,
+        )
 
         _state.update { current ->
             current.copy(
                 runningTestIds = current.runningTestIds + testId,
+                runCancelled = false,
                 runErrorMessage = null,
                 submitFailed = false,
                 requiresFreshValidationForSubmit = false,
@@ -561,7 +592,7 @@ class CreateProblemViewModel(
             )
         }
 
-        scope.launch {
+        activeRunJob = scope.launch {
             runCatching { validateCreateProblemUseCase(request) }
                 .onSuccess { response ->
                     val apiResult = response.results.firstOrNull()
@@ -584,10 +615,24 @@ class CreateProblemViewModel(
                             },
                             testRunResultsById = if (staleResult) current.testRunResultsById else resultMap,
                             validatedSnapshotHash = if (singleTestValidated) requestSnapshotHash else current.validatedSnapshotHash,
+                            validatedRuntimeMs = if (singleTestValidated) {
+                                response.runtimeMs
+                            } else {
+                                current.validatedRuntimeMs
+                            },
+                            validatedMemoryUsedKb = if (singleTestValidated) {
+                                response.memoryUsedKb
+                            } else {
+                                current.validatedMemoryUsedKb
+                            },
+                            runCancelled = false,
                         )
                     }
                 }
                 .onFailure { error ->
+                    if (error is CancellationException) {
+                        return@onFailure
+                    }
                     _state.update { current ->
                         current.copy(
                             runningTestIds = current.runningTestIds - testId,
@@ -595,10 +640,19 @@ class CreateProblemViewModel(
                         )
                     }
                 }
+        }.also { job ->
+            job.invokeOnCompletion {
+                if (activeRunJob === job) {
+                    activeRunJob = null
+                }
+                if (activeValidationRunId == validationRunId) {
+                    activeValidationRunId = null
+                }
+            }
         }
     }
 
-    private fun runAllTests() {
+    private fun runAllTests(submitAfterSuccess: Boolean = false) {
         val snapshot = state.value
         if (snapshot.isRunningAllTests || snapshot.runningTestIds.isNotEmpty() || snapshot.isSubmitting) {
             return
@@ -616,32 +670,71 @@ class CreateProblemViewModel(
             return
         }
         val requestSnapshotHash = snapshot.validationSnapshotHash
-        val request = snapshot.toValidateCreateProblemRequest(selectedTestIds = null)
+        val validationRunId = newValidationRunId()
+        activeValidationRunId = validationRunId
+        val request = snapshot.toValidateCreateProblemRequest(
+            selectedTestIds = null,
+            validationRunId = validationRunId,
+        )
         _state.update { current ->
             current.copy(
                 isRunningAllTests = true,
+                runningAllCurrentTestNumber = 1,
+                runningAllTotalTests = current.tests.size,
+                runCancelled = false,
                 runErrorMessage = null,
                 submitFailed = false,
                 requiresFreshValidationForSubmit = false,
                 submitErrorMessage = null,
                 submitSuccessProblemId = null,
+                submitQueuedAfterValidation = submitAfterSuccess,
                 validatedSnapshotHash = null,
+                validatedRuntimeMs = null,
+                validatedMemoryUsedKb = null,
             )
         }
 
-        scope.launch {
-            runCatching { validateCreateProblemUseCase(request) }
-                .onSuccess { response ->
+        activeRunJob = scope.launch {
+            runCatching {
+                val perTestResults = linkedMapOf<Int, CreateProblemTestRunResult>()
+                snapshot.tests.forEachIndexed { index, test ->
+                    _state.update { current ->
+                        current.copy(
+                            runningTestIds = setOf(test.id),
+                            runningAllCurrentTestNumber = index + 1,
+                            runningAllTotalTests = snapshot.tests.size,
+                            runCancelled = false,
+                        )
+                    }
+                    val singleResponse = validateCreateProblemUseCase(
+                        snapshot.toValidateCreateProblemRequest(
+                            selectedTestIds = setOf(test.id),
+                            validationRunId = validationRunId,
+                        )
+                    )
+                    val singleResult = singleResponse.results.firstOrNull()
+                        ?: error("Validation returned no result for test ${index + 1}.")
+                    perTestResults[test.id] = singleResult.toUiResult()
+                }
+                val fullResponse = validateCreateProblemUseCase(request)
+                perTestResults to fullResponse
+            }
+                .onSuccess { (perTestResults, response) ->
                     val responseByIndex = response.results.associateBy { it.index }
                     _state.update { current ->
-                        val mappedResults = current.tests.mapIndexedNotNull { index, test ->
-                            val result = responseByIndex[index + 1] ?: return@mapIndexedNotNull null
-                            test.id to result.toUiResult()
-                        }.toMap()
+                        val mappedResults = current.tests.associate { test ->
+                            val result = perTestResults[test.id]
+                                ?: responseByIndex[current.tests.indexOf(test) + 1]?.toUiResult()
+                            test.id to requireNotNull(result)
+                        }
                         val staleResult = current.validationSnapshotHash != requestSnapshotHash
                         val receivedAllResults = mappedResults.size == current.tests.size
                         current.copy(
                             isRunningAllTests = false,
+                            runningTestIds = emptySet(),
+                            runningAllCurrentTestNumber = null,
+                            runningAllTotalTests = null,
+                            runCancelled = false,
                             runErrorMessage = when {
                                 staleResult -> current.runErrorMessage
                                 !receivedAllResults -> "Validation returned incomplete test results."
@@ -653,20 +746,84 @@ class CreateProblemViewModel(
                             } else {
                                 null
                             },
+                            validatedRuntimeMs = if (!staleResult && receivedAllResults && response.allSuccessful) {
+                                response.runtimeMs
+                            } else {
+                                null
+                            },
+                            validatedMemoryUsedKb = if (!staleResult && receivedAllResults && response.allSuccessful) {
+                                response.memoryUsedKb
+                            } else {
+                                null
+                            },
+                            submitQueuedAfterValidation = if (!staleResult && receivedAllResults && response.allSuccessful) {
+                                current.submitQueuedAfterValidation
+                            } else {
+                                false
+                            },
                         )
+                    }
+                    if (!state.value.runCancelled && submitAfterSuccess && state.value.isValidationFresh) {
+                        submit()
                     }
                 }
                 .onFailure { error ->
+                    if (error is CancellationException) {
+                        return@onFailure
+                    }
                     _state.update { current ->
                         current.copy(
                             isRunningAllTests = false,
+                            runningTestIds = emptySet(),
+                            runningAllCurrentTestNumber = null,
+                            runningAllTotalTests = null,
+                            runCancelled = false,
                             runErrorMessage = extractReadableErrorMessage(error),
                             validatedSnapshotHash = null,
+                            validatedRuntimeMs = null,
+                            validatedMemoryUsedKb = null,
+                            submitQueuedAfterValidation = false,
                         )
                     }
                 }
+        }.also { job ->
+            job.invokeOnCompletion {
+                if (activeRunJob === job) {
+                    activeRunJob = null
+                }
+                if (activeValidationRunId == validationRunId) {
+                    activeValidationRunId = null
+                }
+            }
         }
     }
+
+    private fun cancelActiveRun() {
+        val validationRunId = activeValidationRunId
+        if (!validationRunId.isNullOrBlank()) {
+            scope.launch {
+                runCatching { cancelCreateProblemValidationUseCase(validationRunId) }
+            }
+        }
+        activeRunJob?.cancel()
+        activeRunJob = null
+        activeValidationRunId = null
+        _state.update { current ->
+            current.copy(
+                runningTestIds = emptySet(),
+                isRunningAllTests = false,
+                runningAllCurrentTestNumber = null,
+                runningAllTotalTests = null,
+                runCancelled = true,
+                runErrorMessage = null,
+                submitQueuedAfterValidation = false,
+            )
+        }
+    }
+}
+
+private fun newValidationRunId(): String {
+    return "create-problem-validation-${Random.nextLong().toString().removePrefix("-")}-${Random.nextLong().toString().removePrefix("-")}"
 }
 
 private fun validateCreateProblem(state: CreateProblemState): CreateProblemValidation {
@@ -824,6 +981,7 @@ private fun CreateProblemState.toCreateProblemRequest(): CreateProblemRequestDto
 
 private fun CreateProblemState.toValidateCreateProblemRequest(
     selectedTestIds: Set<Int>?,
+    validationRunId: String?,
 ): ValidateCreateProblemRequestDto {
     val selectedTests = if (selectedTestIds == null) {
         tests
@@ -841,6 +999,7 @@ private fun CreateProblemState.toValidateCreateProblemRequest(
                 memoryLimitMb = 256,
             )
         },
+        validationRunId = validationRunId,
     )
 }
 
@@ -859,6 +1018,7 @@ private fun CreateProblemState.clearSubmissionFeedback(): CreateProblemState {
         isSubmitting = false,
         submitFailed = false,
         requiresFreshValidationForSubmit = false,
+        submitQueuedAfterValidation = false,
         submitStatusMessage = null,
         submitErrorMessage = null,
         submitSuccessProblemId = null,
@@ -869,9 +1029,15 @@ private fun CreateProblemState.clearSubmissionAndValidationFeedback(): CreatePro
     return clearSubmissionFeedback().copy(
         isRunningAllTests = false,
         runningTestIds = emptySet(),
+        runningAllCurrentTestNumber = null,
+        runningAllTotalTests = null,
+        runCancelled = false,
         runErrorMessage = null,
         testRunResultsById = emptyMap(),
         validatedSnapshotHash = null,
+        validatedRuntimeMs = null,
+        validatedMemoryUsedKb = null,
+        submitQueuedAfterValidation = false,
     )
 }
 
