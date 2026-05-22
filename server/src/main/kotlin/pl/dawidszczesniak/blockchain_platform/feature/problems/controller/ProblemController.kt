@@ -27,6 +27,7 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetProble
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetProblemSummariesUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.JoinProblemUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.RunProblemCodeUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.RetrySubmissionJudgeJobUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.PrepareCreateProblemOnChainUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.ConfirmCreateProblemOnChainUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.PrepareJoinProblemOnChainUseCase
@@ -49,6 +50,7 @@ internal class ProblemController(
     private val runProblemCodeUseCase: RunProblemCodeUseCase,
     private val enqueueProblemSubmissionUseCase: EnqueueProblemSubmissionUseCase,
     private val getSubmissionJudgeJobUseCase: GetSubmissionJudgeJobUseCase,
+    private val retrySubmissionJudgeJobUseCase: RetrySubmissionJudgeJobUseCase,
 ) {
     fun getProblemSummaries(): List<ProblemSummaryDto> {
         return getProblemSummariesUseCase().map { it.toDto() }
@@ -148,5 +150,12 @@ internal class ProblemController(
         jobId: Long,
     ): SubmissionJudgeJobDto {
         return getSubmissionJudgeJobUseCase(userId, jobId)
+    }
+
+    fun retrySubmissionJudgeJob(
+        userId: Long,
+        jobId: Long,
+    ): SubmissionJudgeJobDto {
+        return retrySubmissionJudgeJobUseCase(userId, jobId)
     }
 }

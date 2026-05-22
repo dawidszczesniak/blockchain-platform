@@ -2,6 +2,7 @@ package pl.dawidszczesniak.blockchain_platform.feature.problems.usecase
 
 import java.security.MessageDigest
 import java.time.Instant
+import org.slf4j.LoggerFactory
 import org.web3j.crypto.Hash
 import org.web3j.utils.Numeric
 import pl.dawidszczesniak.blockchain_platform.db.SubmissionAttemptStatus
@@ -26,9 +27,17 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.sandbox.SandboxCl
 import pl.dawidszczesniak.blockchain_platform.feature.problems.sandbox.SandboxConfig
 import pl.dawidszczesniak.blockchain_platform.feature.problems.sandbox.SandboxRunTestOutput
 
+private val logger = LoggerFactory.getLogger("SubmitProblemCodeUseCase")
+
 internal class SubmitProblemValidationException(
     message: String,
 ) : IllegalArgumentException(message)
+
+internal class SubmissionReceiptTimeoutException(
+    val submissionId: Long,
+    val partialResponse: SubmitProblemResponseDto,
+    message: String,
+) : IllegalStateException(message)
 
 internal interface SubmitProblemCodeUseCase {
     operator fun invoke(userId: Long, problemId: Int, request: RunProblemRequestDto): SubmitProblemResponseDto
@@ -44,7 +53,22 @@ internal sealed interface SubmissionJudgeOutcome {
 }
 
 internal interface SubmissionJudgeService {
-    fun judge(userId: Long, problemId: Int, request: RunProblemRequestDto): SubmissionJudgeOutcome
+    fun judge(
+        userId: Long,
+        problemId: Int,
+        request: RunProblemRequestDto,
+        reportStatus: (String) -> Unit = {},
+    ): SubmissionJudgeOutcome
+}
+
+internal interface SubmissionReceiptRetryService {
+    fun retryPendingReceipt(
+        userId: Long,
+        problemId: Int,
+        submissionId: Long,
+        partialResponse: SubmitProblemResponseDto,
+        reportStatus: (String) -> Unit = {},
+    ): SubmitProblemResponseDto
 }
 
 internal class SubmitProblemCodeUseCaseImpl(
@@ -54,7 +78,7 @@ internal class SubmitProblemCodeUseCaseImpl(
     private val contractConfig: BlockchainPlatformContractConfig,
     private val contractClient: BlockchainPlatformContractClient,
     private val sandboxConsensusEvaluator: SandboxConsensusEvaluator = SandboxConsensusEvaluator(sandboxConfig),
-) : SubmitProblemCodeUseCase, SubmissionJudgeService {
+) : SubmitProblemCodeUseCase, SubmissionJudgeService, SubmissionReceiptRetryService {
     override fun invoke(userId: Long, problemId: Int, request: RunProblemRequestDto): SubmitProblemResponseDto {
         return when (val outcome = judge(userId, problemId, request)) {
             is SubmissionJudgeOutcome.Accepted -> outcome.response
@@ -62,7 +86,12 @@ internal class SubmitProblemCodeUseCaseImpl(
         }
     }
 
-    override fun judge(userId: Long, problemId: Int, request: RunProblemRequestDto): SubmissionJudgeOutcome {
+    override fun judge(
+        userId: Long,
+        problemId: Int,
+        request: RunProblemRequestDto,
+        reportStatus: (String) -> Unit,
+    ): SubmissionJudgeOutcome {
         val languageProfile = runCatching { JudgeLanguages.requireSupported(request.language) }
             .getOrElse { error ->
                 throw SubmitProblemValidationException(error.message ?: "Unsupported language.")
@@ -89,6 +118,14 @@ internal class SubmitProblemCodeUseCaseImpl(
         }
 
         val sandboxInputs = context.tests.map(languageProfile::applyTo)
+        logger.info(
+            "Starting submission evaluation for problemId={}, userId={}, tests={}, language={}.",
+            problemId,
+            userId,
+            sandboxInputs.size,
+            languageProfile.id,
+        )
+        reportStatus("Uruchamianie testów na sandboxach.")
         val nodeRuns = sandboxClient.runSolutionOnAllNodes(
             sourceCode = sourceCode,
             language = languageProfile.id,
@@ -127,8 +164,24 @@ internal class SubmitProblemCodeUseCaseImpl(
         val allPassed = passedCount == evaluatedTests.size
         val runtimeMs = consensus.runtimeMs
         val reportedMemoryUsedKb = consensus.memoryUsedKb
+        logger.info(
+            "Sandbox consensus established for problemId={}, userId={}: consensusReached={}/{}, runtimeMs={}, memoryUsedKb={}.",
+            problemId,
+            userId,
+            consensusReached,
+            sandboxConfig.requiredConsensus,
+            runtimeMs,
+            reportedMemoryUsedKb,
+        )
         if (!allPassed) {
             val failedCount = evaluatedTests.size - passedCount
+            logger.warn(
+                "Submission blocked for problemId={}, userId={}: failedTests={}/{}.",
+                problemId,
+                userId,
+                failedCount,
+                evaluatedTests.size,
+            )
             return SubmissionJudgeOutcome.Rejected(
                 preview = RunProblemResponseDto(
                     total = evaluatedTests.size,
@@ -203,6 +256,30 @@ internal class SubmitProblemCodeUseCaseImpl(
                 },
             )
         )
+        logger.info(
+            "Persisted accepted submission draft for problemId={}, userId={}, submissionId={}.",
+            problemId,
+            userId,
+            submissionRecord.submissionId,
+        )
+        val acceptedResponse = SubmitProblemResponseDto(
+            submissionId = submissionRecord.submissionId,
+            total = evaluatedTests.size,
+            passed = passedCount,
+            allPassed = allPassed,
+            runtimeMs = runtimeMs,
+            memoryUsedKb = memoryUsedKb,
+            results = evaluatedTests.map { it.apiResult },
+            consensusRequired = sandboxConfig.requiredConsensus,
+            consensusReached = consensusReached,
+            sandboxImageHash = sandboxImageHash,
+            sandboxResultHash = consensusResultHash,
+            commitmentHash = commitmentHash,
+            proxyAddress = contractConfig.proxyAddress,
+            txHash = "",
+            explorerUrl = null,
+        )
+        reportStatus("Zapisuję wynik on-chain.")
         val resultWrite = contractClient.recordSubmissionResult(
             SubmissionResultRecord(
                 competitionId = context.onchainCompetitionId,
@@ -216,17 +293,58 @@ internal class SubmitProblemCodeUseCaseImpl(
                 runtimeMs = runtimeMs,
                 memoryUsedKb = memoryUsedKb,
                 consensusNodes = consensusReached,
-            )
+            ),
+            onProgress = reportStatus,
+            onTransactionSent = { txHash ->
+                repository.markSubmissionResultPendingConfirmation(
+                    submissionId = submissionRecord.submissionId,
+                    proxyAddress = contractConfig.proxyAddress,
+                    txHash = txHash,
+                    fromWallet = contractConfig.operatorWalletAddress,
+                )
+            },
         )
         if (!resultWrite.success || resultWrite.txHash.isNullOrBlank()) {
+            logger.warn(
+                "On-chain submission result write failed for submissionId={}: txHash={}, error={}.",
+                submissionRecord.submissionId,
+                resultWrite.txHash,
+                resultWrite.error,
+            )
             val error = resultWrite.error?.ifBlank { null }
                 ?: "Submission result was not recorded on-chain."
+            if (resultWrite.txHash != null && error.equals(RECEIPT_TIMEOUT_ERROR, ignoreCase = true)) {
+                val partialResponse = acceptedResponse.copy(
+                    txHash = resultWrite.txHash,
+                    explorerUrl = contractConfig.explorerTxUrl(resultWrite.txHash),
+                )
+                val detailedError = buildReceiptTimeoutMessage(
+                    submissionId = submissionRecord.submissionId,
+                    txHash = resultWrite.txHash,
+                    timeoutMs = contractConfig.receiptTimeoutMs,
+                )
+                repository.markSubmissionResultPendingError(
+                    submissionId = submissionRecord.submissionId,
+                    error = detailedError,
+                    txHash = resultWrite.txHash,
+                )
+                throw SubmissionReceiptTimeoutException(
+                    submissionId = submissionRecord.submissionId,
+                    partialResponse = partialResponse,
+                    message = detailedError,
+                )
+            }
             repository.markSubmissionResultFailed(
                 submissionId = submissionRecord.submissionId,
                 error = error,
             )
             throw SubmitProblemValidationException(error)
         }
+        logger.info(
+            "On-chain submission result write confirmed for submissionId={} with txHash={}.",
+            submissionRecord.submissionId,
+            resultWrite.txHash,
+        )
         repository.markSubmissionResultRecorded(
             submissionId = submissionRecord.submissionId,
             proxyAddress = contractConfig.proxyAddress,
@@ -236,23 +354,71 @@ internal class SubmitProblemCodeUseCaseImpl(
         )
 
         return SubmissionJudgeOutcome.Accepted(
-            response = SubmitProblemResponseDto(
-                submissionId = submissionRecord.submissionId,
-                total = evaluatedTests.size,
-                passed = passedCount,
-                allPassed = allPassed,
-                runtimeMs = runtimeMs,
-                memoryUsedKb = memoryUsedKb,
-                results = evaluatedTests.map { it.apiResult },
-                consensusRequired = sandboxConfig.requiredConsensus,
-                consensusReached = consensusReached,
-                sandboxImageHash = sandboxImageHash,
-                sandboxResultHash = consensusResultHash,
-                commitmentHash = commitmentHash,
-                proxyAddress = contractConfig.proxyAddress,
+            response = acceptedResponse.copy(
                 txHash = resultWrite.txHash,
                 explorerUrl = contractConfig.explorerTxUrl(resultWrite.txHash),
             )
+        )
+    }
+
+    override fun retryPendingReceipt(
+        userId: Long,
+        problemId: Int,
+        submissionId: Long,
+        partialResponse: SubmitProblemResponseDto,
+        reportStatus: (String) -> Unit,
+    ): SubmitProblemResponseDto {
+        val retryContext = repository.fetchSubmissionReceiptRetryContext(submissionId)
+            ?: throw SubmitProblemValidationException("Submission retry context was not found.")
+        val txHash = retryContext.txHash?.takeIf { it.isNotBlank() }
+            ?: throw SubmitProblemValidationException("Submission retry is not available because transaction hash is missing.")
+        if (retryContext.recordedAt != null) {
+            return partialResponse.copy(
+                txHash = txHash,
+                explorerUrl = contractConfig.explorerTxUrl(txHash),
+            )
+        }
+        reportStatus("Ponawiam sprawdzanie potwierdzenia transakcji on-chain.")
+        val resultWrite = contractClient.confirmSubmissionResultReceipt(
+            txHash = txHash,
+            onProgress = reportStatus,
+        )
+        if (!resultWrite.success || resultWrite.txHash.isNullOrBlank()) {
+            val error = resultWrite.error?.ifBlank { null }
+                ?: "Submission result was not recorded on-chain."
+            if (resultWrite.txHash != null && error.equals(RECEIPT_TIMEOUT_ERROR, ignoreCase = true)) {
+                val detailedError = buildReceiptTimeoutMessage(
+                    submissionId = submissionId,
+                    txHash = resultWrite.txHash,
+                    timeoutMs = contractConfig.receiptTimeoutMs,
+                )
+                repository.markSubmissionResultPendingError(
+                    submissionId = submissionId,
+                    error = detailedError,
+                    txHash = resultWrite.txHash,
+                )
+                throw SubmissionReceiptTimeoutException(
+                    submissionId = submissionId,
+                    partialResponse = partialResponse.copy(
+                        txHash = resultWrite.txHash,
+                        explorerUrl = contractConfig.explorerTxUrl(resultWrite.txHash),
+                    ),
+                    message = detailedError,
+                )
+            }
+            repository.markSubmissionResultFailed(submissionId, error)
+            throw SubmitProblemValidationException(error)
+        }
+        repository.markSubmissionResultRecorded(
+            submissionId = submissionId,
+            proxyAddress = contractConfig.proxyAddress,
+            txHash = resultWrite.txHash,
+            recordedAt = Instant.now(),
+            fromWallet = contractConfig.operatorWalletAddress,
+        )
+        return partialResponse.copy(
+            txHash = resultWrite.txHash,
+            explorerUrl = contractConfig.explorerTxUrl(resultWrite.txHash),
         )
     }
 }
@@ -269,6 +435,22 @@ private enum class SubmitRunStatus {
     Error,
     Timeout,
 }
+
+private fun buildReceiptTimeoutMessage(
+    submissionId: Long,
+    txHash: String,
+    timeoutMs: Long,
+): String {
+    return buildString {
+        appendLine(RECEIPT_TIMEOUT_ERROR)
+        appendLine("Submission ID: $submissionId")
+        appendLine("Transaction hash: $txHash")
+        appendLine("Receipt timeout: ${timeoutMs} ms")
+        append("Retry is available and will re-check the same transaction receipt without sending a new transaction.")
+    }
+}
+
+private const val RECEIPT_TIMEOUT_ERROR = "Transaction sent but receipt was not confirmed in time."
 
 private fun ProblemExecutionTest.toMissingSubmissionResult(): EvaluatedSubmissionTest {
     return toSubmissionResult(

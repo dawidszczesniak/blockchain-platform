@@ -63,4 +63,7 @@ class ProblemRepositoryImpl(
 
     override suspend fun fetchSubmissionJudgeJob(jobId: Long) =
         remoteDataSource.fetchSubmissionJudgeJob(jobId)
+
+    override suspend fun retrySubmissionJudgeJob(jobId: Long) =
+        remoteDataSource.retrySubmissionJudgeJob(jobId)
 }

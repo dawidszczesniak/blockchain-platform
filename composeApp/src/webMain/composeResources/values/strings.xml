@@ -236,6 +236,10 @@
     <string name="problem_details_run_result_actual">Actual: %1$s</string>
     <string name="problem_details_run_result_hidden_failed">Hidden test failed.</string>
     <string name="problem_details_submit_submitting">Submitting solution...</string>
+    <string name="problem_details_submit_popup_countdown">Time left before timeout: %1$s</string>
+    <string name="problem_details_submit_popup_ok">OK</string>
+    <string name="problem_details_submit_popup_retry">Retry</string>
+    <string name="problem_details_submit_popup_retry_loading">Retrying...</string>
     <string name="problem_details_submit_error_prefix">Submit failed: %1$s</string>
     <string name="problem_details_submit_result_title">Submission receipt</string>
     <string name="problem_details_submit_consensus">Consensus: %1$d/%2$d nodes</string>

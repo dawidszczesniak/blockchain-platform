@@ -20,6 +20,10 @@ internal interface GetSubmissionJudgeJobUseCase {
     operator fun invoke(userId: Long, jobId: Long): SubmissionJudgeJobDto
 }
 
+internal interface RetrySubmissionJudgeJobUseCase {
+    operator fun invoke(userId: Long, jobId: Long): SubmissionJudgeJobDto
+}
+
 internal class EnqueueProblemSubmissionUseCaseImpl(
     private val repository: SubmissionJudgeJobRepository,
     private val queue: SubmissionJudgeQueue,
@@ -72,4 +76,35 @@ internal class GetSubmissionJudgeJobUseCaseImpl(
     }
 }
 
+internal class RetrySubmissionJudgeJobUseCaseImpl(
+    private val repository: SubmissionJudgeJobRepository,
+    private val queue: SubmissionJudgeQueue,
+    private val mapper: SubmissionJudgeJobMapper,
+) : RetrySubmissionJudgeJobUseCase {
+    override fun invoke(userId: Long, jobId: Long): SubmissionJudgeJobDto {
+        val record = repository.getForUser(jobId, userId)
+            ?: throw SubmissionJudgeJobValidationException("Submission judge job not found.")
+        if (!record.isReceiptRetryable()) {
+            throw SubmissionJudgeJobValidationException("Retry is not available for this submission judge job.")
+        }
+        if (!repository.prepareRetry(jobId)) {
+            throw SubmissionJudgeJobValidationException("Submission judge job could not be retried right now.")
+        }
+        queue.enqueue(jobId)
+        val queuedRecord = repository.getForUser(jobId, userId)
+            ?: throw SubmissionJudgeJobValidationException("Submission judge job not found.")
+        return mapper.toDto(
+            record = queuedRecord,
+            queuePosition = queue.position(jobId),
+        )
+    }
+}
+
 private const val MAX_SOURCE_CODE_CHARS = 120_000
+
+private fun pl.dawidszczesniak.blockchain_platform.feature.problems.judge.SubmissionJudgeJobRecord.isReceiptRetryable(): Boolean {
+    return status == SubmissionJudgeJobStatus.Error &&
+        submissionId != null &&
+        !resultPayloadJson.isNullOrBlank() &&
+        statusMessage.orEmpty().contains("receipt was not confirmed in time", ignoreCase = true)
+}

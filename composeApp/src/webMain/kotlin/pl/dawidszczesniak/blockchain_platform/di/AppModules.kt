@@ -43,6 +43,8 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.RunProble
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.RunProblemCodeUseCaseImpl
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetSubmissionJudgeJobUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetSubmissionJudgeJobUseCaseImpl
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.RetrySubmissionJudgeJobUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.RetrySubmissionJudgeJobUseCaseImpl
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.SubmitProblemCodeUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.SubmitProblemCodeUseCaseImpl
 import pl.dawidszczesniak.blockchain_platform.app.AppViewModel
@@ -124,6 +126,7 @@ fun appModules() = module {
     factory<RunProblemCodeUseCase> { RunProblemCodeUseCaseImpl(get()) }
     factory<SubmitProblemCodeUseCase> { SubmitProblemCodeUseCaseImpl(get()) }
     factory<GetSubmissionJudgeJobUseCase> { GetSubmissionJudgeJobUseCaseImpl(get()) }
+    factory<RetrySubmissionJudgeJobUseCase> { RetrySubmissionJudgeJobUseCaseImpl(get()) }
     factory<PrepareCreateProblemOnChainUseCase> { PrepareCreateProblemOnChainUseCaseImpl(get()) }
     factory<ConfirmCreateProblemOnChainUseCase> { ConfirmCreateProblemOnChainUseCaseImpl(get()) }
     factory<ValidateCreateProblemUseCase> { ValidateCreateProblemUseCaseImpl(get()) }
@@ -138,7 +141,7 @@ fun appModules() = module {
     factory { BackendHealthViewModel(get()) }
     factory { BackendMaintenanceViewModel() }
     factory { CreateProblemViewModel(get(), get(), get(), get(), get(), get(), get()) }
-    factory { ProblemDetailsViewModel(get(), get(), get(), get(), get(), get(), get(), get(), get()) }
+    factory { ProblemDetailsViewModel(get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     factory { ProblemsListViewModel(get()) }
     factory { MyProblemsViewModel(get()) }
     factory { MyParticipationViewModel(get(), get()) }

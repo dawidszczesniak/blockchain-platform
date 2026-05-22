@@ -48,6 +48,7 @@ interface ProblemRemoteDataSource {
     suspend fun runProblemCode(problemId: Int, request: RunProblemRequestDto): RunProblemResponseDto
     suspend fun submitProblemCode(problemId: Int, request: RunProblemRequestDto): SubmissionJudgeJobDto
     suspend fun fetchSubmissionJudgeJob(jobId: Long): SubmissionJudgeJobDto
+    suspend fun retrySubmissionJudgeJob(jobId: Long): SubmissionJudgeJobDto
 }
 
 class ProblemRemoteDataSourceImpl(
@@ -264,6 +265,15 @@ class ProblemRemoteDataSourceImpl(
         val json = Json { ignoreUnknownKeys = true }
         val payload = httpTextClient.get(
             endpoint(apiBaseUrl, "/problems/submission-jobs/$jobId"),
+        )
+        return json.decodeFromString(SubmissionJudgeJobDto.serializer(), payload)
+    }
+
+    override suspend fun retrySubmissionJudgeJob(jobId: Long): SubmissionJudgeJobDto {
+        val json = Json { ignoreUnknownKeys = true }
+        val payload = httpTextClient.postJson(
+            endpoint(apiBaseUrl, "/problems/submission-jobs/$jobId/retry"),
+            "{}",
         )
         return json.decodeFromString(SubmissionJudgeJobDto.serializer(), payload)
     }

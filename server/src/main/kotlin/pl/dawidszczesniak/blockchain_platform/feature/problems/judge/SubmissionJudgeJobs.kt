@@ -13,6 +13,7 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.decodeFromString
+import org.slf4j.LoggerFactory
 import org.jetbrains.exposed.sql.ResultRow
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.SortOrder
@@ -30,6 +31,10 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.SubmissionJud
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.SubmitProblemResponseDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.SubmissionJudgeOutcome
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.SubmissionJudgeService
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.SubmissionReceiptRetryService
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.SubmissionReceiptTimeoutException
+
+private val logger = LoggerFactory.getLogger("SubmissionJudgeWorker")
 
 internal data class SubmissionJudgeJobRecord(
     val jobId: Long,
@@ -52,9 +57,16 @@ internal interface SubmissionJudgeJobRepository {
     fun get(jobId: Long): SubmissionJudgeJobRecord?
     fun getForUser(jobId: Long, userId: Long): SubmissionJudgeJobRecord?
     fun markRunning(jobId: Long): Boolean
+    fun prepareRetry(jobId: Long): Boolean
+    fun updateRunningStatus(jobId: Long, message: String)
     fun completeAccepted(jobId: Long, submissionId: Long, payloadJson: String)
     fun completeRejected(jobId: Long, message: String, previewJson: String)
-    fun completeError(jobId: Long, message: String)
+    fun completeError(
+        jobId: Long,
+        message: String,
+        submissionId: Long? = null,
+        resultPayloadJson: String? = null,
+    )
     fun recoverQueuedJobIds(): List<Long>
 }
 
@@ -129,6 +141,39 @@ internal class SubmissionJudgeJobRepositoryImpl(
         }
     }
 
+    override fun prepareRetry(jobId: Long): Boolean {
+        return transactionRunner.inTransaction {
+            ProblemSubmissionJudgeJobsTable.update(
+                where = {
+                    (ProblemSubmissionJudgeJobsTable.jobId eq jobId) and
+                        (ProblemSubmissionJudgeJobsTable.status eq SubmissionJudgeJobStatus.Error.dbValue)
+                }
+            ) {
+                it[status] = SubmissionJudgeJobStatus.Queued.dbValue
+                it[startedAt] = null
+                it[completedAt] = null
+                it[statusMessage] = null
+            } > 0
+        }
+    }
+
+    override fun updateRunningStatus(jobId: Long, message: String) {
+        val normalizedMessage = message.trim()
+        if (normalizedMessage.isEmpty()) {
+            return
+        }
+        transactionRunner.inTransaction {
+            ProblemSubmissionJudgeJobsTable.update(
+                where = {
+                    (ProblemSubmissionJudgeJobsTable.jobId eq jobId) and
+                        (ProblemSubmissionJudgeJobsTable.status eq SubmissionJudgeJobStatus.Running.dbValue)
+                }
+            ) {
+                it[statusMessage] = normalizedMessage
+            }
+        }
+    }
+
     override fun completeAccepted(jobId: Long, submissionId: Long, payloadJson: String) {
         val completedAt = Instant.now().toDbDateTime()
         transactionRunner.inTransaction {
@@ -160,7 +205,12 @@ internal class SubmissionJudgeJobRepositoryImpl(
         }
     }
 
-    override fun completeError(jobId: Long, message: String) {
+    override fun completeError(
+        jobId: Long,
+        message: String,
+        submissionId: Long?,
+        resultPayloadJson: String?,
+    ) {
         val completedAt = Instant.now().toDbDateTime()
         transactionRunner.inTransaction {
             ProblemSubmissionJudgeJobsTable.update(
@@ -169,7 +219,8 @@ internal class SubmissionJudgeJobRepositoryImpl(
                 it[status] = SubmissionJudgeJobStatus.Error.dbValue
                 it[statusMessage] = message
                 it[previewPayloadJson] = null
-                it[resultPayloadJson] = null
+                it[ProblemSubmissionJudgeJobsTable.submissionId] = submissionId
+                it[ProblemSubmissionJudgeJobsTable.resultPayloadJson] = resultPayloadJson
                 it[ProblemSubmissionJudgeJobsTable.completedAt] = completedAt
             }
         }
@@ -234,6 +285,7 @@ internal class SubmissionJudgeWorker(
     private val queue: SubmissionJudgeQueue,
     private val repository: SubmissionJudgeJobRepository,
     private val judgeService: SubmissionJudgeService,
+    private val retryService: SubmissionReceiptRetryService,
 ) : AutoCloseable {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val json = Json { ignoreUnknownKeys = true }
@@ -259,26 +311,58 @@ internal class SubmissionJudgeWorker(
 
     private fun process(jobId: Long) {
         if (!repository.markRunning(jobId)) {
+            logger.info("Skipping submission judge job {} because it is no longer queued.", jobId)
             return
         }
         val job = repository.get(jobId)
         if (job == null) {
+            logger.warn("Submission judge job {} disappeared after being marked running.", jobId)
             repository.completeError(jobId, "Judge job no longer exists.")
             return
         }
+        logger.info(
+            "Processing submission judge job {} for problemId={}, userId={}, language={}.",
+            jobId,
+            job.problemId,
+            job.userId,
+            job.language,
+        )
         val request = RunProblemRequestDto(
             sourceCode = job.sourceCode,
             language = job.language,
         )
         runCatching {
-            judgeService.judge(
-                userId = job.userId,
-                problemId = job.problemId,
-                request = request,
-            )
+            val reportStatus: (String) -> Unit = { message ->
+                logger.info("Submission judge job {} status: {}", jobId, message)
+                repository.updateRunningStatus(jobId, message)
+            }
+            if (job.isReceiptRetryJob()) {
+                val partialResponse = json.decodeFromString(SubmitProblemResponseDto.serializer(), job.resultPayloadJson.orEmpty())
+                SubmissionJudgeOutcome.Accepted(
+                    retryService.retryPendingReceipt(
+                        userId = job.userId,
+                        problemId = job.problemId,
+                        submissionId = requireNotNull(job.submissionId),
+                        partialResponse = partialResponse,
+                        reportStatus = reportStatus,
+                    )
+                )
+            } else {
+                judgeService.judge(
+                    userId = job.userId,
+                    problemId = job.problemId,
+                    request = request,
+                    reportStatus = reportStatus,
+                )
+            }
         }.onSuccess { outcome ->
             when (outcome) {
                 is SubmissionJudgeOutcome.Accepted -> {
+                    logger.info(
+                        "Submission judge job {} accepted with submissionId={}.",
+                        jobId,
+                        outcome.response.submissionId,
+                    )
                     repository.completeAccepted(
                         jobId = jobId,
                         submissionId = outcome.response.submissionId,
@@ -287,6 +371,7 @@ internal class SubmissionJudgeWorker(
                 }
 
                 is SubmissionJudgeOutcome.Rejected -> {
+                    logger.warn("Submission judge job {} rejected: {}", jobId, outcome.message)
                     repository.completeRejected(
                         jobId = jobId,
                         message = outcome.message,
@@ -295,16 +380,28 @@ internal class SubmissionJudgeWorker(
                 }
             }
         }.onFailure { error ->
+            logger.error("Submission judge job {} failed.", jobId, error)
             repository.completeError(
                 jobId = jobId,
                 message = error.message?.ifBlank { null } ?: "Judge worker failed.",
+                submissionId = (error as? SubmissionReceiptTimeoutException)?.submissionId,
+                resultPayloadJson = (error as? SubmissionReceiptTimeoutException)?.let {
+                    json.encodeToString(SubmitProblemResponseDto.serializer(), it.partialResponse)
+                },
             )
         }
     }
 }
 
 internal class SubmissionJudgeJobMapper {
+    constructor() : this(null)
+
+    constructor(receiptTimeoutMs: Long?) {
+        this.receiptTimeoutMs = receiptTimeoutMs
+    }
+
     private val json = Json { ignoreUnknownKeys = true }
+    private val receiptTimeoutMs: Long?
 
     fun toDto(record: SubmissionJudgeJobRecord, queuePosition: Int? = null): SubmissionJudgeJobDto {
         val preview = record.previewPayloadJson?.takeIf { it.isNotBlank() }?.let { payload ->
@@ -319,11 +416,24 @@ internal class SubmissionJudgeJobMapper {
             language = record.language,
             queuePosition = queuePosition,
             message = record.statusMessage,
+            retryAllowed = record.isReceiptTimeoutRetryable(),
+            receiptTimeoutMs = receiptTimeoutMs,
             submissionId = record.submissionId,
             runPreview = preview,
             submissionResult = result,
         )
     }
+}
+
+private fun SubmissionJudgeJobRecord.isReceiptTimeoutRetryable(): Boolean {
+    return status == SubmissionJudgeJobStatus.Error &&
+        submissionId != null &&
+        !resultPayloadJson.isNullOrBlank() &&
+        statusMessage.orEmpty().contains("receipt was not confirmed in time", ignoreCase = true)
+}
+
+private fun SubmissionJudgeJobRecord.isReceiptRetryJob(): Boolean {
+    return submissionId != null && !resultPayloadJson.isNullOrBlank()
 }
 
 private fun ResultRow.toRecord(): SubmissionJudgeJobRecord {

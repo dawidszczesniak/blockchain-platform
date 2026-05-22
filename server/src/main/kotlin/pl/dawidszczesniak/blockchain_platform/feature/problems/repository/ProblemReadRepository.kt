@@ -497,11 +497,44 @@ internal class ProblemReadRepositoryImpl(
             ProblemSubmissionsTable.update(
                 where = { ProblemSubmissionsTable.submissionId eq submissionId }
             ) {
+                it[status] = SubmissionAttemptStatus.Accepted.dbValue
                 it[onchainRecordContractAddress] = proxyAddress
                 it[onchainRecordTxHash] = txHash
                 it[onchainRecordFromWallet] = fromWallet
                 it[onchainRecordError] = null
                 it[onchainRecordedAt] = recordedAt.toDbDateTime()
+            }
+        }
+    }
+
+    override fun markSubmissionResultPendingConfirmation(
+        submissionId: Long,
+        proxyAddress: String,
+        txHash: String,
+        fromWallet: String,
+    ) {
+        transactionRunner.inTransaction {
+            ProblemSubmissionsTable.update(
+                where = { ProblemSubmissionsTable.submissionId eq submissionId }
+            ) {
+                it[onchainRecordContractAddress] = proxyAddress
+                it[onchainRecordTxHash] = txHash
+                it[onchainRecordFromWallet] = fromWallet
+                it[onchainRecordError] = null
+                it[onchainRecordedAt] = null
+            }
+        }
+    }
+
+    override fun markSubmissionResultPendingError(submissionId: Long, error: String, txHash: String?) {
+        transactionRunner.inTransaction {
+            ProblemSubmissionsTable.update(
+                where = { ProblemSubmissionsTable.submissionId eq submissionId }
+            ) {
+                if (!txHash.isNullOrBlank()) {
+                    it[onchainRecordTxHash] = txHash
+                }
+                it[onchainRecordError] = error
             }
         }
     }
@@ -514,6 +547,25 @@ internal class ProblemReadRepositoryImpl(
                 it[status] = SubmissionAttemptStatus.Error.dbValue
                 it[onchainRecordError] = error
             }
+        }
+    }
+
+    override fun fetchSubmissionReceiptRetryContext(submissionId: Long): SubmissionReceiptRetryContext? {
+        return transactionRunner.inTransaction {
+            ProblemSubmissionsTable
+                .selectAll()
+                .where { ProblemSubmissionsTable.submissionId eq submissionId }
+                .singleOrNull()
+                ?.let { row ->
+                    SubmissionReceiptRetryContext(
+                        submissionId = row[ProblemSubmissionsTable.submissionId],
+                        txHash = row[ProblemSubmissionsTable.onchainRecordTxHash],
+                        recordedAt = row[ProblemSubmissionsTable.onchainRecordedAt]?.toInstant(java.time.ZoneOffset.UTC),
+                        contractAddress = row[ProblemSubmissionsTable.onchainRecordContractAddress],
+                        fromWallet = row[ProblemSubmissionsTable.onchainRecordFromWallet],
+                        currentError = row[ProblemSubmissionsTable.onchainRecordError],
+                    )
+                }
         }
     }
 

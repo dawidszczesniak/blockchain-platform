@@ -11,6 +11,10 @@ interface GetSubmissionJudgeJobUseCase {
     suspend operator fun invoke(jobId: Long): SubmissionJudgeJobDto
 }
 
+interface RetrySubmissionJudgeJobUseCase {
+    suspend operator fun invoke(jobId: Long): SubmissionJudgeJobDto
+}
+
 class SubmitProblemCodeUseCaseImpl(
     private val repository: ProblemRepository,
 ) : SubmitProblemCodeUseCase {
@@ -28,5 +32,13 @@ class GetSubmissionJudgeJobUseCaseImpl(
 ) : GetSubmissionJudgeJobUseCase {
     override suspend fun invoke(jobId: Long): SubmissionJudgeJobDto {
         return repository.fetchSubmissionJudgeJob(jobId)
+    }
+}
+
+class RetrySubmissionJudgeJobUseCaseImpl(
+    private val repository: ProblemRepository,
+) : RetrySubmissionJudgeJobUseCase {
+    override suspend fun invoke(jobId: Long): SubmissionJudgeJobDto {
+        return repository.retrySubmissionJudgeJob(jobId)
     }
 }

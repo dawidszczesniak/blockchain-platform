@@ -1,6 +1,7 @@
 package pl.dawidszczesniak.blockchain_platform.feature.problems.onchain
 
 import java.math.BigInteger
+import org.slf4j.LoggerFactory
 import org.web3j.abi.EventEncoder
 import org.web3j.abi.FunctionEncoder
 import org.web3j.abi.FunctionReturnDecoder
@@ -29,6 +30,8 @@ import pl.dawidszczesniak.blockchain_platform.feature.auth.BlockchainConfig
 import pl.dawidszczesniak.blockchain_platform.feature.platform.PaymentAssetConfig
 import pl.dawidszczesniak.blockchain_platform.feature.platform.PaymentAssetKind
 import pl.dawidszczesniak.blockchain_platform.feature.problems.atomicAmountToBigInteger
+
+private val logger = LoggerFactory.getLogger("EthereumBlockchainPlatformContractClient")
 
 internal data class BlockchainPlatformContractConfig(
     val proxyAddress: String,
@@ -177,7 +180,16 @@ internal interface BlockchainPlatformContractClient {
 
     fun cancelCompetition(competitionId: Long): BlockchainPlatformWriteResult
 
-    fun recordSubmissionResult(record: SubmissionResultRecord): BlockchainPlatformWriteResult
+    fun recordSubmissionResult(
+        record: SubmissionResultRecord,
+        onProgress: (String) -> Unit = {},
+        onTransactionSent: (String) -> Unit = {},
+    ): BlockchainPlatformWriteResult
+
+    fun confirmSubmissionResultReceipt(
+        txHash: String,
+        onProgress: (String) -> Unit = {},
+    ): BlockchainPlatformWriteResult
 
     fun close()
 }
@@ -369,7 +381,11 @@ internal class EthereumBlockchainPlatformContractClient(
         return submitBackendWriteTransaction(function, "Competition cancellation failed.")
     }
 
-    override fun recordSubmissionResult(record: SubmissionResultRecord): BlockchainPlatformWriteResult {
+    override fun recordSubmissionResult(
+        record: SubmissionResultRecord,
+        onProgress: (String) -> Unit,
+        onTransactionSent: (String) -> Unit,
+    ): BlockchainPlatformWriteResult {
         val function = Function(
             METHOD_RECORD_SUBMISSION_RESULT,
             listOf(
@@ -387,7 +403,47 @@ internal class EthereumBlockchainPlatformContractClient(
             ),
             emptyList(),
         )
-        return submitBackendWriteTransaction(function, "On-chain submission result write failed.")
+        return submitBackendWriteTransaction(
+            function = function,
+            fallbackError = "On-chain submission result write failed.",
+            onProgress = onProgress,
+            onTransactionSent = onTransactionSent,
+        )
+    }
+
+    override fun confirmSubmissionResultReceipt(
+        txHash: String,
+        onProgress: (String) -> Unit,
+    ): BlockchainPlatformWriteResult {
+        return runCatching {
+            logger.info("Rechecking receipt for existing backend write transaction: txHash={}.", txHash)
+            onProgress("Transakcja wysłana. Czekam na potwierdzenie w sieci.")
+            val receipt = waitForReceipt(txHash)
+                ?: return@runCatching BlockchainPlatformWriteResult(
+                    success = false,
+                    txHash = txHash,
+                    error = "Transaction sent but receipt was not confirmed in time.",
+                )
+            val status = receipt.status.orEmpty().lowercase()
+            if (status == "0x1" || status == "1") {
+                logger.info("Existing backend write transaction confirmed: txHash={}, receiptStatus={}.", txHash, receipt.status)
+                BlockchainPlatformWriteResult(success = true, txHash = txHash)
+            } else {
+                logger.warn("Existing backend write transaction reverted: txHash={}, receiptStatus={}.", txHash, receipt.status)
+                BlockchainPlatformWriteResult(
+                    success = false,
+                    txHash = txHash,
+                    error = "Transaction reverted with status ${receipt.status}.",
+                )
+            }
+        }.getOrElse { error ->
+            logger.error("Existing backend write transaction receipt check failed.", error)
+            BlockchainPlatformWriteResult(
+                success = false,
+                txHash = txHash,
+                error = error.message?.ifBlank { null } ?: "On-chain submission result write failed.",
+            )
+        }
     }
 
     override fun close() {
@@ -397,6 +453,8 @@ internal class EthereumBlockchainPlatformContractClient(
     private fun submitBackendWriteTransaction(
         function: Function,
         fallbackError: String,
+        onProgress: (String) -> Unit = {},
+        onTransactionSent: (String) -> Unit = {},
     ): BlockchainPlatformWriteResult {
         return runCatching {
             val data = FunctionEncoder.encode(function)
@@ -405,7 +463,14 @@ internal class EthereumBlockchainPlatformContractClient(
                 DefaultBlockParameterName.PENDING,
             ).send().transactionCount
             val gasPrice = contractConfig.gasPriceWei?.toBigInteger()
-                ?: web3j.ethGasPrice().send().gasPrice
+                ?: recommendedGasPrice(web3j.ethGasPrice().send().gasPrice)
+            logger.info(
+                "Submitting backend write transaction to proxyAddress={} with nonce={}, gasPriceWei={}, gasLimit={}.",
+                contractConfig.proxyAddress,
+                nonce,
+                gasPrice,
+                contractConfig.gasLimit,
+            )
             val rawTransaction = RawTransaction.createTransaction(
                 nonce,
                 gasPrice,
@@ -414,12 +479,17 @@ internal class EthereumBlockchainPlatformContractClient(
                 data,
             )
             val signedMessage = TransactionEncoder.signMessage(rawTransaction, blockchainConfig.chainId, operatorCredentials)
+            onProgress("Podpisuję i wysyłam transakcję on-chain.")
             val sendResponse = web3j.ethSendRawTransaction(Numeric.toHexString(signedMessage)).send()
             if (sendResponse.hasError()) {
                 val reason = sendResponse.error?.message?.ifBlank { null } ?: "eth_sendRawTransaction failed."
+                logger.warn("eth_sendRawTransaction failed for proxyAddress={}: {}", contractConfig.proxyAddress, reason)
                 return@runCatching BlockchainPlatformWriteResult(success = false, error = reason)
             }
             val txHash = sendResponse.transactionHash
+            logger.info("Backend write transaction sent: txHash={}.", txHash)
+            onTransactionSent(txHash)
+            onProgress("Transakcja wysłana. Czekam na potwierdzenie w sieci.")
             val receipt = waitForReceipt(txHash)
                 ?: return@runCatching BlockchainPlatformWriteResult(
                     success = false,
@@ -428,8 +498,10 @@ internal class EthereumBlockchainPlatformContractClient(
                 )
             val status = receipt.status.orEmpty().lowercase()
             if (status == "0x1" || status == "1") {
+                logger.info("Backend write transaction confirmed: txHash={}, receiptStatus={}.", txHash, receipt.status)
                 BlockchainPlatformWriteResult(success = true, txHash = txHash)
             } else {
+                logger.warn("Backend write transaction reverted: txHash={}, receiptStatus={}.", txHash, receipt.status)
                 BlockchainPlatformWriteResult(
                     success = false,
                     txHash = txHash,
@@ -437,6 +509,7 @@ internal class EthereumBlockchainPlatformContractClient(
                 )
             }
         }.getOrElse { error ->
+            logger.error("Backend write transaction failed before confirmation.", error)
             BlockchainPlatformWriteResult(
                 success = false,
                 error = error.message?.ifBlank { null } ?: fallbackError,
@@ -508,17 +581,52 @@ internal class EthereumBlockchainPlatformContractClient(
 
     private fun waitForReceipt(txHash: String): TransactionReceipt? {
         val startedAt = System.currentTimeMillis()
+        var attempts = 0
         while (System.currentTimeMillis() - startedAt <= contractConfig.receiptTimeoutMs) {
+            attempts += 1
             val receipt = runCatching {
                 web3j.ethGetTransactionReceipt(txHash).send().transactionReceipt.orElse(null)
+            }.onFailure { error ->
+                logger.warn(
+                    "eth_getTransactionReceipt failed for txHash={} on attempt {} after {} ms: {}",
+                    txHash,
+                    attempts,
+                    System.currentTimeMillis() - startedAt,
+                    error.message,
+                )
             }.getOrNull()
             if (receipt != null) {
+                logger.info(
+                    "Receipt found for txHash={} on attempt {} after {} ms.",
+                    txHash,
+                    attempts,
+                    System.currentTimeMillis() - startedAt,
+                )
                 return receipt
+            }
+            if (attempts == 1 || attempts % 5 == 0) {
+                logger.info(
+                    "Still waiting for receipt for txHash={} after {} ms (attempt {}).",
+                    txHash,
+                    System.currentTimeMillis() - startedAt,
+                    attempts,
+                )
             }
             Thread.sleep(contractConfig.receiptPollIntervalMs)
         }
+        logger.warn(
+            "Receipt timeout for txHash={} after {} ms and {} attempts.",
+            txHash,
+            System.currentTimeMillis() - startedAt,
+            attempts,
+        )
         return null
     }
+}
+
+private fun recommendedGasPrice(networkGasPrice: BigInteger): BigInteger {
+    val bumped = networkGasPrice.multiply(BigInteger.valueOf(120L)).divide(BigInteger.valueOf(100L))
+    return bumped.max(BigInteger.ONE)
 }
 
 internal fun bytes32HashHex(raw: String?): String {
@@ -629,7 +737,7 @@ private const val METHOD_SETTLE_COMPETITION = "settleCompetition"
 private const val METHOD_CANCEL_COMPETITION = "cancelCompetition"
 private const val METHOD_RECORD_SUBMISSION_RESULT = "recordSubmissionResult"
 private const val DEFAULT_GAS_LIMIT = 700_000L
-private const val DEFAULT_RECEIPT_TIMEOUT_MS = 120_000L
+private const val DEFAULT_RECEIPT_TIMEOUT_MS = 300_000L
 private const val DEFAULT_RECEIPT_POLL_INTERVAL_MS = 2_000L
 private const val DEFAULT_PREPARE_INTENT_TTL_SECONDS = 900
 private const val ZERO_HEX = "0x0"

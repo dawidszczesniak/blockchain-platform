@@ -450,6 +450,8 @@ private class FakeProblemWriteRepository(
     var createSubmissionRecordCalled = false
     var lastSubmissionDraft: SubmissionRecordDraft? = null
     var recordedSubmissionId: Long? = null
+    var pendingConfirmationSubmissionId: Long? = null
+    var pendingErrorSubmissionId: Long? = null
     var failedSubmissionId: Long? = null
 
     override fun createProblemForUser(
@@ -494,9 +496,29 @@ private class FakeProblemWriteRepository(
         recordedSubmissionId = submissionId
     }
 
+    override fun markSubmissionResultPendingConfirmation(
+        submissionId: Long,
+        proxyAddress: String,
+        txHash: String,
+        fromWallet: String,
+    ) {
+        pendingConfirmationSubmissionId = submissionId
+    }
+
+    override fun markSubmissionResultPendingError(
+        submissionId: Long,
+        error: String,
+        txHash: String?,
+    ) {
+        pendingErrorSubmissionId = submissionId
+    }
+
     override fun markSubmissionResultFailed(submissionId: Long, error: String) {
         failedSubmissionId = submissionId
     }
+
+    override fun fetchSubmissionReceiptRetryContext(submissionId: Long) =
+        error("Not used in this test.")
 
     override fun fetchCompetitionSettlementSnapshot(problemId: Int) =
         error("Not used in this test.")
@@ -588,10 +610,20 @@ private class FakeBlockchainPlatformContractClient(
     override fun cancelCompetition(competitionId: Long): BlockchainPlatformWriteResult =
         error("Not used in this test.")
 
-    override fun recordSubmissionResult(record: SubmissionResultRecord): BlockchainPlatformWriteResult {
+    override fun recordSubmissionResult(
+        record: SubmissionResultRecord,
+        onProgress: (String) -> Unit,
+        onTransactionSent: (String) -> Unit,
+    ): BlockchainPlatformWriteResult {
         lastRecord = record
+        response.txHash?.let(onTransactionSent)
         return response
     }
+
+    override fun confirmSubmissionResultReceipt(
+        txHash: String,
+        onProgress: (String) -> Unit,
+    ): BlockchainPlatformWriteResult = response
 
     override fun close() = Unit
 }

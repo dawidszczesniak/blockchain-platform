@@ -155,6 +155,15 @@ internal data class PersistedSubmissionRecord(
     val submissionId: Long,
 )
 
+internal data class SubmissionReceiptRetryContext(
+    val submissionId: Long,
+    val txHash: String?,
+    val recordedAt: Instant?,
+    val contractAddress: String?,
+    val fromWallet: String?,
+    val currentError: String?,
+)
+
 internal interface ProblemWriteRepository {
     fun findProblemIdByOnchainCreationTxHash(txHash: String): Int?
     fun createProblemForUser(userId: Long, draft: NewProblemDraft): Int
@@ -169,6 +178,12 @@ internal interface ProblemWriteRepository {
     fun fetchOnchainJoinContext(problemId: Int): OnchainJoinContext
     fun fetchExecutionContextForUser(userId: Long, problemId: Int): ProblemExecutionContext
     fun createSubmissionRecord(draft: SubmissionRecordDraft): PersistedSubmissionRecord
+    fun markSubmissionResultPendingConfirmation(
+        submissionId: Long,
+        proxyAddress: String,
+        txHash: String,
+        fromWallet: String,
+    )
     fun markSubmissionResultRecorded(
         submissionId: Long,
         proxyAddress: String,
@@ -176,7 +191,9 @@ internal interface ProblemWriteRepository {
         recordedAt: Instant,
         fromWallet: String,
     )
+    fun markSubmissionResultPendingError(submissionId: Long, error: String, txHash: String? = null)
     fun markSubmissionResultFailed(submissionId: Long, error: String)
+    fun fetchSubmissionReceiptRetryContext(submissionId: Long): SubmissionReceiptRetryContext?
     fun fetchCompetitionSettlementSnapshot(problemId: Int): CompetitionSettlementSnapshot?
     fun fetchBestSettlementCandidate(problemId: Int): ProblemSettlementCandidate?
     fun recordSettledWinner(

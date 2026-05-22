@@ -174,7 +174,19 @@ private class FakeSettlementProblemWriteRepository(
         recordedAt: Instant,
         fromWallet: String,
     ) = error("Not used in this test.")
+    override fun markSubmissionResultPendingConfirmation(
+        submissionId: Long,
+        proxyAddress: String,
+        txHash: String,
+        fromWallet: String,
+    ) = error("Not used in this test.")
+    override fun markSubmissionResultPendingError(
+        submissionId: Long,
+        error: String,
+        txHash: String?,
+    ) = error("Not used in this test.")
     override fun markSubmissionResultFailed(submissionId: Long, error: String) = error("Not used in this test.")
+    override fun fetchSubmissionReceiptRetryContext(submissionId: Long) = error("Not used in this test.")
     override fun fetchCompetitionSettlementSnapshot(problemId: Int): CompetitionSettlementSnapshot? = snapshot
     override fun fetchBestSettlementCandidate(problemId: Int): ProblemSettlementCandidate? = null
     override fun recordSettledWinner(
@@ -286,7 +298,16 @@ private class FakeSettlementContractClient(
         return cancelResult
     }
 
-    override fun recordSubmissionResult(record: SubmissionResultRecord): BlockchainPlatformWriteResult = error("Not used in this test.")
+    override fun recordSubmissionResult(
+        record: SubmissionResultRecord,
+        onProgress: (String) -> Unit,
+        onTransactionSent: (String) -> Unit,
+    ): BlockchainPlatformWriteResult = error("Not used in this test.")
+
+    override fun confirmSubmissionResultReceipt(
+        txHash: String,
+        onProgress: (String) -> Unit,
+    ): BlockchainPlatformWriteResult = error("Not used in this test.")
 
     override fun close() = Unit
 }

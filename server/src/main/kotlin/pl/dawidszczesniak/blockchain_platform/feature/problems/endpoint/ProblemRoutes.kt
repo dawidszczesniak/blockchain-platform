@@ -480,4 +480,39 @@ internal fun Route.problemRoutes() {
             )
         }
     }
+    post("/problems/submission-jobs/{jobId}/retry") {
+        try {
+            call.requireTrustedOrigin(authConfig)
+            val session = call.requireAuthSession(authConfig, sessionStore)
+            val jobId = call.parameters["jobId"]?.toLongOrNull()
+                ?: throw SubmissionJudgeJobValidationException("Invalid submission judge job identifier.")
+            val result = withContext(Dispatchers.IO) {
+                controller.retrySubmissionJudgeJob(
+                    userId = session.userId,
+                    jobId = jobId,
+                )
+            }
+            call.respond(HttpStatusCode.Accepted, result)
+        } catch (error: SubmissionJudgeJobValidationException) {
+            call.respond(
+                HttpStatusCode.BadRequest,
+                mapOf("message" to (error.message ?: "Cannot retry this submission judge job.")),
+            )
+        } catch (error: AuthRequiredException) {
+            call.respond(
+                HttpStatusCode.Unauthorized,
+                mapOf("message" to (error.message ?: "Login required.")),
+            )
+        } catch (error: AuthCsrfException) {
+            call.respond(
+                HttpStatusCode.Forbidden,
+                mapOf("message" to (error.message ?: "Request origin is not allowed.")),
+            )
+        } catch (error: AuthServiceUnavailableException) {
+            call.respond(
+                HttpStatusCode.ServiceUnavailable,
+                mapOf("message" to (error.message ?: "Authentication service is unavailable.")),
+            )
+        }
+    }
 }

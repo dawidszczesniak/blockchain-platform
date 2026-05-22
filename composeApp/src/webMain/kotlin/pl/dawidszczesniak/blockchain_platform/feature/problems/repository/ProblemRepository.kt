@@ -28,4 +28,5 @@ interface ProblemRepository {
     suspend fun runProblemCode(problemId: Int, sourceCode: String, language: String): RunProblemResponseDto
     suspend fun submitProblemCode(problemId: Int, sourceCode: String, language: String): SubmissionJudgeJobDto
     suspend fun fetchSubmissionJudgeJob(jobId: Long): SubmissionJudgeJobDto
+    suspend fun retrySubmissionJudgeJob(jobId: Long): SubmissionJudgeJobDto
 }

@@ -93,7 +93,10 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.Competiti
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.CompetitionSettlementWorker
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.RunProblemCodeUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.RunProblemCodeUseCaseImpl
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.RetrySubmissionJudgeJobUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.RetrySubmissionJudgeJobUseCaseImpl
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.SubmissionJudgeService
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.SubmissionReceiptRetryService
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.SubmitProblemCodeUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.SubmitProblemCodeUseCaseImpl
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.SandboxConsensusEvaluator
@@ -147,7 +150,7 @@ internal fun serverModules(environment: Map<String, String>) = module {
     single<CreateProblemValidationCancellationRegistry> { CreateProblemValidationCancellationRegistryImpl() }
     single<SubmissionJudgeJobRepository> { SubmissionJudgeJobRepositoryImpl(get()) }
     single<SubmissionJudgeQueue> { RedisSubmissionJudgeQueue(get()) }
-    single { SubmissionJudgeJobMapper() }
+    single { SubmissionJudgeJobMapper(get<BlockchainPlatformContractConfig>().receiptTimeoutMs) }
     single<CreateProblemReferenceValidationService> { CreateProblemReferenceValidationServiceImpl(get(), get()) }
     single { CreateProblemDraftFactory(get(), get()) }
     single<CompetitionIntentStore> { RedisCompetitionIntentStore(get(), get()) }
@@ -169,11 +172,13 @@ internal fun serverModules(environment: Map<String, String>) = module {
     single { SubmitProblemCodeUseCaseImpl(get(), get(), get(), get(), get(), get()) }
     single<SubmitProblemCodeUseCase> { get<SubmitProblemCodeUseCaseImpl>() }
     single<SubmissionJudgeService> { get<SubmitProblemCodeUseCaseImpl>() }
+    single<SubmissionReceiptRetryService> { get<SubmitProblemCodeUseCaseImpl>() }
     single<EnqueueProblemSubmissionUseCase> { EnqueueProblemSubmissionUseCaseImpl(get(), get(), get()) }
     single<GetSubmissionJudgeJobUseCase> { GetSubmissionJudgeJobUseCaseImpl(get(), get(), get()) }
-    single { SubmissionJudgeWorker(get(), get(), get()) }
+    single<RetrySubmissionJudgeJobUseCase> { RetrySubmissionJudgeJobUseCaseImpl(get(), get(), get()) }
+    single { SubmissionJudgeWorker(get(), get(), get(), get()) }
     single { CompetitionSettlementWorker(get(), get(), get(), get(), get()) }
-    factory { ProblemController(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
+    factory { ProblemController(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
 
     single<DashboardDao> { DashboardDaoImpl(get()) }
     single<DashboardReadRepository> { DashboardReadRepositoryImpl(get(), get(), get()) }
