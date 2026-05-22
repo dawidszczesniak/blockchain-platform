@@ -279,84 +279,19 @@ internal class SubmitProblemCodeUseCaseImpl(
             txHash = "",
             explorerUrl = null,
         )
-        reportStatus("Zapisuję wynik on-chain.")
-        val resultWrite = contractClient.recordSubmissionResult(
-            SubmissionResultRecord(
-                competitionId = context.onchainCompetitionId,
+        return SubmissionJudgeOutcome.Accepted(
+            response = recordAcceptedSubmissionResult(
+                context = context,
                 submissionId = submissionRecord.submissionId,
-                participantWalletAddress = context.participantWalletAddress,
-                submissionHash = commitmentHash,
+                acceptedResponse = acceptedResponse,
                 codeHash = codeHash,
                 testsHash = testsHash,
                 resultHash = consensusResultHash,
                 sandboxImageHash = sandboxImageHash,
                 runtimeMs = runtimeMs,
                 memoryUsedKb = memoryUsedKb,
-                consensusNodes = consensusReached,
-            ),
-            onProgress = reportStatus,
-            onTransactionSent = { txHash ->
-                repository.markSubmissionResultPendingConfirmation(
-                    submissionId = submissionRecord.submissionId,
-                    proxyAddress = contractConfig.proxyAddress,
-                    txHash = txHash,
-                    fromWallet = contractConfig.operatorWalletAddress,
-                )
-            },
-        )
-        if (!resultWrite.success || resultWrite.txHash.isNullOrBlank()) {
-            logger.warn(
-                "On-chain submission result write failed for submissionId={}: txHash={}, error={}.",
-                submissionRecord.submissionId,
-                resultWrite.txHash,
-                resultWrite.error,
-            )
-            val error = resultWrite.error?.ifBlank { null }
-                ?: "Submission result was not recorded on-chain."
-            if (resultWrite.txHash != null && error.equals(RECEIPT_TIMEOUT_ERROR, ignoreCase = true)) {
-                val partialResponse = acceptedResponse.copy(
-                    txHash = resultWrite.txHash,
-                    explorerUrl = contractConfig.explorerTxUrl(resultWrite.txHash),
-                )
-                val detailedError = buildReceiptTimeoutMessage(
-                    submissionId = submissionRecord.submissionId,
-                    txHash = resultWrite.txHash,
-                    timeoutMs = contractConfig.receiptTimeoutMs,
-                )
-                repository.markSubmissionResultPendingError(
-                    submissionId = submissionRecord.submissionId,
-                    error = detailedError,
-                    txHash = resultWrite.txHash,
-                )
-                throw SubmissionReceiptTimeoutException(
-                    submissionId = submissionRecord.submissionId,
-                    partialResponse = partialResponse,
-                    message = detailedError,
-                )
-            }
-            repository.markSubmissionResultFailed(
-                submissionId = submissionRecord.submissionId,
-                error = error,
-            )
-            throw SubmitProblemValidationException(error)
-        }
-        logger.info(
-            "On-chain submission result write confirmed for submissionId={} with txHash={}.",
-            submissionRecord.submissionId,
-            resultWrite.txHash,
-        )
-        repository.markSubmissionResultRecorded(
-            submissionId = submissionRecord.submissionId,
-            proxyAddress = contractConfig.proxyAddress,
-            txHash = resultWrite.txHash,
-            recordedAt = Instant.now(),
-            fromWallet = contractConfig.operatorWalletAddress,
-        )
-
-        return SubmissionJudgeOutcome.Accepted(
-            response = acceptedResponse.copy(
-                txHash = resultWrite.txHash,
-                explorerUrl = contractConfig.explorerTxUrl(resultWrite.txHash),
+                consensusReached = consensusReached,
+                reportStatus = reportStatus,
             )
         )
     }
@@ -384,26 +319,15 @@ internal class SubmitProblemCodeUseCaseImpl(
             onProgress = reportStatus,
         )
         if (!resultWrite.success || resultWrite.txHash.isNullOrBlank()) {
-            val error = resultWrite.error?.ifBlank { null }
-                ?: "Submission result was not recorded on-chain."
+            val error = resultWrite.error?.ifBlank { null } ?: "Submission result was not recorded on-chain."
             if (resultWrite.txHash != null && error.equals(RECEIPT_TIMEOUT_ERROR, ignoreCase = true)) {
-                val detailedError = buildReceiptTimeoutMessage(
+                throwReceiptTimeout(
                     submissionId = submissionId,
                     txHash = resultWrite.txHash,
-                    timeoutMs = contractConfig.receiptTimeoutMs,
-                )
-                repository.markSubmissionResultPendingError(
-                    submissionId = submissionId,
-                    error = detailedError,
-                    txHash = resultWrite.txHash,
-                )
-                throw SubmissionReceiptTimeoutException(
-                    submissionId = submissionId,
                     partialResponse = partialResponse.copy(
                         txHash = resultWrite.txHash,
                         explorerUrl = contractConfig.explorerTxUrl(resultWrite.txHash),
                     ),
-                    message = detailedError,
                 )
             }
             repository.markSubmissionResultFailed(submissionId, error)
@@ -419,6 +343,113 @@ internal class SubmitProblemCodeUseCaseImpl(
         return partialResponse.copy(
             txHash = resultWrite.txHash,
             explorerUrl = contractConfig.explorerTxUrl(resultWrite.txHash),
+        )
+    }
+
+    private fun recordAcceptedSubmissionResult(
+        context: ProblemExecutionContext,
+        submissionId: Long,
+        acceptedResponse: SubmitProblemResponseDto,
+        codeHash: String,
+        testsHash: String,
+        resultHash: String,
+        sandboxImageHash: String,
+        runtimeMs: Int,
+        memoryUsedKb: Int,
+        consensusReached: Int,
+        reportStatus: (String) -> Unit,
+    ): SubmitProblemResponseDto {
+        reportStatus("Zapisuję wynik on-chain.")
+        val resultWrite = contractClient.recordSubmissionResult(
+            SubmissionResultRecord(
+                competitionId = context.onchainCompetitionId,
+                submissionId = submissionId,
+                participantWalletAddress = context.participantWalletAddress,
+                submissionHash = acceptedResponse.commitmentHash,
+                codeHash = codeHash,
+                testsHash = testsHash,
+                resultHash = resultHash,
+                sandboxImageHash = sandboxImageHash,
+                runtimeMs = runtimeMs,
+                memoryUsedKb = memoryUsedKb,
+                consensusNodes = consensusReached,
+            ),
+            onProgress = reportStatus,
+            onTransactionSent = { txHash ->
+                repository.markSubmissionResultPendingConfirmation(
+                    submissionId = submissionId,
+                    proxyAddress = contractConfig.proxyAddress,
+                    txHash = txHash,
+                    fromWallet = contractConfig.operatorWalletAddress,
+                )
+            },
+        )
+        return when {
+            resultWrite.success && !resultWrite.txHash.isNullOrBlank() -> {
+                logger.info(
+                    "On-chain submission result write confirmed for submissionId={} with txHash={}.",
+                    submissionId,
+                    resultWrite.txHash,
+                )
+                repository.markSubmissionResultRecorded(
+                    submissionId = submissionId,
+                    proxyAddress = contractConfig.proxyAddress,
+                    txHash = resultWrite.txHash,
+                    recordedAt = Instant.now(),
+                    fromWallet = contractConfig.operatorWalletAddress,
+                )
+                acceptedResponse.copy(
+                    txHash = resultWrite.txHash,
+                    explorerUrl = contractConfig.explorerTxUrl(resultWrite.txHash),
+                )
+            }
+
+            else -> {
+                logger.warn(
+                    "On-chain submission result write failed for submissionId={}: txHash={}, error={}.",
+                    submissionId,
+                    resultWrite.txHash,
+                    resultWrite.error,
+                )
+                val error = resultWrite.error?.ifBlank { null } ?: "Submission result was not recorded on-chain."
+                if (resultWrite.txHash != null && error.equals(RECEIPT_TIMEOUT_ERROR, ignoreCase = true)) {
+                    throwReceiptTimeout(
+                        submissionId = submissionId,
+                        txHash = resultWrite.txHash,
+                        partialResponse = acceptedResponse.copy(
+                            txHash = resultWrite.txHash,
+                            explorerUrl = contractConfig.explorerTxUrl(resultWrite.txHash),
+                        ),
+                    )
+                }
+                repository.markSubmissionResultFailed(
+                    submissionId = submissionId,
+                    error = error,
+                )
+                throw SubmitProblemValidationException(error)
+            }
+        }
+    }
+
+    private fun throwReceiptTimeout(
+        submissionId: Long,
+        txHash: String,
+        partialResponse: SubmitProblemResponseDto,
+    ): Nothing {
+        val detailedError = buildReceiptTimeoutMessage(
+            submissionId = submissionId,
+            txHash = txHash,
+            timeoutMs = contractConfig.receiptTimeoutMs,
+        )
+        repository.markSubmissionResultPendingError(
+            submissionId = submissionId,
+            error = detailedError,
+            txHash = txHash,
+        )
+        throw SubmissionReceiptTimeoutException(
+            submissionId = submissionId,
+            partialResponse = partialResponse,
+            message = detailedError,
         )
     }
 }

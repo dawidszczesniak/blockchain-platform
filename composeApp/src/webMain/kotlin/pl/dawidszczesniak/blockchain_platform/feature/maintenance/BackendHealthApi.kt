@@ -10,8 +10,7 @@ import kotlin.js.Promise
 import kotlin.js.toBoolean
 import kotlin.js.toJsBoolean
 
-// TODO(backend): Expose a lightweight `/health` endpoint for this check.
-// JS/Wasm health check using JS interop.
+// JS/Wasm health check using backend `/health`.
 suspend fun checkBackendHealth(apiBaseUrl: String): Boolean {
     val base = apiBaseUrl.trimEnd('/')
     val url = if (base.isBlank()) "/health" else "$base/health"

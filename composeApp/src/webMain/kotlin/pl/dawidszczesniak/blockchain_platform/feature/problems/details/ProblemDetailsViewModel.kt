@@ -24,6 +24,7 @@ import pl.dawidszczesniak.blockchain_platform.feature.login.WalletSessionStore
 import pl.dawidszczesniak.blockchain_platform.feature.login.WalletTransactionRequest
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.RunProblemResponseDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.SubmitProblemResponseDto
+import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.SubmissionJudgeJobDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.participation.ParticipationSyncStore
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.ConfirmJoinProblemOnChainUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetParticipationProblemsUseCase
@@ -50,6 +51,7 @@ data class ProblemDetailsGateState(
     val submitErrorMessage: String? = null,
     val submitResult: SubmitProblemResponseDto? = null,
     val submitRetryAllowed: Boolean = false,
+    val isAwaitingReceiptConfirmation: Boolean = false,
     val submitReceiptTimeoutMs: Long? = null,
     val submitReceiptWaitStartedAtMs: Long? = null,
 )
@@ -107,6 +109,7 @@ class ProblemDetailsViewModel(
                 submitErrorMessage = null,
                 submitResult = if (isNewProblem) null else current.submitResult,
                 submitRetryAllowed = false,
+                isAwaitingReceiptConfirmation = false,
                 submitReceiptTimeoutMs = null,
                 submitReceiptWaitStartedAtMs = null,
             )
@@ -120,6 +123,7 @@ class ProblemDetailsViewModel(
                     isSubmitting = false,
                     isSubmitRequestInFlight = false,
                     activeSubmissionJobId = null,
+                    isAwaitingReceiptConfirmation = false,
                 )
             }
             return
@@ -323,6 +327,7 @@ class ProblemDetailsViewModel(
                 runResult = null,
                 submitResult = null,
                 submitRetryAllowed = false,
+                isAwaitingReceiptConfirmation = false,
                 submitReceiptTimeoutMs = null,
                 submitReceiptWaitStartedAtMs = null,
             )
@@ -330,57 +335,20 @@ class ProblemDetailsViewModel(
         activeScope().launch {
             runCatching { submitProblemCodeUseCase(problemId, sourceCode, language) }
                 .onSuccess { job ->
-                    _state.update { current ->
-                        val statusMessage = humanizeSubmissionJobStatus(job.status, job.queuePosition, job.message)
-        current.copy(
-                isSubmitting = true,
-                isSubmitRequestInFlight = false,
-                            activeSubmissionJobId = job.jobId,
-                            submitStatusMessage = statusMessage,
-                            submitErrorMessage = null,
-                            submitResult = null,
-                            submitRetryAllowed = job.retryAllowed,
-                            submitReceiptTimeoutMs = job.receiptTimeoutMs,
-                            submitReceiptWaitStartedAtMs = nextReceiptWaitStartedAt(
-                                currentStartedAtMs = current.submitReceiptWaitStartedAtMs,
-                                previousMessage = current.submitStatusMessage,
-                                nextMessage = statusMessage,
-                            ),
-                        )
-                    }
+                    applySubmissionJobState(job)
                     runCatching { pollSubmissionJudgeJob(job.jobId) }
                         .onFailure { error ->
                             if (error is CancellationException) {
                                 return@onFailure
                             }
-                            _state.update { current ->
-                                current.copy(
-                                    isSubmitting = false,
-                                    isSubmitRequestInFlight = false,
-                                    submitStatusMessage = null,
-                                    submitErrorMessage = extractReadableErrorMessage(error),
-                                    submitResult = null,
-                                    submitRetryAllowed = false,
-                                    submitReceiptWaitStartedAtMs = null,
-                                )
-                            }
+                            applySubmitError(extractReadableErrorMessage(error))
                         }
                 }
                 .onFailure { error ->
                     if (error is CancellationException) {
                         return@onFailure
                     }
-                    _state.update { current ->
-                        current.copy(
-                            isSubmitting = false,
-                            isSubmitRequestInFlight = false,
-                            submitStatusMessage = null,
-                            submitErrorMessage = extractReadableErrorMessage(error),
-                            submitResult = null,
-                            submitRetryAllowed = false,
-                            submitReceiptWaitStartedAtMs = null,
-                        )
-                    }
+                    applySubmitError(extractReadableErrorMessage(error))
                 }
         }
     }
@@ -398,45 +366,21 @@ class ProblemDetailsViewModel(
                 submitStatusMessage = "Ponawiam sprawdzanie transakcji.",
                 submitErrorMessage = null,
                 submitResult = null,
+                isAwaitingReceiptConfirmation = false,
                 submitReceiptWaitStartedAtMs = null,
             )
         }
         activeScope().launch {
             runCatching { retrySubmissionJudgeJobUseCase(jobId) }
                 .onSuccess { job ->
-                    _state.update { current ->
-                        val statusMessage = humanizeSubmissionJobStatus(job.status, job.queuePosition, job.message)
-                        current.copy(
-                            isSubmitting = true,
-                            isSubmitRequestInFlight = false,
-                            activeSubmissionJobId = job.jobId,
-                            submitStatusMessage = statusMessage,
-                            submitErrorMessage = null,
-                            submitRetryAllowed = job.retryAllowed,
-                            submitReceiptTimeoutMs = job.receiptTimeoutMs,
-                            submitReceiptWaitStartedAtMs = nextReceiptWaitStartedAt(
-                                currentStartedAtMs = current.submitReceiptWaitStartedAtMs,
-                                previousMessage = current.submitStatusMessage,
-                                nextMessage = statusMessage,
-                            ),
-                        )
-                    }
+                    applySubmissionJobState(job)
                     pollSubmissionJudgeJob(job.jobId)
                 }
                 .onFailure { error ->
                     if (error is CancellationException) {
                         return@onFailure
                     }
-                    _state.update { current ->
-                        current.copy(
-                            isSubmitting = false,
-                            isSubmitRequestInFlight = false,
-                            submitStatusMessage = null,
-                            submitErrorMessage = extractReadableErrorMessage(error),
-                            submitRetryAllowed = false,
-                            submitReceiptWaitStartedAtMs = null,
-                        )
-                    }
+                    applySubmitError(extractReadableErrorMessage(error))
                 }
         }
     }
@@ -450,6 +394,8 @@ class ProblemDetailsViewModel(
                     submitStatusMessage = null,
                     submitErrorMessage = null,
                     submitRetryAllowed = false,
+                    isAwaitingReceiptConfirmation = false,
+                    submitReceiptTimeoutMs = null,
                     submitReceiptWaitStartedAtMs = null,
                 )
             }
@@ -467,67 +413,63 @@ class ProblemDetailsViewModel(
         return scope
     }
 
+    private fun applySubmissionJobState(job: SubmissionJudgeJobDto) {
+        _state.update { current ->
+            val statusMessage = humanizeSubmissionJobStatus(job.status, job.queuePosition, job.message)
+            current.copy(
+                isSubmitting = true,
+                isSubmitRequestInFlight = false,
+                activeSubmissionJobId = job.jobId,
+                submitStatusMessage = statusMessage,
+                submitErrorMessage = null,
+                submitResult = null,
+                submitRetryAllowed = job.retryAllowed,
+                isAwaitingReceiptConfirmation = job.awaitingReceiptConfirmation,
+                submitReceiptTimeoutMs = job.receiptTimeoutMs,
+                submitReceiptWaitStartedAtMs = nextReceiptWaitStartedAt(
+                    currentStartedAtMs = current.submitReceiptWaitStartedAtMs,
+                    wasAwaitingReceipt = current.isAwaitingReceiptConfirmation,
+                    isAwaitingReceipt = job.awaitingReceiptConfirmation,
+                ),
+            )
+        }
+    }
+
+    private fun applySubmitError(message: String) {
+        _state.update { current ->
+            current.copy(
+                isSubmitting = false,
+                isSubmitRequestInFlight = false,
+                submitStatusMessage = null,
+                submitErrorMessage = message,
+                submitResult = null,
+                submitRetryAllowed = false,
+                isAwaitingReceiptConfirmation = false,
+                submitReceiptTimeoutMs = null,
+                submitReceiptWaitStartedAtMs = null,
+            )
+        }
+    }
+
     private suspend fun pollSubmissionJudgeJob(jobId: Long) {
         while (activeScope().isActive) {
             val job = runCatching { getSubmissionJudgeJobUseCase(jobId) }
                 .getOrElse { error ->
-                    _state.update { current ->
-                        current.copy(
-                            isSubmitting = false,
-                            isSubmitRequestInFlight = false,
-                            submitStatusMessage = null,
-                            submitErrorMessage = extractReadableErrorMessage(error),
-                            submitResult = null,
-                            submitRetryAllowed = false,
-                            submitReceiptWaitStartedAtMs = null,
-                        )
-                    }
+                    applySubmitError(extractReadableErrorMessage(error))
                     return
                 }
-            when (job.status.trim().lowercase()) {
-                "queued" -> {
-                    _state.update { current ->
-                        val statusMessage = humanizeSubmissionJobStatus(job.status, job.queuePosition, job.message)
-                        current.copy(
-                            isSubmitting = true,
-                            isSubmitRequestInFlight = false,
-                            activeSubmissionJobId = job.jobId,
-                            submitStatusMessage = statusMessage,
-                            submitErrorMessage = null,
-                            submitRetryAllowed = job.retryAllowed,
-                            submitReceiptTimeoutMs = job.receiptTimeoutMs,
-                            submitReceiptWaitStartedAtMs = nextReceiptWaitStartedAt(
-                                currentStartedAtMs = current.submitReceiptWaitStartedAtMs,
-                                previousMessage = current.submitStatusMessage,
-                                nextMessage = statusMessage,
-                            ),
-                        )
-                    }
+            when (SubmissionJobUiStatus.from(job.status)) {
+                SubmissionJobUiStatus.Queued -> {
+                    applySubmissionJobState(job)
                     delay(SUBMISSION_JOB_POLL_INTERVAL_MS)
                 }
 
-                "running" -> {
-                    _state.update { current ->
-                        val statusMessage = humanizeSubmissionJobStatus(job.status, job.queuePosition, job.message)
-                        current.copy(
-                            isSubmitting = true,
-                            isSubmitRequestInFlight = false,
-                            activeSubmissionJobId = job.jobId,
-                            submitStatusMessage = statusMessage,
-                            submitErrorMessage = null,
-                            submitRetryAllowed = job.retryAllowed,
-                            submitReceiptTimeoutMs = job.receiptTimeoutMs,
-                            submitReceiptWaitStartedAtMs = nextReceiptWaitStartedAt(
-                                currentStartedAtMs = current.submitReceiptWaitStartedAtMs,
-                                previousMessage = current.submitStatusMessage,
-                                nextMessage = statusMessage,
-                            ),
-                        )
-                    }
+                SubmissionJobUiStatus.Running -> {
+                    applySubmissionJobState(job)
                     delay(SUBMISSION_JOB_POLL_INTERVAL_MS)
                 }
 
-                "accepted" -> {
+                SubmissionJobUiStatus.Accepted -> {
                     val result = job.submissionResult
                         ?: throw IllegalStateException("Judge finished without submission result.")
                     participationSyncStore.notifyChanged()
@@ -540,13 +482,15 @@ class ProblemDetailsViewModel(
                             submitErrorMessage = null,
                             submitResult = result,
                             submitRetryAllowed = false,
+                            isAwaitingReceiptConfirmation = false,
+                            submitReceiptTimeoutMs = null,
                             submitReceiptWaitStartedAtMs = null,
                         )
                     }
                     return
                 }
 
-                "rejected" -> {
+                SubmissionJobUiStatus.Rejected -> {
                     _state.update { current ->
                         current.copy(
                             isSubmitting = false,
@@ -559,13 +503,15 @@ class ProblemDetailsViewModel(
                             runResult = job.runPreview,
                             submitResult = null,
                             submitRetryAllowed = false,
+                            isAwaitingReceiptConfirmation = false,
+                            submitReceiptTimeoutMs = null,
                             submitReceiptWaitStartedAtMs = null,
                         )
                     }
                     return
                 }
 
-                else -> {
+                SubmissionJobUiStatus.Error -> {
                     _state.update { current ->
                         current.copy(
                             isSubmitting = false,
@@ -575,6 +521,7 @@ class ProblemDetailsViewModel(
                             submitResult = null,
                             activeSubmissionJobId = job.jobId,
                             submitRetryAllowed = job.retryAllowed,
+                            isAwaitingReceiptConfirmation = false,
                             submitReceiptTimeoutMs = job.receiptTimeoutMs,
                             submitReceiptWaitStartedAtMs = null,
                         )
@@ -644,20 +591,36 @@ private const val SUBMISSION_JOB_POLL_INTERVAL_MS = 1_000L
 
 private fun nextReceiptWaitStartedAt(
     currentStartedAtMs: Long?,
-    previousMessage: String?,
-    nextMessage: String?,
+    wasAwaitingReceipt: Boolean,
+    isAwaitingReceipt: Boolean,
 ): Long? {
-    return if (nextMessage.isReceiptWaitingMessage()) {
+    return if (isAwaitingReceipt) {
         currentStartedAtMs ?: currentEpochMillis()
-    } else if (previousMessage.isReceiptWaitingMessage()) {
+    } else if (wasAwaitingReceipt) {
         null
     } else {
         currentStartedAtMs
     }
 }
 
-private fun String?.isReceiptWaitingMessage(): Boolean {
-    return this?.contains("Czekam na potwierdzenie w sieci", ignoreCase = true) == true
+private enum class SubmissionJobUiStatus {
+    Queued,
+    Running,
+    Accepted,
+    Rejected,
+    Error;
+
+    companion object {
+        fun from(raw: String): SubmissionJobUiStatus {
+            return when (raw.trim().lowercase()) {
+                "queued" -> Queued
+                "running" -> Running
+                "accepted" -> Accepted
+                "rejected" -> Rejected
+                else -> Error
+            }
+        }
+    }
 }
 
 @JsFun("() => Date.now()")

@@ -3,6 +3,7 @@ package pl.dawidszczesniak.blockchain_platform.feature.problems.usecase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.RunProblemRequestDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.SubmissionJudgeJobDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.judge.JudgeLanguages
+import pl.dawidszczesniak.blockchain_platform.feature.problems.judge.isReceiptRetryable
 import pl.dawidszczesniak.blockchain_platform.feature.problems.judge.SubmissionJudgeJobMapper
 import pl.dawidszczesniak.blockchain_platform.feature.problems.judge.SubmissionJudgeJobRepository
 import pl.dawidszczesniak.blockchain_platform.feature.problems.judge.SubmissionJudgeQueue
@@ -101,10 +102,3 @@ internal class RetrySubmissionJudgeJobUseCaseImpl(
 }
 
 private const val MAX_SOURCE_CODE_CHARS = 120_000
-
-private fun pl.dawidszczesniak.blockchain_platform.feature.problems.judge.SubmissionJudgeJobRecord.isReceiptRetryable(): Boolean {
-    return status == SubmissionJudgeJobStatus.Error &&
-        submissionId != null &&
-        !resultPayloadJson.isNullOrBlank() &&
-        statusMessage.orEmpty().contains("receipt was not confirmed in time", ignoreCase = true)
-}

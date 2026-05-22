@@ -235,6 +235,7 @@ data class SubmissionJudgeJobDto(
     val queuePosition: Int? = null,
     val message: String? = null,
     val retryAllowed: Boolean = false,
+    val awaitingReceiptConfirmation: Boolean = false,
     val receiptTimeoutMs: Long? = null,
     val submissionId: Long? = null,
     val runPreview: RunProblemResponseDto? = null,

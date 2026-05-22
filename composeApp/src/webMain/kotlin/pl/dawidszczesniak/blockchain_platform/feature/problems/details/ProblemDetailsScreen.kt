@@ -218,9 +218,6 @@ fun ProblemDetailsScreen(
                             runErrorMessage = gateState.runErrorMessage,
                             runResult = gateState.runResult,
                             isSubmitting = gateState.isSubmitting,
-                            isSubmitRequestInFlight = gateState.isSubmitRequestInFlight,
-                            submitStatusMessage = gateState.submitStatusMessage,
-                            submitErrorMessage = gateState.submitErrorMessage,
                             submitResult = gateState.submitResult,
                             onRun = { viewModel.run(problem.id, solutionCode, "kotlin") },
                             onSubmit = { viewModel.submit(problem.id, solutionCode, "kotlin") },
@@ -258,9 +255,6 @@ fun ProblemDetailsScreen(
                             runErrorMessage = gateState.runErrorMessage,
                             runResult = gateState.runResult,
                             isSubmitting = gateState.isSubmitting,
-                            isSubmitRequestInFlight = gateState.isSubmitRequestInFlight,
-                            submitStatusMessage = gateState.submitStatusMessage,
-                            submitErrorMessage = gateState.submitErrorMessage,
                             submitResult = gateState.submitResult,
                             onRun = { viewModel.run(problem.id, solutionCode, "kotlin") },
                             onSubmit = { viewModel.submit(problem.id, solutionCode, "kotlin") },
@@ -449,9 +443,6 @@ private fun CodeEditorPane(
     runErrorMessage: String?,
     runResult: RunProblemResponseDto?,
     isSubmitting: Boolean,
-    isSubmitRequestInFlight: Boolean,
-    submitStatusMessage: String?,
-    submitErrorMessage: String?,
     submitResult: SubmitProblemResponseDto?,
     onRun: () -> Unit,
     onSubmit: () -> Unit,
@@ -807,7 +798,7 @@ private fun joinOverlayMessageWithDots(
     message: String,
     loadingDotsCount: Int,
 ) = buildAnnotatedString {
-    append(message.trimEnd().trimEnd('.'))
+    append(message.withoutTrailingEllipsis())
     append(" ")
     repeat(3) { index ->
         withStyle(
@@ -822,6 +813,10 @@ private fun joinOverlayMessageWithDots(
             append(".")
         }
     }
+}
+
+private fun String.withoutTrailingEllipsis(): String {
+    return trimEnd().removeSuffix("...").trimEnd('.').trimEnd()
 }
 
 private fun formatDurationAsMinutesSeconds(durationMs: Long): String {
@@ -1103,7 +1098,7 @@ private fun defaultSolutionTemplate(problem: ProblemSummary): String {
     return """
         fun solve(input: String): String {
             // ${problem.title}
-            // TODO: implement your solution
+            // Parse the input and return the expected output format.
             return input
         }
     """.trimIndent()

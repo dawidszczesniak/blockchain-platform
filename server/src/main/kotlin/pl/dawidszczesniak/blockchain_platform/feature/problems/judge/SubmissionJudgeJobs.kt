@@ -336,7 +336,7 @@ internal class SubmissionJudgeWorker(
                 logger.info("Submission judge job {} status: {}", jobId, message)
                 repository.updateRunningStatus(jobId, message)
             }
-            if (job.isReceiptRetryJob()) {
+            if (job.hasStoredReceiptRetryPayload()) {
                 val partialResponse = json.decodeFromString(SubmitProblemResponseDto.serializer(), job.resultPayloadJson.orEmpty())
                 SubmissionJudgeOutcome.Accepted(
                     retryService.retryPendingReceipt(
@@ -393,15 +393,10 @@ internal class SubmissionJudgeWorker(
     }
 }
 
-internal class SubmissionJudgeJobMapper {
-    constructor() : this(null)
-
-    constructor(receiptTimeoutMs: Long?) {
-        this.receiptTimeoutMs = receiptTimeoutMs
-    }
-
+internal class SubmissionJudgeJobMapper(
+    private val receiptTimeoutMs: Long? = null,
+) {
     private val json = Json { ignoreUnknownKeys = true }
-    private val receiptTimeoutMs: Long?
 
     fun toDto(record: SubmissionJudgeJobRecord, queuePosition: Int? = null): SubmissionJudgeJobDto {
         val preview = record.previewPayloadJson?.takeIf { it.isNotBlank() }?.let { payload ->
@@ -416,24 +411,14 @@ internal class SubmissionJudgeJobMapper {
             language = record.language,
             queuePosition = queuePosition,
             message = record.statusMessage,
-            retryAllowed = record.isReceiptTimeoutRetryable(),
+            retryAllowed = record.isReceiptRetryable(),
+            awaitingReceiptConfirmation = record.isAwaitingReceiptConfirmation(),
             receiptTimeoutMs = receiptTimeoutMs,
             submissionId = record.submissionId,
             runPreview = preview,
             submissionResult = result,
         )
     }
-}
-
-private fun SubmissionJudgeJobRecord.isReceiptTimeoutRetryable(): Boolean {
-    return status == SubmissionJudgeJobStatus.Error &&
-        submissionId != null &&
-        !resultPayloadJson.isNullOrBlank() &&
-        statusMessage.orEmpty().contains("receipt was not confirmed in time", ignoreCase = true)
-}
-
-private fun SubmissionJudgeJobRecord.isReceiptRetryJob(): Boolean {
-    return submissionId != null && !resultPayloadJson.isNullOrBlank()
 }
 
 private fun ResultRow.toRecord(): SubmissionJudgeJobRecord {
