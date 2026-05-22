@@ -2,6 +2,8 @@
 
 Kotlin full-stack coding competition platform with one on-chain application contract deployed behind an OpenZeppelin UUPS proxy.
 
+This repository is the master's thesis project of Dawid Szczesniak at the Military University of Technology.
+
 The runtime contract surface is still one address: the `BlockchainTestContract` proxy. The implementation contract contains logic and can be replaced. The proxy keeps the persistent storage under ERC-1967, so competition state, winner history, and recorded submission results survive upgrades.
 
 OpenZeppelin references used for this setup:
@@ -26,13 +28,19 @@ OpenZeppelin references used for this setup:
 - `server`
   - Ktor backend exposing auth, platform, dashboard, and problem APIs
   - prepares and confirms on-chain create/join flows
+  - enqueues async submission judge jobs
   - judges submissions through sandbox consensus
   - records accepted submission results on-chain
+  - retries pending receipt confirmations for already-sent submission transactions
   - runs background settlement/cancellation workers
 - `composeApp`
   - Compose Multiplatform web frontend
+  - WasmJS local dev entrypoint on port `8081`
 - `sandbox-runner`
-  - isolated code execution nodes used for judging consensus
+  - Kotlin/JVM HTTP sandbox node used for judging consensus
+  - compiles user code and validators inside the container
+  - runs a long-lived JVM worker harness per suite to avoid per-test JVM startup noise
+  - exposes `/run`, `/cancel`, `/health`, and `/attestation`
 
 ## UUPS Upgrade Model
 
@@ -244,10 +252,13 @@ Current on-chain join flow (`/problems/{problemId}/join/prepare` -> `/problems/{
 
 Accepted submission:
 
-1. sandbox nodes run code
-2. backend requires consensus
-3. backend persists accepted submission
-4. backend operator records it on-chain with `recordSubmissionResult(...)`
+1. frontend enqueues a submission judge job
+2. backend worker pulls the job from Redis
+3. sandbox nodes run code
+4. backend requires consensus
+5. backend persists accepted submission
+6. backend operator records it on-chain with `recordSubmissionResult(...)`
+7. if the transaction was sent but receipt confirmation times out, the same job can retry receipt confirmation for the same `txHash` without submitting a new transaction
 
 Settlement:
 
@@ -261,13 +272,19 @@ Settlement:
 Backend tests:
 
 ```bash
-./gradlew test
+./gradlew :server:test
 ```
 
 Frontend compile:
 
 ```bash
 ./gradlew :composeApp:compileKotlinWasmJs
+```
+
+Sandbox runner build:
+
+```bash
+./gradlew :sandbox-runner:build
 ```
 
 Foundry compile:
@@ -282,4 +299,11 @@ OpenZeppelin validation:
 npm install
 forge clean
 env -u ETH_RPC_URL forge script script/ValidateBlockchainTestContract.s.sol:ValidateBlockchainTestContract
+```
+
+Full local verification pass:
+
+```bash
+./gradlew :server:test :composeApp:compileKotlinWasmJs :sandbox-runner:build
+forge build
 ```
