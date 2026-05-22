@@ -6,6 +6,20 @@ This repository is the master's thesis project of Dawid Szczesniak at the Milita
 
 The runtime contract surface is still one address: the `BlockchainTestContract` proxy. The implementation contract contains logic and can be replaced. The proxy keeps the persistent storage under ERC-1967, so competition state, winner history, and recorded submission results survive upgrades.
 
+## Project Goal
+
+The platform is designed for algorithmic and optimization-heavy programming competitions.
+
+Its core model is:
+
+- a problem creator publishes an algorithmic challenge with a reference solution, evaluation tests, and competition parameters
+- participants join the competition and submit their own implementations of the same problem
+- correctness is enforced first through sandbox execution and consensus across isolated execution nodes
+- among correct solutions, the system records and compares runtime and memory metrics to identify the most efficient implementation
+- the blockchain layer provides a tamper-resistant settlement and result-recording surface for competition lifecycle events and accepted submissions
+
+In product terms, this is not a generic coding playground. It is a modern blockchain-backed optimization contest system where the value comes from proving that a participant solved the same algorithmic task more efficiently than competing implementations under a controlled and auditable execution environment.
+
 OpenZeppelin references used for this setup:
 
 - UUPS overview: https://docs.openzeppelin.com/upgrades
