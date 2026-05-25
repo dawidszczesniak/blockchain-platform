@@ -1,19 +1,24 @@
 package pl.dawidszczesniak.blockchain_platform.feature.problems.controller
 
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ConfirmCreateProblemRequestDto
+import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ConfirmCompetitionLifecycleActionRequestDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ConfirmJoinProblemRequestDto
+import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ConfirmSubmissionResultRequestDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.CancelCreateProblemValidationRequestDto
+import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.CompetitionLifecycleActionResponseDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.CreateProblemRequestDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.CreateProblemResponseDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.CreatedProblemDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.JoinProblemResponseDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ParticipationProblemDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.PrepareCreateProblemResponseDto
+import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.PrepareCompetitionLifecycleActionResponseDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.PrepareJoinProblemResponseDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ProblemSummaryDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.RunProblemRequestDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.RunProblemResponseDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.SubmissionJudgeJobDto
+import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.SubmitProblemResponseDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ValidateCreateProblemRequestDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ValidateCreateProblemResponseDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.mapper.toDto
@@ -30,8 +35,13 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.RunProble
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.RetrySubmissionJudgeJobUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.PrepareCreateProblemOnChainUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.ConfirmCreateProblemOnChainUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.ConfirmCancelCompetitionOnChainUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.PrepareJoinProblemOnChainUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.ConfirmJoinProblemOnChainUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.ConfirmSubmissionResultOnChainUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.ConfirmSettleCompetitionOnChainUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.PrepareCancelCompetitionOnChainUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.PrepareSettleCompetitionOnChainUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.ValidateCreateProblemUseCase
 
 internal class ProblemController(
@@ -47,6 +57,11 @@ internal class ProblemController(
     private val joinProblemUseCase: JoinProblemUseCase,
     private val prepareJoinProblemOnChainUseCase: PrepareJoinProblemOnChainUseCase,
     private val confirmJoinProblemOnChainUseCase: ConfirmJoinProblemOnChainUseCase,
+    private val prepareSettleCompetitionOnChainUseCase: PrepareSettleCompetitionOnChainUseCase,
+    private val confirmSettleCompetitionOnChainUseCase: ConfirmSettleCompetitionOnChainUseCase,
+    private val prepareCancelCompetitionOnChainUseCase: PrepareCancelCompetitionOnChainUseCase,
+    private val confirmCancelCompetitionOnChainUseCase: ConfirmCancelCompetitionOnChainUseCase,
+    private val confirmSubmissionResultOnChainUseCase: ConfirmSubmissionResultOnChainUseCase,
     private val runProblemCodeUseCase: RunProblemCodeUseCase,
     private val enqueueProblemSubmissionUseCase: EnqueueProblemSubmissionUseCase,
     private val getSubmissionJudgeJobUseCase: GetSubmissionJudgeJobUseCase,
@@ -127,6 +142,49 @@ internal class ProblemController(
         request: ConfirmJoinProblemRequestDto,
     ): JoinProblemResponseDto {
         return confirmJoinProblemOnChainUseCase(userId, walletAddress, problemId, request)
+    }
+
+    fun prepareSettleCompetitionOnChain(
+        userId: Long,
+        walletAddress: String,
+        problemId: Int,
+    ): PrepareCompetitionLifecycleActionResponseDto {
+        return prepareSettleCompetitionOnChainUseCase(userId, walletAddress, problemId)
+    }
+
+    fun confirmSettleCompetitionOnChain(
+        userId: Long,
+        walletAddress: String,
+        problemId: Int,
+        request: ConfirmCompetitionLifecycleActionRequestDto,
+    ): CompetitionLifecycleActionResponseDto {
+        return confirmSettleCompetitionOnChainUseCase(userId, walletAddress, problemId, request)
+    }
+
+    fun prepareCancelCompetitionOnChain(
+        userId: Long,
+        walletAddress: String,
+        problemId: Int,
+    ): PrepareCompetitionLifecycleActionResponseDto {
+        return prepareCancelCompetitionOnChainUseCase(userId, walletAddress, problemId)
+    }
+
+    fun confirmCancelCompetitionOnChain(
+        userId: Long,
+        walletAddress: String,
+        problemId: Int,
+        request: ConfirmCompetitionLifecycleActionRequestDto,
+    ): CompetitionLifecycleActionResponseDto {
+        return confirmCancelCompetitionOnChainUseCase(userId, walletAddress, problemId, request)
+    }
+
+    fun confirmSubmissionResultOnChain(
+        userId: Long,
+        walletAddress: String,
+        submissionId: Long,
+        request: ConfirmSubmissionResultRequestDto,
+    ): SubmitProblemResponseDto {
+        return confirmSubmissionResultOnChainUseCase(userId, walletAddress, submissionId, request)
     }
 
     fun runProblemCode(

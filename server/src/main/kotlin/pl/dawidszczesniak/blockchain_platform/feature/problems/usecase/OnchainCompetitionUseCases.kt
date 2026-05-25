@@ -2,22 +2,32 @@ package pl.dawidszczesniak.blockchain_platform.feature.problems.usecase
 
 import java.time.Instant
 import java.time.LocalDate
+import pl.dawidszczesniak.blockchain_platform.db.CompetitionSettlementStatus
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import pl.dawidszczesniak.blockchain_platform.db.DashboardMetricsRefresher
 import pl.dawidszczesniak.blockchain_platform.db.DbTransactionRunner
 import pl.dawidszczesniak.blockchain_platform.feature.auth.BlockchainConfig
 import pl.dawidszczesniak.blockchain_platform.feature.platform.PaymentAssetCatalog
+import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ConfirmSubmissionResultRequestDto
+import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.CompetitionLifecycleActionResponseDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.competition.toContractDeadlineEpochSeconds
 import pl.dawidszczesniak.blockchain_platform.feature.problems.competition.CompetitionIntentStore
+import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ConfirmCompetitionLifecycleActionRequestDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ConfirmCreateProblemRequestDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ConfirmJoinProblemRequestDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.CreateProblemRequestDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.CreateProblemResponseDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.JoinProblemResponseDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.PrepareCreateProblemResponseDto
+import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.PrepareCompetitionLifecycleActionResponseDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.PreparedWalletTransactionDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.PrepareJoinProblemResponseDto
+import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.SubmitProblemResponseDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.onchain.BlockchainPlatformContractClient
 import pl.dawidszczesniak.blockchain_platform.feature.problems.onchain.BlockchainPlatformContractConfig
+import pl.dawidszczesniak.blockchain_platform.feature.problems.onchain.SubmissionResultRecord
 import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.ProblemWriteRepository
 
 internal interface PrepareCreateProblemOnChainUseCase {
@@ -34,6 +44,41 @@ internal interface PrepareJoinProblemOnChainUseCase {
 
 internal interface ConfirmJoinProblemOnChainUseCase {
     operator fun invoke(userId: Long, walletAddress: String, problemId: Int, request: ConfirmJoinProblemRequestDto): JoinProblemResponseDto
+}
+
+internal interface PrepareSettleCompetitionOnChainUseCase {
+    operator fun invoke(userId: Long, walletAddress: String, problemId: Int): PrepareCompetitionLifecycleActionResponseDto
+}
+
+internal interface ConfirmSettleCompetitionOnChainUseCase {
+    operator fun invoke(
+        userId: Long,
+        walletAddress: String,
+        problemId: Int,
+        request: ConfirmCompetitionLifecycleActionRequestDto,
+    ): CompetitionLifecycleActionResponseDto
+}
+
+internal interface PrepareCancelCompetitionOnChainUseCase {
+    operator fun invoke(userId: Long, walletAddress: String, problemId: Int): PrepareCompetitionLifecycleActionResponseDto
+}
+
+internal interface ConfirmCancelCompetitionOnChainUseCase {
+    operator fun invoke(
+        userId: Long,
+        walletAddress: String,
+        problemId: Int,
+        request: ConfirmCompetitionLifecycleActionRequestDto,
+    ): CompetitionLifecycleActionResponseDto
+}
+
+internal interface ConfirmSubmissionResultOnChainUseCase {
+    operator fun invoke(
+        userId: Long,
+        walletAddress: String,
+        submissionId: Long,
+        request: ConfirmSubmissionResultRequestDto,
+    ): SubmitProblemResponseDto
 }
 
 internal class PrepareCreateProblemOnChainUseCaseImpl(
@@ -235,6 +280,236 @@ internal class ConfirmJoinProblemOnChainUseCaseImpl(
     }
 }
 
+internal class CompetitionLifecycleValidationException(message: String) : RuntimeException(message)
+
+internal class PrepareSettleCompetitionOnChainUseCaseImpl(
+    private val repository: ProblemWriteRepository,
+    private val contractClient: BlockchainPlatformContractClient,
+    private val blockchainConfig: BlockchainConfig,
+) : PrepareSettleCompetitionOnChainUseCase {
+    override fun invoke(
+        userId: Long,
+        walletAddress: String,
+        problemId: Int,
+    ): PrepareCompetitionLifecycleActionResponseDto {
+        if (userId <= 0L || walletAddress.isBlank()) {
+            throw CompetitionLifecycleValidationException("Authenticated wallet session is required.")
+        }
+        val context = repository.fetchCompetitionLifecycleContext(problemId)
+            ?: throw CompetitionLifecycleValidationException("Problem is not linked to an on-chain competition.")
+        requireSettlementReady(context)
+        val transaction = contractClient.prepareSettleCompetition(context.competitionId)
+        return PrepareCompetitionLifecycleActionResponseDto(
+            chainId = blockchainConfig.chainId,
+            proxyAddress = transaction.to,
+            explorerBaseUrl = blockchainConfig.explorerBaseUrl,
+            transaction = transaction.toDto(),
+        )
+    }
+}
+
+internal class ConfirmSettleCompetitionOnChainUseCaseImpl(
+    private val repository: ProblemWriteRepository,
+    private val contractClient: BlockchainPlatformContractClient,
+    private val contractConfig: BlockchainPlatformContractConfig,
+) : ConfirmSettleCompetitionOnChainUseCase {
+    override fun invoke(
+        userId: Long,
+        walletAddress: String,
+        problemId: Int,
+        request: ConfirmCompetitionLifecycleActionRequestDto,
+    ): CompetitionLifecycleActionResponseDto {
+        if (userId <= 0L || walletAddress.isBlank()) {
+            throw CompetitionLifecycleValidationException("Authenticated wallet session is required.")
+        }
+        val context = repository.fetchCompetitionLifecycleContext(problemId)
+            ?: throw CompetitionLifecycleValidationException("Problem is not linked to an on-chain competition.")
+        requireSettlementReady(context)
+        val normalizedWallet = normalizeWallet(walletAddress)
+        val verifiedTx = contractClient.verifySettleCompetitionTransaction(
+            txHash = normalizeTxHash(request.txHash),
+            expectedSenderWallet = normalizedWallet,
+            expectedCompetitionId = context.competitionId,
+        )
+        val winnerUserId = repository.findUserIdByWalletAddress(verifiedTx.winnerWalletAddress)
+            ?: throw CompetitionLifecycleValidationException("Winner wallet from on-chain settlement is not mapped to a platform user.")
+        repository.recordSettledWinner(
+            problemId = problemId,
+            winnerUserId = winnerUserId,
+            payoutAmountAtomic = context.prizeAmountAtomic,
+            txHash = verifiedTx.txHash,
+            settledAt = Instant.now(),
+            fromWallet = normalizedWallet,
+        )
+        return CompetitionLifecycleActionResponseDto(
+            competitionId = context.competitionId,
+            settlementStatus = CompetitionSettlementStatus.Settled.dbValue,
+            txHash = verifiedTx.txHash,
+            explorerUrl = contractConfig.explorerTxUrl(verifiedTx.txHash),
+            winnerWalletAddress = verifiedTx.winnerWalletAddress,
+        )
+    }
+}
+
+internal class PrepareCancelCompetitionOnChainUseCaseImpl(
+    private val repository: ProblemWriteRepository,
+    private val contractClient: BlockchainPlatformContractClient,
+    private val blockchainConfig: BlockchainConfig,
+    private val contractConfig: BlockchainPlatformContractConfig,
+) : PrepareCancelCompetitionOnChainUseCase {
+    override fun invoke(
+        userId: Long,
+        walletAddress: String,
+        problemId: Int,
+    ): PrepareCompetitionLifecycleActionResponseDto {
+        if (userId <= 0L || walletAddress.isBlank()) {
+            throw CompetitionLifecycleValidationException("Authenticated wallet session is required.")
+        }
+        val context = repository.fetchCompetitionLifecycleContext(problemId)
+            ?: throw CompetitionLifecycleValidationException("Problem is not linked to an on-chain competition.")
+        requireCancellationAuthorization(
+            context = context,
+            callerWalletAddress = walletAddress,
+            operatorWalletAddress = contractConfig.operatorWalletAddress,
+        )
+        requireCancellationReady(context)
+        val transaction = contractClient.prepareCancelCompetition(context.competitionId)
+        return PrepareCompetitionLifecycleActionResponseDto(
+            chainId = blockchainConfig.chainId,
+            proxyAddress = transaction.to,
+            explorerBaseUrl = blockchainConfig.explorerBaseUrl,
+            transaction = transaction.toDto(),
+        )
+    }
+}
+
+internal class ConfirmCancelCompetitionOnChainUseCaseImpl(
+    private val repository: ProblemWriteRepository,
+    private val contractClient: BlockchainPlatformContractClient,
+    private val contractConfig: BlockchainPlatformContractConfig,
+) : ConfirmCancelCompetitionOnChainUseCase {
+    override fun invoke(
+        userId: Long,
+        walletAddress: String,
+        problemId: Int,
+        request: ConfirmCompetitionLifecycleActionRequestDto,
+    ): CompetitionLifecycleActionResponseDto {
+        if (userId <= 0L || walletAddress.isBlank()) {
+            throw CompetitionLifecycleValidationException("Authenticated wallet session is required.")
+        }
+        val context = repository.fetchCompetitionLifecycleContext(problemId)
+            ?: throw CompetitionLifecycleValidationException("Problem is not linked to an on-chain competition.")
+        requireCancellationAuthorization(
+            context = context,
+            callerWalletAddress = walletAddress,
+            operatorWalletAddress = contractConfig.operatorWalletAddress,
+        )
+        requireCancellationReady(context)
+        val normalizedWallet = normalizeWallet(walletAddress)
+        val verifiedTx = contractClient.verifyCancelCompetitionTransaction(
+            txHash = normalizeTxHash(request.txHash),
+            expectedSenderWallet = normalizedWallet,
+            expectedCompetitionId = context.competitionId,
+        )
+        repository.markCompetitionSettlementCancelled(
+            problemId = problemId,
+            txHash = verifiedTx.txHash,
+            settledAt = Instant.now(),
+            fromWallet = normalizedWallet,
+        )
+        return CompetitionLifecycleActionResponseDto(
+            competitionId = context.competitionId,
+            settlementStatus = CompetitionSettlementStatus.Cancelled.dbValue,
+            txHash = verifiedTx.txHash,
+            explorerUrl = contractConfig.explorerTxUrl(verifiedTx.txHash),
+            winnerWalletAddress = null,
+        )
+    }
+}
+
+internal class ConfirmSubmissionResultOnChainUseCaseImpl(
+    private val repository: ProblemWriteRepository,
+    private val contractClient: BlockchainPlatformContractClient,
+    private val contractConfig: BlockchainPlatformContractConfig,
+) : ConfirmSubmissionResultOnChainUseCase {
+    private val json = Json { ignoreUnknownKeys = true }
+
+    override fun invoke(
+        userId: Long,
+        walletAddress: String,
+        submissionId: Long,
+        request: ConfirmSubmissionResultRequestDto,
+    ): SubmitProblemResponseDto {
+        val context = repository.fetchSubmissionOnchainConfirmationContext(userId, submissionId)
+            ?: throw SubmissionJudgeJobValidationException("Submission was not found for the current wallet session.")
+        val normalizedWallet = normalizeWallet(walletAddress)
+        if (normalizedWallet != normalizeWallet(context.participantWalletAddress)) {
+            throw SubmissionJudgeJobValidationException("Submission does not belong to the current wallet session.")
+        }
+        val payloadJson = context.resultPayloadJson?.takeIf { it.isNotBlank() }
+            ?: throw SubmissionJudgeJobValidationException("Submission result is not ready for on-chain confirmation.")
+        val existingPayload = json.decodeFromString<SubmitProblemResponseDto>(payloadJson)
+        val normalizedTxHash = normalizeTxHash(request.txHash)
+
+        if (context.onchainRecordedAt != null) {
+            val recordedTxHash = context.onchainRecordTxHash?.let(::normalizeTxHash).orEmpty()
+            if (recordedTxHash.isNotBlank() && recordedTxHash != normalizedTxHash) {
+                throw SubmissionJudgeJobValidationException(
+                    "Submission was already confirmed on-chain under transaction $recordedTxHash."
+                )
+            }
+            val confirmedPayload = existingPayload.copy(
+                onchainRecorded = true,
+                txHash = recordedTxHash.ifBlank { normalizedTxHash },
+                explorerUrl = contractConfig.explorerTxUrl(recordedTxHash.ifBlank { normalizedTxHash }),
+            )
+            repository.updateSubmissionAcceptedResultPayload(
+                submissionId = submissionId,
+                payloadJson = json.encodeToString(confirmedPayload),
+            )
+            return confirmedPayload
+        }
+
+        val signature = existingPayload.signature?.takeIf { it.isNotBlank() }
+            ?: throw SubmissionJudgeJobValidationException("Submission signature is missing.")
+        val verifiedTx = contractClient.verifySubmissionResultTransaction(
+            txHash = normalizedTxHash,
+            expectedParticipantWallet = context.participantWalletAddress,
+            record = SubmissionResultRecord(
+                competitionId = context.competitionId,
+                onchainSubmissionId = context.onchainSubmissionId,
+                participantWalletAddress = context.participantWalletAddress,
+                submissionHash = context.commitmentHash,
+                codeHash = context.codeHash,
+                challengeHash = context.challengeHash,
+                resultHash = context.resultHash,
+                sandboxImageHash = context.consensusImageHash,
+                runtimeMs = context.runtimeMs,
+                memoryUsedKb = context.memoryUsedKb,
+                consensusNodes = context.consensusNodes,
+            ),
+            signatureHex = signature,
+        )
+        repository.markSubmissionResultRecorded(
+            submissionId = submissionId,
+            proxyAddress = contractConfig.proxyAddress,
+            txHash = verifiedTx.txHash,
+            recordedAt = Instant.now(),
+            fromWallet = normalizedWallet,
+        )
+        val confirmedPayload = existingPayload.copy(
+            onchainRecorded = true,
+            txHash = verifiedTx.txHash,
+            explorerUrl = contractConfig.explorerTxUrl(verifiedTx.txHash),
+        )
+        repository.updateSubmissionAcceptedResultPayload(
+            submissionId = submissionId,
+            payloadJson = json.encodeToString(confirmedPayload),
+        )
+        return confirmedPayload
+    }
+}
+
 private fun pl.dawidszczesniak.blockchain_platform.feature.problems.competition.PreparedCreateProblemIntent.toValidatedDraft(
     paymentAssetCatalog: PaymentAssetCatalog,
 ): ValidatedCreateProblemDraft {
@@ -271,6 +546,47 @@ private fun pl.dawidszczesniak.blockchain_platform.feature.problems.onchain.Prep
         data = data,
         valueHex = valueHex,
     )
+}
+
+private fun requireSettlementReady(context: pl.dawidszczesniak.blockchain_platform.feature.problems.repository.CompetitionLifecycleContext) {
+    if (context.settlementStatus != CompetitionSettlementStatus.Pending.dbValue) {
+        throw CompetitionLifecycleValidationException("Competition is already finalized on-chain.")
+    }
+    if (context.registeredParticipants < context.requiredParticipants) {
+        throw CompetitionLifecycleValidationException("Competition cannot be settled before the participant threshold is reached.")
+    }
+    val submitDeadlineEpochSeconds = context.submitUntilDate.toContractDeadlineEpochSeconds()
+    if (Instant.now().epochSecond <= submitDeadlineEpochSeconds) {
+        throw CompetitionLifecycleValidationException("Competition settlement unlocks after the submission deadline.")
+    }
+}
+
+private fun requireCancellationReady(context: pl.dawidszczesniak.blockchain_platform.feature.problems.repository.CompetitionLifecycleContext) {
+    if (context.settlementStatus != CompetitionSettlementStatus.Pending.dbValue) {
+        throw CompetitionLifecycleValidationException("Competition is already finalized on-chain.")
+    }
+    val nowEpochSeconds = Instant.now().epochSecond
+    val joinDeadlineEpochSeconds = context.joinUntilDate.toContractDeadlineEpochSeconds()
+    val submitDeadlineEpochSeconds = context.submitUntilDate.toContractDeadlineEpochSeconds()
+    val registrationFailed = nowEpochSeconds > joinDeadlineEpochSeconds &&
+        context.registeredParticipants < context.requiredParticipants
+    val submissionsFinished = nowEpochSeconds > submitDeadlineEpochSeconds
+    if (!registrationFailed && !submissionsFinished) {
+        throw CompetitionLifecycleValidationException("Competition cancellation is still time-locked.")
+    }
+}
+
+private fun requireCancellationAuthorization(
+    context: pl.dawidszczesniak.blockchain_platform.feature.problems.repository.CompetitionLifecycleContext,
+    callerWalletAddress: String,
+    operatorWalletAddress: String,
+) {
+    val normalizedCaller = normalizeWallet(callerWalletAddress)
+    val normalizedCreator = normalizeWallet(context.creatorWalletAddress)
+    val normalizedOperator = normalizeWallet(operatorWalletAddress)
+    if (normalizedCaller != normalizedCreator && normalizedCaller != normalizedOperator) {
+        throw CompetitionLifecycleValidationException("Only the competition creator or platform admin can cancel this competition from the UI.")
+    }
 }
 
 private fun normalizeWallet(walletAddress: String): String {

@@ -1,14 +1,15 @@
 package pl.dawidszczesniak.blockchain_platform.feature.problems.onchain
 
 import java.math.BigInteger
-import org.slf4j.LoggerFactory
 import org.web3j.abi.EventEncoder
 import org.web3j.abi.FunctionEncoder
 import org.web3j.abi.FunctionReturnDecoder
 import org.web3j.abi.TypeReference
 import org.web3j.abi.datatypes.Address
+import org.web3j.abi.datatypes.DynamicBytes
 import org.web3j.abi.datatypes.Event
 import org.web3j.abi.datatypes.Function
+import org.web3j.abi.datatypes.NumericType
 import org.web3j.abi.datatypes.Type
 import org.web3j.abi.datatypes.generated.Bytes32
 import org.web3j.abi.datatypes.generated.Uint16
@@ -17,8 +18,7 @@ import org.web3j.abi.datatypes.generated.Uint32
 import org.web3j.abi.datatypes.generated.Uint64
 import org.web3j.crypto.Credentials
 import org.web3j.crypto.Hash
-import org.web3j.crypto.RawTransaction
-import org.web3j.crypto.TransactionEncoder
+import org.web3j.crypto.Sign
 import org.web3j.protocol.Web3j
 import org.web3j.protocol.core.DefaultBlockParameterName
 import org.web3j.protocol.core.methods.response.Log
@@ -26,12 +26,11 @@ import org.web3j.protocol.core.methods.response.Transaction
 import org.web3j.protocol.core.methods.response.TransactionReceipt
 import org.web3j.protocol.http.HttpService
 import org.web3j.utils.Numeric
+import org.web3j.protocol.core.methods.request.Transaction as EthCallTransaction
 import pl.dawidszczesniak.blockchain_platform.feature.auth.BlockchainConfig
 import pl.dawidszczesniak.blockchain_platform.feature.platform.PaymentAssetConfig
 import pl.dawidszczesniak.blockchain_platform.feature.platform.PaymentAssetKind
 import pl.dawidszczesniak.blockchain_platform.feature.problems.atomicAmountToBigInteger
-
-private val logger = LoggerFactory.getLogger("EthereumBlockchainPlatformContractClient")
 
 internal data class BlockchainPlatformContractConfig(
     val proxyAddress: String,
@@ -68,7 +67,7 @@ internal data class BlockchainPlatformContractConfig(
                 "ETH_PLATFORM_PROXY_ADDRESS must be configured because BlockchainTestContract is always used on-chain."
             }
             require(!operatorPrivateKey.isNullOrBlank()) {
-                "ETH_PLATFORM_OPERATOR_PRIVATE_KEY must be configured because settlement and accepted result recording are always on-chain."
+                "ETH_PLATFORM_OPERATOR_PRIVATE_KEY must be configured because submission result payloads are signed by platform operator."
             }
 
             return BlockchainPlatformContractConfig(
@@ -121,11 +120,11 @@ internal data class VerifiedCompetitionJoin(
 
 internal data class SubmissionResultRecord(
     val competitionId: Long,
-    val submissionId: Long,
+    val onchainSubmissionId: Long,
     val participantWalletAddress: String,
     val submissionHash: String,
     val codeHash: String,
-    val testsHash: String,
+    val challengeHash: String,
     val resultHash: String,
     val sandboxImageHash: String,
     val runtimeMs: Int,
@@ -133,10 +132,24 @@ internal data class SubmissionResultRecord(
     val consensusNodes: Int,
 )
 
-internal data class BlockchainPlatformWriteResult(
-    val success: Boolean,
-    val txHash: String? = null,
-    val error: String? = null,
+internal data class PreparedSignedSubmissionResult(
+    val signatureHex: String,
+    val signerWalletAddress: String,
+    val transaction: PreparedCompetitionTransaction,
+    val simulationErrorMessage: String? = null,
+)
+
+internal data class VerifiedSubmissionRecording(
+    val txHash: String,
+)
+
+internal data class VerifiedCompetitionSettlement(
+    val txHash: String,
+    val winnerWalletAddress: String,
+)
+
+internal data class VerifiedCompetitionCancellation(
+    val txHash: String,
 )
 
 internal interface BlockchainPlatformContractClient {
@@ -176,20 +189,32 @@ internal interface BlockchainPlatformContractClient {
         expectedEntryFeeAmountAtomic: String,
     ): VerifiedCompetitionJoin
 
-    fun settleCompetition(competitionId: Long): BlockchainPlatformWriteResult
-
-    fun cancelCompetition(competitionId: Long): BlockchainPlatformWriteResult
-
-    fun recordSubmissionResult(
+    fun prepareSignedSubmissionResult(
         record: SubmissionResultRecord,
-        onProgress: (String) -> Unit = {},
-        onTransactionSent: (String) -> Unit = {},
-    ): BlockchainPlatformWriteResult
+    ): PreparedSignedSubmissionResult
 
-    fun confirmSubmissionResultReceipt(
+    fun verifySubmissionResultTransaction(
         txHash: String,
-        onProgress: (String) -> Unit = {},
-    ): BlockchainPlatformWriteResult
+        expectedParticipantWallet: String,
+        record: SubmissionResultRecord,
+        signatureHex: String,
+    ): VerifiedSubmissionRecording
+
+    fun prepareSettleCompetition(competitionId: Long): PreparedCompetitionTransaction
+
+    fun verifySettleCompetitionTransaction(
+        txHash: String,
+        expectedSenderWallet: String,
+        expectedCompetitionId: Long,
+    ): VerifiedCompetitionSettlement
+
+    fun prepareCancelCompetition(competitionId: Long): PreparedCompetitionTransaction
+
+    fun verifyCancelCompetitionTransaction(
+        txHash: String,
+        expectedSenderWallet: String,
+        expectedCompetitionId: Long,
+    ): VerifiedCompetitionCancellation
 
     fun close()
 }
@@ -363,158 +388,218 @@ internal class EthereumBlockchainPlatformContractClient(
         return VerifiedCompetitionJoin(txHash = normalizeHex(txHash))
     }
 
-    override fun settleCompetition(competitionId: Long): BlockchainPlatformWriteResult {
+    override fun prepareSignedSubmissionResult(
+        record: SubmissionResultRecord,
+    ): PreparedSignedSubmissionResult {
+        val signatureHex = signSubmissionResult(record)
+        val transaction = prepareSubmissionResultTransaction(record, signatureHex)
+        return PreparedSignedSubmissionResult(
+            signatureHex = signatureHex,
+            signerWalletAddress = contractConfig.operatorWalletAddress,
+            transaction = transaction,
+            simulationErrorMessage = simulateSubmissionResultTransaction(
+                record = record,
+                transaction = transaction,
+            ),
+        )
+    }
+
+    override fun verifySubmissionResultTransaction(
+        txHash: String,
+        expectedParticipantWallet: String,
+        record: SubmissionResultRecord,
+        signatureHex: String,
+    ): VerifiedSubmissionRecording {
+        val transaction = loadTransaction(txHash)
+        val receipt = loadSuccessfulReceipt(txHash)
+        val expectedPrepared = prepareSubmissionResultTransaction(record, signatureHex)
+        validateUserSubmittedTransaction(
+            transaction = transaction,
+            expectedFrom = expectedParticipantWallet,
+            expectedTo = expectedPrepared.to,
+            expectedData = expectedPrepared.data,
+            expectedValue = hexToBigInteger(expectedPrepared.valueHex),
+        )
+        val log = findEventLog(receipt, SUBMISSION_RECORDED_EVENT_SIGNATURE)
+        val competitionId = Numeric.toBigInt(log.topics.getOrNull(1)).longValueExact()
+        val submissionId = Numeric.toBigInt(log.topics.getOrNull(2)).longValueExact()
+        val participant = topicAddress(log.topics.getOrNull(3))
+        if (competitionId != record.competitionId) {
+            error("SubmissionResultRecorded event competition id does not match prepared submission.")
+        }
+        if (submissionId != record.onchainSubmissionId) {
+            error("SubmissionResultRecorded event submission id does not match prepared submission.")
+        }
+        if (participant != normalizeAddress(expectedParticipantWallet)) {
+            error("SubmissionResultRecorded event participant does not match current wallet.")
+        }
+        val values = FunctionReturnDecoder.decode(log.data, SUBMISSION_RECORDED_EVENT_PARAMETERS)
+        val submissionHash = values.bytes32Value(0)
+        val codeHash = values.bytes32Value(1)
+        val challengeHash = values.bytes32Value(2)
+        val resultHash = values.bytes32Value(3)
+        val sandboxImageHash = values.bytes32Value(4)
+        val runtimeMs = values.uintValue(5)
+        val memoryUsedKb = values.uintValue(6)
+        val consensusNodes = values.uint16Value(7)
+        if (
+            submissionHash != normalizeHex(record.submissionHash) ||
+            codeHash != normalizeHex(record.codeHash) ||
+            challengeHash != normalizeHex(record.challengeHash) ||
+            resultHash != normalizeHex(record.resultHash) ||
+            sandboxImageHash != normalizeHex(record.sandboxImageHash) ||
+            runtimeMs != BigInteger.valueOf(record.runtimeMs.toLong()) ||
+            memoryUsedKb != BigInteger.valueOf(record.memoryUsedKb.toLong()) ||
+            consensusNodes != BigInteger.valueOf(record.consensusNodes.toLong())
+        ) {
+            error("SubmissionResultRecorded event payload does not match prepared submission.")
+        }
+        return VerifiedSubmissionRecording(txHash = normalizeHex(txHash))
+    }
+
+    override fun prepareSettleCompetition(competitionId: Long): PreparedCompetitionTransaction {
         val function = Function(
             METHOD_SETTLE_COMPETITION,
             listOf(Uint256(BigInteger.valueOf(competitionId))),
             emptyList(),
         )
-        return submitBackendWriteTransaction(function, "Competition settlement failed.")
+        return PreparedCompetitionTransaction(
+            to = contractConfig.proxyAddress,
+            data = FunctionEncoder.encode(function),
+            valueHex = ZERO_HEX,
+        )
     }
 
-    override fun cancelCompetition(competitionId: Long): BlockchainPlatformWriteResult {
+    override fun verifySettleCompetitionTransaction(
+        txHash: String,
+        expectedSenderWallet: String,
+        expectedCompetitionId: Long,
+    ): VerifiedCompetitionSettlement {
+        val transaction = loadTransaction(txHash)
+        val receipt = loadSuccessfulReceipt(txHash)
+        val expectedPrepared = prepareSettleCompetition(expectedCompetitionId)
+        validateUserSubmittedTransaction(
+            transaction = transaction,
+            expectedFrom = expectedSenderWallet,
+            expectedTo = expectedPrepared.to,
+            expectedData = expectedPrepared.data,
+            expectedValue = hexToBigInteger(expectedPrepared.valueHex),
+        )
+        val log = findEventLog(receipt, SETTLED_EVENT_SIGNATURE)
+        val competitionId = Numeric.toBigInt(log.topics.getOrNull(1)).longValueExact()
+        val winnerWalletAddress = topicAddress(log.topics.getOrNull(2))
+        if (competitionId != expectedCompetitionId) {
+            error("CompetitionSettled event competition id does not match prepared settlement.")
+        }
+        return VerifiedCompetitionSettlement(
+            txHash = normalizeHex(txHash),
+            winnerWalletAddress = winnerWalletAddress,
+        )
+    }
+
+    override fun prepareCancelCompetition(competitionId: Long): PreparedCompetitionTransaction {
         val function = Function(
             METHOD_CANCEL_COMPETITION,
             listOf(Uint256(BigInteger.valueOf(competitionId))),
             emptyList(),
         )
-        return submitBackendWriteTransaction(function, "Competition cancellation failed.")
-    }
-
-    override fun recordSubmissionResult(
-        record: SubmissionResultRecord,
-        onProgress: (String) -> Unit,
-        onTransactionSent: (String) -> Unit,
-    ): BlockchainPlatformWriteResult {
-        val function = Function(
-            METHOD_RECORD_SUBMISSION_RESULT,
-            listOf(
-                Uint256(BigInteger.valueOf(record.competitionId)),
-                Uint256(BigInteger.valueOf(record.submissionId)),
-                Address(normalizeAddress(record.participantWalletAddress)),
-                Bytes32(bytes32(record.submissionHash)),
-                Bytes32(bytes32(record.codeHash)),
-                Bytes32(bytes32(record.testsHash)),
-                Bytes32(bytes32(record.resultHash)),
-                Bytes32(bytes32(record.sandboxImageHash)),
-                Uint32(BigInteger.valueOf(record.runtimeMs.coerceAtLeast(0).toLong())),
-                Uint32(BigInteger.valueOf(record.memoryUsedKb.coerceAtLeast(0).toLong())),
-                Uint16(BigInteger.valueOf(record.consensusNodes.coerceAtLeast(0).toLong())),
-            ),
-            emptyList(),
-        )
-        return submitBackendWriteTransaction(
-            function = function,
-            fallbackError = "On-chain submission result write failed.",
-            onProgress = onProgress,
-            onTransactionSent = onTransactionSent,
+        return PreparedCompetitionTransaction(
+            to = contractConfig.proxyAddress,
+            data = FunctionEncoder.encode(function),
+            valueHex = ZERO_HEX,
         )
     }
 
-    override fun confirmSubmissionResultReceipt(
+    override fun verifyCancelCompetitionTransaction(
         txHash: String,
-        onProgress: (String) -> Unit,
-    ): BlockchainPlatformWriteResult {
-        return runCatching {
-            logger.info("Rechecking receipt for existing backend write transaction: txHash={}.", txHash)
-            onProgress("Transakcja wysłana. Czekam na potwierdzenie w sieci.")
-            val receipt = waitForReceipt(txHash)
-                ?: return@runCatching BlockchainPlatformWriteResult(
-                    success = false,
-                    txHash = txHash,
-                    error = "Transaction sent but receipt was not confirmed in time.",
-                )
-            val status = receipt.status.orEmpty().lowercase()
-            if (status == "0x1" || status == "1") {
-                logger.info("Existing backend write transaction confirmed: txHash={}, receiptStatus={}.", txHash, receipt.status)
-                BlockchainPlatformWriteResult(success = true, txHash = txHash)
-            } else {
-                logger.warn("Existing backend write transaction reverted: txHash={}, receiptStatus={}.", txHash, receipt.status)
-                BlockchainPlatformWriteResult(
-                    success = false,
-                    txHash = txHash,
-                    error = "Transaction reverted with status ${receipt.status}.",
-                )
-            }
-        }.getOrElse { error ->
-            logger.error("Existing backend write transaction receipt check failed.", error)
-            BlockchainPlatformWriteResult(
-                success = false,
-                txHash = txHash,
-                error = error.message?.ifBlank { null } ?: "On-chain submission result write failed.",
-            )
+        expectedSenderWallet: String,
+        expectedCompetitionId: Long,
+    ): VerifiedCompetitionCancellation {
+        val transaction = loadTransaction(txHash)
+        val receipt = loadSuccessfulReceipt(txHash)
+        val expectedPrepared = prepareCancelCompetition(expectedCompetitionId)
+        validateUserSubmittedTransaction(
+            transaction = transaction,
+            expectedFrom = expectedSenderWallet,
+            expectedTo = expectedPrepared.to,
+            expectedData = expectedPrepared.data,
+            expectedValue = hexToBigInteger(expectedPrepared.valueHex),
+        )
+        val log = findEventLog(receipt, CANCELLED_EVENT_SIGNATURE)
+        val competitionId = Numeric.toBigInt(log.topics.getOrNull(1)).longValueExact()
+        if (competitionId != expectedCompetitionId) {
+            error("CompetitionCancelled event competition id does not match prepared cancellation.")
         }
+        return VerifiedCompetitionCancellation(txHash = normalizeHex(txHash))
     }
 
     override fun close() {
         web3j.shutdown()
     }
 
-    private fun submitBackendWriteTransaction(
-        function: Function,
-        fallbackError: String,
-        onProgress: (String) -> Unit = {},
-        onTransactionSent: (String) -> Unit = {},
-    ): BlockchainPlatformWriteResult {
-        return runCatching {
-            val data = FunctionEncoder.encode(function)
-            val nonce = web3j.ethGetTransactionCount(
-                operatorCredentials.address,
-                DefaultBlockParameterName.PENDING,
-            ).send().transactionCount
-            val gasPrice = contractConfig.gasPriceWei?.toBigInteger()
-                ?: recommendedGasPrice(web3j.ethGasPrice().send().gasPrice)
-            logger.info(
-                "Submitting backend write transaction to proxyAddress={} with nonce={}, gasPriceWei={}, gasLimit={}.",
-                contractConfig.proxyAddress,
-                nonce,
-                gasPrice,
-                contractConfig.gasLimit,
-            )
-            val rawTransaction = RawTransaction.createTransaction(
-                nonce,
-                gasPrice,
-                BigInteger.valueOf(contractConfig.gasLimit),
-                contractConfig.proxyAddress,
-                data,
-            )
-            val signedMessage = TransactionEncoder.signMessage(rawTransaction, blockchainConfig.chainId, operatorCredentials)
-            onProgress("Podpisuję i wysyłam transakcję on-chain.")
-            val sendResponse = web3j.ethSendRawTransaction(Numeric.toHexString(signedMessage)).send()
-            if (sendResponse.hasError()) {
-                val reason = sendResponse.error?.message?.ifBlank { null } ?: "eth_sendRawTransaction failed."
-                logger.warn("eth_sendRawTransaction failed for proxyAddress={}: {}", contractConfig.proxyAddress, reason)
-                return@runCatching BlockchainPlatformWriteResult(success = false, error = reason)
-            }
-            val txHash = sendResponse.transactionHash
-            logger.info("Backend write transaction sent: txHash={}.", txHash)
-            onTransactionSent(txHash)
-            onProgress("Transakcja wysłana. Czekam na potwierdzenie w sieci.")
-            val receipt = waitForReceipt(txHash)
-                ?: return@runCatching BlockchainPlatformWriteResult(
-                    success = false,
-                    txHash = txHash,
-                    error = "Transaction sent but receipt was not confirmed in time.",
-                )
-            val status = receipt.status.orEmpty().lowercase()
-            if (status == "0x1" || status == "1") {
-                logger.info("Backend write transaction confirmed: txHash={}, receiptStatus={}.", txHash, receipt.status)
-                BlockchainPlatformWriteResult(success = true, txHash = txHash)
-            } else {
-                logger.warn("Backend write transaction reverted: txHash={}, receiptStatus={}.", txHash, receipt.status)
-                BlockchainPlatformWriteResult(
-                    success = false,
-                    txHash = txHash,
-                    error = "Transaction reverted with status ${receipt.status}.",
-                )
-            }
-        }.getOrElse { error ->
-            logger.error("Backend write transaction failed before confirmation.", error)
-            BlockchainPlatformWriteResult(
-                success = false,
-                error = error.message?.ifBlank { null } ?: fallbackError,
-            )
+    private fun prepareSubmissionResultTransaction(
+        record: SubmissionResultRecord,
+        signatureHex: String,
+    ): PreparedCompetitionTransaction {
+        val function = Function(
+            METHOD_RECORD_SUBMISSION_RESULT,
+            listOf(
+                Uint256(BigInteger.valueOf(record.competitionId)),
+                Uint256(BigInteger.valueOf(record.onchainSubmissionId)),
+                Bytes32(bytes32(record.submissionHash)),
+                Bytes32(bytes32(record.codeHash)),
+                Bytes32(bytes32(record.challengeHash)),
+                Bytes32(bytes32(record.resultHash)),
+                Bytes32(bytes32(record.sandboxImageHash)),
+                Uint32(BigInteger.valueOf(record.runtimeMs.coerceAtLeast(0).toLong())),
+                Uint32(BigInteger.valueOf(record.memoryUsedKb.coerceAtLeast(0).toLong())),
+                Uint16(BigInteger.valueOf(record.consensusNodes.coerceAtLeast(0).toLong())),
+                DynamicBytes(Numeric.hexStringToByteArray(normalizeHex(signatureHex))),
+            ),
+            emptyList(),
+        )
+        return PreparedCompetitionTransaction(
+            to = contractConfig.proxyAddress,
+            data = FunctionEncoder.encode(function),
+            valueHex = ZERO_HEX,
+        )
+    }
+
+    private fun simulateSubmissionResultTransaction(
+        record: SubmissionResultRecord,
+        transaction: PreparedCompetitionTransaction,
+    ): String? {
+        val request = EthCallTransaction.createEthCallTransaction(
+            normalizeAddress(record.participantWalletAddress),
+            normalizeAddress(transaction.to),
+            normalizeHex(transaction.data),
+        )
+        val response = web3j.ethCall(request, DefaultBlockParameterName.LATEST).send()
+        if (!response.isReverted) {
+            return null
         }
+        val revertData = extractRevertData(response)
+        val decodedReason = decodeSubmissionRevertReason(revertData)
+        val fallbackReason = response.revertReason?.trim().orEmpty()
+        return listOfNotNull(
+            decodedReason,
+            fallbackReason.takeIf { it.isNotBlank() && it != decodedReason },
+        ).firstOrNull()
+            ?: "On-chain simulation reverted without a readable reason."
+    }
+
+    private fun signSubmissionResult(record: SubmissionResultRecord): String {
+        val digest = submissionResultDigest(
+            contractAddress = contractConfig.proxyAddress,
+            chainId = blockchainConfig.chainId,
+            record = record,
+        )
+        val signatureData = Sign.signMessage(
+            Numeric.hexStringToByteArray(digest),
+            operatorCredentials.ecKeyPair,
+            false,
+        )
+        return signatureHex(signatureData)
     }
 
     private fun prepareApprovalTransaction(
@@ -579,54 +664,65 @@ internal class EthereumBlockchainPlatformContractClient(
         } ?: error("Expected BlockchainTestContract event was not found in transaction receipt.")
     }
 
-    private fun waitForReceipt(txHash: String): TransactionReceipt? {
-        val startedAt = System.currentTimeMillis()
-        var attempts = 0
-        while (System.currentTimeMillis() - startedAt <= contractConfig.receiptTimeoutMs) {
-            attempts += 1
-            val receipt = runCatching {
-                web3j.ethGetTransactionReceipt(txHash).send().transactionReceipt.orElse(null)
-            }.onFailure { error ->
-                logger.warn(
-                    "eth_getTransactionReceipt failed for txHash={} on attempt {} after {} ms: {}",
-                    txHash,
-                    attempts,
-                    System.currentTimeMillis() - startedAt,
-                    error.message,
-                )
+}
+
+private fun extractRevertData(response: org.web3j.protocol.core.methods.response.EthCall): String? {
+    val errorData = response.error?.data?.trim().orEmpty()
+    HEX_DATA_REGEX.find(errorData)?.value?.let { return normalizeHex(it) }
+    val value = response.value?.trim().orEmpty()
+    if (value.startsWith("0x") && value.length >= 10) {
+        return normalizeHex(value)
+    }
+    return null
+}
+
+@Suppress("UNCHECKED_CAST")
+private fun decodeSubmissionRevertReason(revertData: String?): String? {
+    val normalized = revertData?.trim()?.lowercase()?.takeIf { it.startsWith("0x") && it.length >= 10 } ?: return null
+    val selector = normalized.take(10)
+    val encodedArguments = "0x${normalized.removePrefix("0x").drop(8)}"
+    return when (selector) {
+        customErrorSelector("ParticipantNotJoined()") -> "ParticipantNotJoined(): wallet is not joined to this competition."
+        customErrorSelector("SubmissionWindowClosed()") -> "SubmissionWindowClosed(): the submission deadline has already passed on-chain."
+        customErrorSelector("InvalidSignature()") -> "InvalidSignature(): operator signature does not match the submission payload."
+        customErrorSelector("CompetitionNotOpen()") -> "CompetitionNotOpen(): the competition is no longer open for recording submissions."
+        customErrorSelector("InvalidCompetition()") -> "InvalidCompetition(): competition id was rejected by the contract."
+        customErrorSelector("InvalidSubmission()") -> "InvalidSubmission(): submission payload was rejected by the contract."
+        customErrorSelector("InvalidHash()") -> "InvalidHash(): one of the prepared bytes32 hashes was rejected by the contract."
+        customErrorSelector("SubmissionAlreadyRecorded(uint256)") -> {
+            val decodedId = runCatching {
+                FunctionReturnDecoder.decode(
+                    encodedArguments,
+                    listOf(object : TypeReference<Uint256>() {} as TypeReference<Type<*>>),
+                ).uintValue(0).longValueExact()
             }.getOrNull()
-            if (receipt != null) {
-                logger.info(
-                    "Receipt found for txHash={} on attempt {} after {} ms.",
-                    txHash,
-                    attempts,
-                    System.currentTimeMillis() - startedAt,
-                )
-                return receipt
+            if (decodedId != null) {
+                "SubmissionAlreadyRecorded($decodedId): this on-chain submission id is already used."
+            } else {
+                "SubmissionAlreadyRecorded(): this on-chain submission id is already used."
             }
-            if (attempts == 1 || attempts % 5 == 0) {
-                logger.info(
-                    "Still waiting for receipt for txHash={} after {} ms (attempt {}).",
-                    txHash,
-                    System.currentTimeMillis() - startedAt,
-                    attempts,
-                )
-            }
-            Thread.sleep(contractConfig.receiptPollIntervalMs)
         }
-        logger.warn(
-            "Receipt timeout for txHash={} after {} ms and {} attempts.",
-            txHash,
-            System.currentTimeMillis() - startedAt,
-            attempts,
-        )
-        return null
+
+        customErrorSelector("SandboxImageNotApproved(bytes32)") -> {
+            val decodedHash = runCatching {
+                FunctionReturnDecoder.decode(
+                    encodedArguments,
+                    listOf(object : TypeReference<Bytes32>() {} as TypeReference<Type<*>>),
+                ).bytes32Value(0)
+            }.getOrNull()
+            if (!decodedHash.isNullOrBlank()) {
+                "SandboxImageNotApproved($decodedHash): sandbox image hash is not approved by the contract."
+            } else {
+                "SandboxImageNotApproved(): sandbox image hash is not approved by the contract."
+            }
+        }
+
+        else -> null
     }
 }
 
-private fun recommendedGasPrice(networkGasPrice: BigInteger): BigInteger {
-    val bumped = networkGasPrice.multiply(BigInteger.valueOf(120L)).divide(BigInteger.valueOf(100L))
-    return bumped.max(BigInteger.ONE)
+private fun customErrorSelector(signature: String): String {
+    return normalizeHex(Hash.sha3String(signature)).take(10)
 }
 
 internal fun bytes32HashHex(raw: String?): String {
@@ -674,11 +770,19 @@ private fun hexToBigInteger(valueHex: String): BigInteger {
 }
 
 private fun List<Type<*>>.uintValue(index: Int): BigInteger {
-    return (get(index) as Uint256).value
+    return (get(index) as NumericType).value
+}
+
+private fun List<Type<*>>.uint16Value(index: Int): BigInteger {
+    return (get(index) as NumericType).value
 }
 
 private fun List<Type<*>>.addressValue(index: Int): String {
     return (get(index) as Address).value
+}
+
+private fun List<Type<*>>.bytes32Value(index: Int): String {
+    return Numeric.toHexString((get(index) as Bytes32).value).lowercase()
 }
 
 private fun paymentTokenAddress(paymentAsset: PaymentAssetConfig): String {
@@ -729,7 +833,90 @@ private val JOINED_EVENT_SIGNATURE = EventEncoder.encode(
     ),
 )
 
+private val SETTLED_EVENT_SIGNATURE = EventEncoder.encode(
+    Event(
+        "CompetitionSettled",
+        listOf(
+            object : TypeReference<Uint256>(true) {},
+            object : TypeReference<Address>(true) {},
+            object : TypeReference<Address>() {},
+            object : TypeReference<Uint256>() {},
+            object : TypeReference<Uint256>() {},
+            object : TypeReference<Uint256>() {},
+        ),
+    ),
+)
+
+private val CANCELLED_EVENT_SIGNATURE = EventEncoder.encode(
+    Event(
+        "CompetitionCancelled",
+        listOf(
+            object : TypeReference<Uint256>(true) {},
+            object : TypeReference<Uint256>() {},
+        ),
+    ),
+)
+
+@Suppress("UNCHECKED_CAST")
+private val SUBMISSION_RECORDED_EVENT_PARAMETERS: List<TypeReference<Type<*>>> = listOf(
+    object : TypeReference<Bytes32>() {} as TypeReference<Type<*>>,
+    object : TypeReference<Bytes32>() {} as TypeReference<Type<*>>,
+    object : TypeReference<Bytes32>() {} as TypeReference<Type<*>>,
+    object : TypeReference<Bytes32>() {} as TypeReference<Type<*>>,
+    object : TypeReference<Bytes32>() {} as TypeReference<Type<*>>,
+    object : TypeReference<Uint32>() {} as TypeReference<Type<*>>,
+    object : TypeReference<Uint32>() {} as TypeReference<Type<*>>,
+    object : TypeReference<Uint16>() {} as TypeReference<Type<*>>,
+)
+
+private val SUBMISSION_RECORDED_EVENT_SIGNATURE = EventEncoder.encode(
+    Event(
+        "SubmissionResultRecorded",
+        mutableListOf<TypeReference<out Type<*>>>(
+            object : TypeReference<Uint256>(true) {},
+            object : TypeReference<Uint256>(true) {},
+            object : TypeReference<Address>(true) {},
+        ).apply {
+            addAll(SUBMISSION_RECORDED_EVENT_PARAMETERS)
+        },
+    ),
+)
+
+private fun submissionResultDigest(
+    contractAddress: String,
+    chainId: Long,
+    record: SubmissionResultRecord,
+): String {
+    val encoded = FunctionEncoder.encodeConstructor(
+        listOf(
+            Address(normalizeAddress(contractAddress)),
+            Uint256(BigInteger.valueOf(chainId)),
+            Uint256(BigInteger.valueOf(record.competitionId)),
+            Uint256(BigInteger.valueOf(record.onchainSubmissionId)),
+            Address(normalizeAddress(record.participantWalletAddress)),
+            Bytes32(bytes32(record.submissionHash)),
+            Bytes32(bytes32(record.codeHash)),
+            Bytes32(bytes32(record.challengeHash)),
+            Bytes32(bytes32(record.resultHash)),
+            Bytes32(bytes32(record.sandboxImageHash)),
+            Uint32(BigInteger.valueOf(record.runtimeMs.coerceAtLeast(0).toLong())),
+            Uint32(BigInteger.valueOf(record.memoryUsedKb.coerceAtLeast(0).toLong())),
+            Uint16(BigInteger.valueOf(record.consensusNodes.coerceAtLeast(0).toLong())),
+        ),
+    )
+    return normalizeHex(Hash.sha3(encoded))
+}
+
+private fun signatureHex(signature: Sign.SignatureData): String {
+    val bytes = ByteArray(65)
+    System.arraycopy(signature.r, 0, bytes, 0, 32)
+    System.arraycopy(signature.s, 0, bytes, 32, 32)
+    bytes[64] = signature.v.firstOrNull() ?: 0
+    return Numeric.toHexString(bytes).lowercase()
+}
+
 private val HEX_32_BYTES_REGEX = Regex("^(0x)?[0-9a-fA-F]{64}$")
+private val HEX_DATA_REGEX = Regex("0x[0-9a-fA-F]{8,}")
 private const val METHOD_CREATE_COMPETITION = "createCompetition"
 private const val METHOD_JOIN_COMPETITION = "joinCompetition"
 private const val METHOD_APPROVE = "approve"

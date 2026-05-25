@@ -5,7 +5,6 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneOffset
-import kotlin.math.max
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -31,8 +30,6 @@ import pl.dawidszczesniak.blockchain_platform.db.ProblemLifecycleStatus
 import pl.dawidszczesniak.blockchain_platform.db.tables.CompetitionSettlementJobsTable
 import pl.dawidszczesniak.blockchain_platform.db.tables.ProblemsTable
 import pl.dawidszczesniak.blockchain_platform.feature.problems.competition.toContractDeadlineEpochSeconds
-import pl.dawidszczesniak.blockchain_platform.feature.problems.onchain.BlockchainPlatformContractClient
-import pl.dawidszczesniak.blockchain_platform.feature.problems.onchain.BlockchainPlatformContractConfig
 import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.CompetitionSettlementSnapshot
 import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.ProblemWriteRepository
 
@@ -277,8 +274,6 @@ internal class CompetitionSettlementWakeupSignal {
 internal class CompetitionSettlementWorker(
     private val repository: ProblemWriteRepository,
     private val jobRepository: CompetitionSettlementJobRepository,
-    private val contractClient: BlockchainPlatformContractClient,
-    private val contractConfig: BlockchainPlatformContractConfig,
     private val wakeupSignal: CompetitionSettlementWakeupSignal,
     private val nowProvider: () -> Instant = { Instant.now() },
 ) : AutoCloseable {
@@ -330,124 +325,49 @@ internal class CompetitionSettlementWorker(
         }
 
         when (job.jobType) {
-            CompetitionSettlementJobType.RegistrationDeadline -> processRegistrationDeadline(job, snapshot, now)
-            CompetitionSettlementJobType.SubmissionDeadline -> processSubmissionDeadline(job, snapshot, now)
+            CompetitionSettlementJobType.RegistrationDeadline -> processRegistrationDeadline(job, snapshot)
+            CompetitionSettlementJobType.SubmissionDeadline -> processSubmissionDeadline(job, snapshot)
         }
     }
 
     private fun processRegistrationDeadline(
         job: CompetitionSettlementJobRecord,
         snapshot: CompetitionSettlementSnapshot,
-        now: Instant,
     ) {
         if (snapshot.registeredParticipants >= snapshot.requiredParticipants) {
             jobRepository.complete(job.jobId, "Registration threshold reached.")
             return
         }
-        val cancellation = contractClient.cancelCompetition(snapshot.competitionId)
-        if (cancellation.success && !cancellation.txHash.isNullOrBlank()) {
-            repository.markCompetitionSettlementCancelled(
-                problemId = snapshot.problemId,
-                txHash = cancellation.txHash,
-                settledAt = now,
-                fromWallet = contractConfig.operatorWalletAddress,
-            )
-            jobRepository.completeOutstandingJobs(snapshot.problemId, "Competition cancelled after registration deadline.")
-            return
-        }
-        handleExecutionFailure(
-            job = job,
-            problemId = snapshot.problemId,
-            error = cancellation.error ?: "Competition cancellation failed.",
-            now = now,
+        jobRepository.completeOutstandingJobs(
+            snapshot.problemId,
+            "Registration deadline reached. Awaiting user-triggered competition cancellation.",
         )
     }
 
     private fun processSubmissionDeadline(
         job: CompetitionSettlementJobRecord,
         snapshot: CompetitionSettlementSnapshot,
-        now: Instant,
     ) {
         if (snapshot.registeredParticipants < snapshot.requiredParticipants) {
-            val cancellation = contractClient.cancelCompetition(snapshot.competitionId)
-            if (cancellation.success && !cancellation.txHash.isNullOrBlank()) {
-                repository.markCompetitionSettlementCancelled(
-                    problemId = snapshot.problemId,
-                    txHash = cancellation.txHash,
-                    settledAt = now,
-                    fromWallet = contractConfig.operatorWalletAddress,
-                )
-                jobRepository.completeOutstandingJobs(snapshot.problemId, "Competition cancelled after missing registration threshold.")
-                return
-            }
-            handleExecutionFailure(
-                job = job,
-                problemId = snapshot.problemId,
-                error = cancellation.error ?: "Competition cancellation failed.",
-                now = now,
+            jobRepository.completeOutstandingJobs(
+                snapshot.problemId,
+                "Submission deadline reached without required participants. Awaiting user-triggered competition cancellation.",
             )
             return
         }
 
         val bestCandidate = repository.fetchBestSettlementCandidate(snapshot.problemId)
         if (bestCandidate == null) {
-            val cancellation = contractClient.cancelCompetition(snapshot.competitionId)
-            if (cancellation.success && !cancellation.txHash.isNullOrBlank()) {
-                repository.markCompetitionSettlementCancelled(
-                    problemId = snapshot.problemId,
-                    txHash = cancellation.txHash,
-                    settledAt = now,
-                    fromWallet = contractConfig.operatorWalletAddress,
-                )
-                jobRepository.completeOutstandingJobs(snapshot.problemId, "Competition cancelled because no winner was available.")
-                return
-            }
-            handleExecutionFailure(
-                job = job,
-                problemId = snapshot.problemId,
-                error = cancellation.error ?: "Competition cancellation failed because no winner was available.",
-                now = now,
+            jobRepository.completeOutstandingJobs(
+                snapshot.problemId,
+                "Submission deadline reached without a valid winner. Awaiting user-triggered competition cancellation.",
             )
             return
         }
 
-        val settlement = contractClient.settleCompetition(snapshot.competitionId)
-        if (settlement.success && !settlement.txHash.isNullOrBlank()) {
-            repository.recordSettledWinner(
-                problemId = snapshot.problemId,
-                winnerUserId = bestCandidate.userId,
-                payoutAmountAtomic = snapshot.prizeAmountAtomic,
-                txHash = settlement.txHash,
-                settledAt = now,
-                fromWallet = contractConfig.operatorWalletAddress,
-            )
-            jobRepository.completeOutstandingJobs(snapshot.problemId, "Competition settled on-chain.")
-            return
-        }
-        handleExecutionFailure(
-            job = job,
-            problemId = snapshot.problemId,
-            error = settlement.error ?: "Competition settlement failed.",
-            now = now,
-        )
-    }
-
-    private fun handleExecutionFailure(
-        job: CompetitionSettlementJobRecord,
-        problemId: Int,
-        error: String,
-        now: Instant,
-    ) {
-        repository.markCompetitionSettlementPendingError(problemId, error)
-        if (job.attempts >= MAX_JOB_ATTEMPTS) {
-            jobRepository.markDead(job.jobId, error)
-            repository.markCompetitionSettlementFailed(problemId, error)
-            return
-        }
-        jobRepository.reschedule(
-            jobId = job.jobId,
-            error = error,
-            nextAvailableAt = now.plusMillis(nextRetryDelayMs(job.attempts)),
+        jobRepository.completeOutstandingJobs(
+            snapshot.problemId,
+            "Submission deadline reached. Awaiting user-triggered competition settlement.",
         )
     }
 
@@ -468,18 +388,9 @@ internal class CompetitionSettlementWorker(
     }
 
     private fun staleLockThresholdMs(): Long {
-        return max(contractConfig.receiptTimeoutMs + 60_000L, 180_000L)
+        return 180_000L
     }
 
-    private fun nextRetryDelayMs(attempt: Int): Long {
-        val exponent = (attempt - 1).coerceAtLeast(0)
-        val multiplier = 1L shl exponent.coerceAtMost(5)
-        return minOf(15_000L * multiplier, 15 * 60_000L)
-    }
-
-    private companion object {
-        const val MAX_JOB_ATTEMPTS = 10
-    }
 }
 
 internal fun scheduleCompetitionSettlementJobsInCurrentTransaction(

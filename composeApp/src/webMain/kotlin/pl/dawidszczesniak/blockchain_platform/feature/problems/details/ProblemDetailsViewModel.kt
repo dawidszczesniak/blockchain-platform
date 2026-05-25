@@ -16,20 +16,28 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import pl.dawidszczesniak.blockchain_platform.feature.login.WalletProvider
 import pl.dawidszczesniak.blockchain_platform.feature.login.WalletSessionStore
 import pl.dawidszczesniak.blockchain_platform.feature.login.WalletTransactionRequest
+import pl.dawidszczesniak.blockchain_platform.feature.platform.usecase.GetPlatformConfigUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.RunProblemResponseDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.SubmitProblemResponseDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.SubmissionJudgeJobDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.participation.ParticipationSyncStore
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.ConfirmCancelCompetitionOnChainUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.ConfirmJoinProblemOnChainUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.ConfirmSettleCompetitionOnChainUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.ConfirmSubmissionOnChainUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetParticipationProblemsUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetSubmissionJudgeJobUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.PrepareCancelCompetitionOnChainUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.PrepareJoinProblemOnChainUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.PrepareSettleCompetitionOnChainUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.RetrySubmissionJudgeJobUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.RunProblemCodeUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.SubmitProblemCodeUseCase
@@ -50,16 +58,35 @@ data class ProblemDetailsGateState(
     val submitStatusMessage: String? = null,
     val submitErrorMessage: String? = null,
     val submitResult: SubmitProblemResponseDto? = null,
+    val submitInlineStatusMessage: String? = null,
+    val submitInlineErrorMessage: String? = null,
     val submitRetryAllowed: Boolean = false,
     val isAwaitingReceiptConfirmation: Boolean = false,
     val submitReceiptTimeoutMs: Long? = null,
     val submitReceiptWaitStartedAtMs: Long? = null,
 )
 
+data class CompetitionLifecycleActionState(
+    val currentWalletAddress: String? = null,
+    val operatorWalletAddress: String? = null,
+    val isSettling: Boolean = false,
+    val isCancelling: Boolean = false,
+    val statusMessage: String? = null,
+    val errorMessage: String? = null,
+    val settlementStatusOverride: String? = null,
+    val txHash: String? = null,
+    val explorerUrl: String? = null,
+)
+
 class ProblemDetailsViewModel(
     private val getParticipationProblemsUseCase: GetParticipationProblemsUseCase,
     private val prepareJoinProblemOnChainUseCase: PrepareJoinProblemOnChainUseCase,
     private val confirmJoinProblemOnChainUseCase: ConfirmJoinProblemOnChainUseCase,
+    private val prepareSettleCompetitionOnChainUseCase: PrepareSettleCompetitionOnChainUseCase,
+    private val confirmSettleCompetitionOnChainUseCase: ConfirmSettleCompetitionOnChainUseCase,
+    private val prepareCancelCompetitionOnChainUseCase: PrepareCancelCompetitionOnChainUseCase,
+    private val confirmCancelCompetitionOnChainUseCase: ConfirmCancelCompetitionOnChainUseCase,
+    private val confirmSubmissionOnChainUseCase: ConfirmSubmissionOnChainUseCase,
     private val runProblemCodeUseCase: RunProblemCodeUseCase,
     private val submitProblemCodeUseCase: SubmitProblemCodeUseCase,
     private val getSubmissionJudgeJobUseCase: GetSubmissionJudgeJobUseCase,
@@ -67,12 +94,16 @@ class ProblemDetailsViewModel(
     private val participationSyncStore: ParticipationSyncStore,
     private val walletProvider: WalletProvider,
     private val walletSessionStore: WalletSessionStore,
+    private val getPlatformConfigUseCase: GetPlatformConfigUseCase,
 ) {
     private var scope = newScope()
     private val joinedProblemIds = mutableSetOf<Int>()
     private var loadedProblemId: Int? = null
+    private var loadedCompetitionProblemId: Int? = null
     private val _state = MutableStateFlow(ProblemDetailsGateState())
+    private val _competitionActionState = MutableStateFlow(CompetitionLifecycleActionState())
     val state: StateFlow<ProblemDetailsGateState> = _state.asStateFlow()
+    val competitionActionState: StateFlow<CompetitionLifecycleActionState> = _competitionActionState.asStateFlow()
 
     fun load(
         problemId: Int,
@@ -108,6 +139,8 @@ class ProblemDetailsViewModel(
                 submitStatusMessage = null,
                 submitErrorMessage = null,
                 submitResult = if (isNewProblem) null else current.submitResult,
+                submitInlineStatusMessage = if (isNewProblem) null else current.submitInlineStatusMessage,
+                submitInlineErrorMessage = if (isNewProblem) null else current.submitInlineErrorMessage,
                 submitRetryAllowed = false,
                 isAwaitingReceiptConfirmation = false,
                 submitReceiptTimeoutMs = null,
@@ -148,6 +181,40 @@ class ProblemDetailsViewModel(
                         current.copy(
                             isMembershipLoading = false,
                             joinStatusMessage = null,
+                        )
+                    }
+                }
+        }
+    }
+
+    fun loadCompetitionLifecycle(problemId: Int) {
+        val isNewProblem = loadedCompetitionProblemId != problemId
+        loadedCompetitionProblemId = problemId
+        val currentWalletAddress = walletSessionStore.currentWalletAddress()
+        _competitionActionState.update { current ->
+            if (isNewProblem) {
+                CompetitionLifecycleActionState(
+                    currentWalletAddress = currentWalletAddress,
+                )
+            } else {
+                current.copy(currentWalletAddress = currentWalletAddress)
+            }
+        }
+        activeScope().launch {
+            runCatching { getPlatformConfigUseCase() }
+                .onSuccess { config ->
+                    _competitionActionState.update { current ->
+                        current.copy(
+                            currentWalletAddress = walletSessionStore.currentWalletAddress(),
+                            operatorWalletAddress = config.operatorWalletAddress,
+                        )
+                    }
+                }
+                .onFailure {
+                    _competitionActionState.update { current ->
+                        current.copy(
+                            currentWalletAddress = walletSessionStore.currentWalletAddress(),
+                            operatorWalletAddress = null,
                         )
                     }
                 }
@@ -253,6 +320,168 @@ class ProblemDetailsViewModel(
         }
     }
 
+    fun settleCompetition(problemId: Int) {
+        val snapshot = _competitionActionState.value
+        if (snapshot.isSettling || snapshot.isCancelling) {
+            return
+        }
+        _competitionActionState.update { current ->
+            current.copy(
+                isSettling = true,
+                isCancelling = false,
+                statusMessage = "Przygotowuję transakcję rozliczenia konkursu.",
+                errorMessage = null,
+                txHash = null,
+                explorerUrl = null,
+            )
+        }
+        activeScope().launch {
+            runCatching {
+                val walletId = walletSessionStore.currentWalletId()
+                    ?: error("Reconnect wallet before settling this competition.")
+                val walletAddress = walletSessionStore.currentWalletAddress()
+                    ?: error("Reconnect wallet before settling this competition.")
+                val prepared = prepareSettleCompetitionOnChainUseCase(problemId)
+                _competitionActionState.update { current ->
+                    current.copy(
+                        currentWalletAddress = walletAddress,
+                        statusMessage = "Potwierdź rozliczenie konkursu w portfelu.",
+                    )
+                }
+                val txHash = walletProvider.sendTransaction(
+                    walletId = walletId,
+                    walletAddress = walletAddress,
+                    request = WalletTransactionRequest(
+                        to = prepared.transaction.to,
+                        data = prepared.transaction.data,
+                        valueHex = prepared.transaction.valueHex,
+                    ),
+                )
+                _competitionActionState.update { current ->
+                    current.copy(
+                        statusMessage = "Transakcja rozliczenia została wysłana. Czekam na potwierdzenie w sieci.",
+                    )
+                }
+                val receipt = walletProvider.waitForTransactionReceipt(walletId, txHash)
+                _competitionActionState.update { current ->
+                    current.copy(
+                        statusMessage = "Potwierdzam rozliczenie konkursu z backendem.",
+                        txHash = receipt.transactionHash,
+                    )
+                }
+                confirmSettleCompetitionOnChainUseCase(problemId, receipt.transactionHash)
+            }
+                .onSuccess { confirmed ->
+                    participationSyncStore.notifyChanged()
+                    _competitionActionState.update { current ->
+                        current.copy(
+                            isSettling = false,
+                            isCancelling = false,
+                            statusMessage = "Konkurs został rozliczony on-chain.",
+                            errorMessage = null,
+                            settlementStatusOverride = confirmed.settlementStatus,
+                            txHash = confirmed.txHash,
+                            explorerUrl = confirmed.explorerUrl,
+                        )
+                    }
+                }
+                .onFailure { error ->
+                    if (error is CancellationException) {
+                        return@onFailure
+                    }
+                    _competitionActionState.update { current ->
+                        current.copy(
+                            isSettling = false,
+                            isCancelling = false,
+                            statusMessage = null,
+                            errorMessage = extractReadableErrorMessage(error),
+                        )
+                    }
+                }
+        }
+    }
+
+    fun cancelCompetition(problemId: Int) {
+        val snapshot = _competitionActionState.value
+        if (snapshot.isSettling || snapshot.isCancelling) {
+            return
+        }
+        _competitionActionState.update { current ->
+            current.copy(
+                isSettling = false,
+                isCancelling = true,
+                statusMessage = "Przygotowuję transakcję anulowania konkursu.",
+                errorMessage = null,
+                txHash = null,
+                explorerUrl = null,
+            )
+        }
+        activeScope().launch {
+            runCatching {
+                val walletId = walletSessionStore.currentWalletId()
+                    ?: error("Reconnect wallet before cancelling this competition.")
+                val walletAddress = walletSessionStore.currentWalletAddress()
+                    ?: error("Reconnect wallet before cancelling this competition.")
+                val prepared = prepareCancelCompetitionOnChainUseCase(problemId)
+                _competitionActionState.update { current ->
+                    current.copy(
+                        currentWalletAddress = walletAddress,
+                        statusMessage = "Potwierdź anulowanie konkursu w portfelu.",
+                    )
+                }
+                val txHash = walletProvider.sendTransaction(
+                    walletId = walletId,
+                    walletAddress = walletAddress,
+                    request = WalletTransactionRequest(
+                        to = prepared.transaction.to,
+                        data = prepared.transaction.data,
+                        valueHex = prepared.transaction.valueHex,
+                    ),
+                )
+                _competitionActionState.update { current ->
+                    current.copy(
+                        statusMessage = "Transakcja anulowania została wysłana. Czekam na potwierdzenie w sieci.",
+                    )
+                }
+                val receipt = walletProvider.waitForTransactionReceipt(walletId, txHash)
+                _competitionActionState.update { current ->
+                    current.copy(
+                        statusMessage = "Potwierdzam anulowanie konkursu z backendem.",
+                        txHash = receipt.transactionHash,
+                    )
+                }
+                confirmCancelCompetitionOnChainUseCase(problemId, receipt.transactionHash)
+            }
+                .onSuccess { confirmed ->
+                    participationSyncStore.notifyChanged()
+                    _competitionActionState.update { current ->
+                        current.copy(
+                            isSettling = false,
+                            isCancelling = false,
+                            statusMessage = "Konkurs został anulowany on-chain.",
+                            errorMessage = null,
+                            settlementStatusOverride = confirmed.settlementStatus,
+                            txHash = confirmed.txHash,
+                            explorerUrl = confirmed.explorerUrl,
+                        )
+                    }
+                }
+                .onFailure { error ->
+                    if (error is CancellationException) {
+                        return@onFailure
+                    }
+                    _competitionActionState.update { current ->
+                        current.copy(
+                            isSettling = false,
+                            isCancelling = false,
+                            statusMessage = null,
+                            errorMessage = extractReadableErrorMessage(error),
+                        )
+                    }
+                }
+        }
+    }
+
     fun run(problemId: Int, sourceCode: String, language: String) {
         if (_state.value.isRunning) {
             return
@@ -263,6 +492,8 @@ class ProblemDetailsViewModel(
                 current.copy(
                     runErrorMessage = "Source code cannot be empty.",
                     runResult = null,
+                    submitInlineStatusMessage = null,
+                    submitInlineErrorMessage = null,
                 )
             }
             return
@@ -274,6 +505,8 @@ class ProblemDetailsViewModel(
                 submitStatusMessage = null,
                 submitErrorMessage = null,
                 submitResult = null,
+                submitInlineStatusMessage = null,
+                submitInlineErrorMessage = null,
             )
         }
         activeScope().launch {
@@ -312,6 +545,8 @@ class ProblemDetailsViewModel(
                 current.copy(
                     submitErrorMessage = "Source code cannot be empty.",
                     submitResult = null,
+                    submitInlineStatusMessage = null,
+                    submitInlineErrorMessage = null,
                 )
             }
             return
@@ -326,6 +561,8 @@ class ProblemDetailsViewModel(
                 runErrorMessage = null,
                 runResult = null,
                 submitResult = null,
+                submitInlineStatusMessage = null,
+                submitInlineErrorMessage = null,
                 submitRetryAllowed = false,
                 isAwaitingReceiptConfirmation = false,
                 submitReceiptTimeoutMs = null,
@@ -359,28 +596,45 @@ class ProblemDetailsViewModel(
         if (snapshot.isSubmitting || !snapshot.submitRetryAllowed) {
             return
         }
+        val pendingResult = snapshot.submitResult
         _state.update { current ->
             current.copy(
                 isSubmitting = true,
                 isSubmitRequestInFlight = false,
-                submitStatusMessage = "Ponawiam sprawdzanie transakcji.",
+                submitStatusMessage = if (pendingResult != null && !pendingResult.onchainRecorded) {
+                    "Ponawiam zapis wyniku on-chain."
+                } else {
+                    "Ponawiam sprawdzanie zadania."
+                },
                 submitErrorMessage = null,
-                submitResult = null,
-                isAwaitingReceiptConfirmation = false,
-                submitReceiptWaitStartedAtMs = null,
+                submitRetryAllowed = false,
             )
         }
         activeScope().launch {
-            runCatching { retrySubmissionJudgeJobUseCase(jobId) }
-                .onSuccess { job ->
-                    applySubmissionJobState(job)
-                    pollSubmissionJudgeJob(job.jobId)
+            val retryAction = when {
+                pendingResult != null && !pendingResult.onchainRecorded -> runCatching {
+                    val latestJob = getSubmissionJudgeJobUseCase(jobId)
+                    val latestResult = latestJob.submissionResult ?: pendingResult
+                    submitAcceptedResultOnChain(jobId, latestResult)
+                }.onSuccess { confirmed ->
+                    applyConfirmedSubmission(jobId, confirmed)
                 }
+
+                else -> runCatching { retrySubmissionJudgeJobUseCase(jobId) }
+                    .onSuccess { job ->
+                        applySubmissionJobState(job)
+                        pollSubmissionJudgeJob(job.jobId)
+                    }
+            }
+            retryAction
                 .onFailure { error ->
                     if (error is CancellationException) {
                         return@onFailure
                     }
-                    applySubmitError(extractReadableErrorMessage(error))
+                    applySubmitError(
+                        message = extractReadableErrorMessage(error),
+                        pendingResult = _state.value.submitResult ?: pendingResult,
+                    )
                 }
         }
     }
@@ -422,8 +676,10 @@ class ProblemDetailsViewModel(
                 activeSubmissionJobId = job.jobId,
                 submitStatusMessage = statusMessage,
                 submitErrorMessage = null,
-                submitResult = null,
-                submitRetryAllowed = job.retryAllowed,
+                submitResult = current.submitResult,
+                submitInlineStatusMessage = null,
+                submitInlineErrorMessage = null,
+                submitRetryAllowed = false,
                 isAwaitingReceiptConfirmation = job.awaitingReceiptConfirmation,
                 submitReceiptTimeoutMs = job.receiptTimeoutMs,
                 submitReceiptWaitStartedAtMs = nextReceiptWaitStartedAt(
@@ -435,20 +691,132 @@ class ProblemDetailsViewModel(
         }
     }
 
-    private fun applySubmitError(message: String) {
+    private fun applySubmitError(message: String, pendingResult: SubmitProblemResponseDto? = null) {
         _state.update { current ->
             current.copy(
                 isSubmitting = false,
                 isSubmitRequestInFlight = false,
                 submitStatusMessage = null,
                 submitErrorMessage = message,
-                submitResult = null,
+                submitResult = pendingResult ?: current.submitResult,
+                submitInlineStatusMessage = if (pendingResult?.onchainRecorded == false) {
+                    buildInlineOnchainSubmissionStatusMessage(pendingResult)
+                } else {
+                    null
+                },
+                submitInlineErrorMessage = if (pendingResult?.onchainRecorded == false) {
+                    message
+                } else {
+                    null
+                },
+                submitRetryAllowed = pendingResult?.onchainRecorded == false &&
+                    pendingResult.onchainSimulationError.isNullOrBlank(),
+                isAwaitingReceiptConfirmation = false,
+                submitReceiptTimeoutMs = if (pendingResult?.onchainRecorded == false && !pendingResult.txHash.isNullOrBlank()) {
+                    WALLET_RECEIPT_TIMEOUT_MS
+                } else {
+                    null
+                },
+                submitReceiptWaitStartedAtMs = null,
+            )
+        }
+    }
+
+    private fun applyConfirmedSubmission(jobId: Long, result: SubmitProblemResponseDto) {
+        participationSyncStore.notifyChanged()
+        _state.update { current ->
+            current.copy(
+                isSubmitting = false,
+                isSubmitRequestInFlight = false,
+                activeSubmissionJobId = jobId,
+                submitStatusMessage = null,
+                submitErrorMessage = null,
+                submitResult = result,
+                submitInlineStatusMessage = null,
+                submitInlineErrorMessage = null,
                 submitRetryAllowed = false,
                 isAwaitingReceiptConfirmation = false,
                 submitReceiptTimeoutMs = null,
                 submitReceiptWaitStartedAtMs = null,
             )
         }
+    }
+
+    private suspend fun submitAcceptedResultOnChain(
+        jobId: Long,
+        result: SubmitProblemResponseDto,
+    ): SubmitProblemResponseDto {
+        result.onchainSimulationError?.takeIf { it.isNotBlank() }?.let { error(it) }
+        val walletId = walletSessionStore.currentWalletId()
+            ?: error("Reconnect wallet before confirming this submission.")
+        val walletAddress = walletSessionStore.currentWalletAddress()
+            ?: error("Reconnect wallet before confirming this submission.")
+        val pendingResult = result.copy(onchainRecorded = false)
+        val txHash = if (pendingResult.txHash.isNotBlank()) {
+            pendingResult.txHash
+        } else {
+            val walletTransaction = pendingResult.walletTransaction
+                ?: error("Submission transaction payload is missing.")
+            _state.update { current ->
+                current.copy(
+                    isSubmitting = true,
+                    activeSubmissionJobId = jobId,
+                    submitStatusMessage = "Potwierdź zapis wyniku w portfelu.",
+                    submitErrorMessage = null,
+                    submitResult = pendingResult,
+                    submitRetryAllowed = false,
+                    isAwaitingReceiptConfirmation = false,
+                    submitReceiptTimeoutMs = null,
+                    submitReceiptWaitStartedAtMs = null,
+                )
+            }
+            walletProvider.sendTransaction(
+                walletId = walletId,
+                walletAddress = walletAddress,
+                request = WalletTransactionRequest(
+                    to = walletTransaction.to,
+                    data = walletTransaction.data,
+                    valueHex = walletTransaction.valueHex,
+                ),
+            )
+        }
+
+        val sentResult = pendingResult.copy(txHash = txHash)
+        _state.update { current ->
+            current.copy(
+                isSubmitting = true,
+                activeSubmissionJobId = jobId,
+                submitStatusMessage = "Transakcja wysłana. Czekam na potwierdzenie w sieci.",
+                submitErrorMessage = null,
+                submitResult = sentResult,
+                submitRetryAllowed = false,
+                isAwaitingReceiptConfirmation = true,
+                submitReceiptTimeoutMs = WALLET_RECEIPT_TIMEOUT_MS,
+                submitReceiptWaitStartedAtMs = nextReceiptWaitStartedAt(
+                    currentStartedAtMs = current.submitReceiptWaitStartedAtMs,
+                    wasAwaitingReceipt = current.isAwaitingReceiptConfirmation,
+                    isAwaitingReceipt = true,
+                ),
+            )
+        }
+        val receipt = walletProvider.waitForTransactionReceipt(walletId, txHash)
+        _state.update { current ->
+            current.copy(
+                isSubmitting = true,
+                activeSubmissionJobId = jobId,
+                submitStatusMessage = "Potwierdzam zapis wyniku z backendem.",
+                submitErrorMessage = null,
+                submitResult = sentResult.copy(txHash = receipt.transactionHash),
+                submitRetryAllowed = false,
+                isAwaitingReceiptConfirmation = false,
+                submitReceiptTimeoutMs = null,
+                submitReceiptWaitStartedAtMs = null,
+            )
+        }
+        return confirmSubmissionOnChainUseCase(
+            submissionId = result.submissionId,
+            txHash = receipt.transactionHash,
+        )
     }
 
     private suspend fun pollSubmissionJudgeJob(jobId: Long) {
@@ -472,21 +840,23 @@ class ProblemDetailsViewModel(
                 SubmissionJobUiStatus.Accepted -> {
                     val result = job.submissionResult
                         ?: throw IllegalStateException("Judge finished without submission result.")
-                    participationSyncStore.notifyChanged()
-                    _state.update { current ->
-                        current.copy(
-                            isSubmitting = false,
-                            isSubmitRequestInFlight = false,
-                            activeSubmissionJobId = job.jobId,
-                            submitStatusMessage = null,
-                            submitErrorMessage = null,
-                            submitResult = result,
-                            submitRetryAllowed = false,
-                            isAwaitingReceiptConfirmation = false,
-                            submitReceiptTimeoutMs = null,
-                            submitReceiptWaitStartedAtMs = null,
-                        )
+                    if (result.onchainRecorded) {
+                        applyConfirmedSubmission(job.jobId, result)
+                        return
                     }
+                    runCatching { submitAcceptedResultOnChain(job.jobId, result) }
+                        .onSuccess { confirmed ->
+                            applyConfirmedSubmission(job.jobId, confirmed)
+                        }
+                        .onFailure { error ->
+                            if (error is CancellationException) {
+                                return
+                            }
+                            applySubmitError(
+                                message = extractReadableErrorMessage(error),
+                                pendingResult = _state.value.submitResult ?: result,
+                            )
+                        }
                     return
                 }
 
@@ -502,6 +872,8 @@ class ProblemDetailsViewModel(
                             ),
                             runResult = job.runPreview,
                             submitResult = null,
+                            submitInlineStatusMessage = null,
+                            submitInlineErrorMessage = null,
                             submitRetryAllowed = false,
                             isAwaitingReceiptConfirmation = false,
                             submitReceiptTimeoutMs = null,
@@ -519,6 +891,8 @@ class ProblemDetailsViewModel(
                             submitStatusMessage = null,
                             submitErrorMessage = job.message ?: "Judge zakończył się błędem.",
                             submitResult = null,
+                            submitInlineStatusMessage = null,
+                            submitInlineErrorMessage = null,
                             activeSubmissionJobId = job.jobId,
                             submitRetryAllowed = job.retryAllowed,
                             isAwaitingReceiptConfirmation = false,
@@ -540,20 +914,9 @@ private fun extractReadableErrorMessage(error: Throwable): String {
     if (raw.isEmpty()) {
         return "Operation failed."
     }
-    val start = raw.indexOf('{')
-    val end = raw.lastIndexOf('}')
-    if (start >= 0 && end > start) {
-        val jsonPart = raw.substring(start, end + 1)
-        val parsed = runCatching {
-            Json.parseToJsonElement(jsonPart)
-                .jsonObject["message"]
-                ?.jsonPrimitive
-                ?.contentOrNull
-                ?.trim()
-        }.getOrNull()
-        if (!parsed.isNullOrEmpty()) {
-            return humanizeSubmitValidationMessage(parsed)
-        }
+    extractEmbeddedJsonObject(raw)?.let { jsonObject ->
+        decodeWalletRevertData(jsonObject)?.let { return humanizeSubmitValidationMessage(it) }
+        extractPreferredJsonMessage(jsonObject)?.let { return humanizeSubmitValidationMessage(it) }
     }
     return humanizeSubmitValidationMessage(raw)
 }
@@ -584,10 +947,119 @@ private fun humanizeSubmissionJobStatus(status: String, queuePosition: Int?, mes
     }
 }
 
+private fun buildInlineOnchainSubmissionStatusMessage(result: SubmitProblemResponseDto): String {
+    return if (!result.onchainSimulationError.isNullOrBlank()) {
+        "Wynik przeszedł judge, ale backend zatrzymał wysyłkę po symulacji reverta on-chain."
+    } else if (result.txHash.isBlank()) {
+        "Wynik przeszedł judge, ale transakcja zapisu on-chain nie została jeszcze wysłana albo potwierdzona."
+    } else {
+        "Wynik przeszedł judge, ale zapis on-chain dla tej transakcji nie został jeszcze potwierdzony przez backend."
+    }
+}
+
+private fun extractEmbeddedJsonObject(raw: String): JsonObject? {
+    val start = raw.indexOf('{')
+    val end = raw.lastIndexOf('}')
+    if (start < 0 || end <= start) {
+        return null
+    }
+    return runCatching {
+        Json.parseToJsonElement(raw.substring(start, end + 1)).jsonObject
+    }.getOrNull()
+}
+
+private fun extractPreferredJsonMessage(jsonObject: JsonObject): String? {
+    decodeWalletMessages(jsonObject).firstOrNull()?.let { return it }
+    return jsonObject["message"]?.jsonPrimitive?.contentOrNull?.trim()?.takeIf { it.isNotBlank() }
+}
+
+private fun decodeWalletMessages(jsonObject: JsonObject): List<String> {
+    val walletError = jsonObject["walletError"]?.jsonObject ?: return emptyList()
+    return walletError["messages"]
+        ?.jsonArray
+        ?.mapNotNull { entry -> entry.jsonPrimitive.contentOrNull?.trim()?.takeIf { it.isNotBlank() } }
+        ?.sortedByDescending(::walletErrorMessageScore)
+        .orEmpty()
+}
+
+private fun decodeWalletRevertData(jsonObject: JsonObject): String? {
+    val revertData = jsonObject["walletError"]
+        ?.jsonObject
+        ?.get("revertData")
+        ?.jsonPrimitive
+        ?.contentOrNull
+        ?.trim()
+        ?.lowercase()
+        ?.takeIf { it.startsWith("0x") && it.length >= 10 }
+        ?: return null
+    val selector = revertData.take(10)
+    val argumentData = "0x${revertData.removePrefix("0x").drop(8)}"
+    return when (selector) {
+        WALLET_SELECTOR_PARTICIPANT_NOT_JOINED ->
+            "ParticipantNotJoined(): wallet is not joined to this competition."
+
+        WALLET_SELECTOR_SUBMISSION_WINDOW_CLOSED ->
+            "SubmissionWindowClosed(): the submission deadline has already passed on-chain."
+
+        WALLET_SELECTOR_INVALID_SIGNATURE ->
+            "InvalidSignature(): operator signature does not match the submission payload."
+
+        WALLET_SELECTOR_COMPETITION_NOT_OPEN ->
+            "CompetitionNotOpen(): the competition is no longer open for recording submissions."
+
+        WALLET_SELECTOR_INVALID_COMPETITION ->
+            "InvalidCompetition(): competition id was rejected by the contract."
+
+        WALLET_SELECTOR_INVALID_SUBMISSION ->
+            "InvalidSubmission(): submission payload was rejected by the contract."
+
+        WALLET_SELECTOR_INVALID_HASH ->
+            "InvalidHash(): one of the prepared bytes32 hashes was rejected by the contract."
+
+        WALLET_SELECTOR_SUBMISSION_ALREADY_RECORDED -> {
+            decodeAbiUint256(argumentData)?.let {
+                "SubmissionAlreadyRecorded($it): this on-chain submission id is already used."
+            } ?: "SubmissionAlreadyRecorded(): this on-chain submission id is already used."
+        }
+
+        else -> null
+    }
+}
+
+private fun walletErrorMessageScore(message: String): Int {
+    val normalized = message.lowercase()
+    return when {
+        "submissionalreadyrecorded" in normalized -> 300
+        "participantnotjoined" in normalized -> 250
+        "invalidsignature" in normalized -> 250
+        "execution reverted" in normalized -> 200
+        "revert" in normalized -> 150
+        "internal json-rpc error" in normalized -> 10
+        else -> 50 + message.length
+    }
+}
+
+private fun decodeAbiUint256(dataHex: String): Long? {
+    val raw = dataHex.removePrefix("0x")
+    if (raw.length < 64) {
+        return null
+    }
+    return runCatching { raw.takeLast(64).toULong(16).toLong() }.getOrNull()
+}
+
 private val SUBMIT_BLOCKED_PATTERN =
     Regex("""Submission blocked: (\d+)/(\d+) tests did not pass\. Solution was not submitted\.""")
 
 private const val SUBMISSION_JOB_POLL_INTERVAL_MS = 1_000L
+private const val WALLET_RECEIPT_TIMEOUT_MS = 180_000L
+private const val WALLET_SELECTOR_INVALID_COMPETITION = "0x1bb8aef5"
+private const val WALLET_SELECTOR_INVALID_SUBMISSION = "0xf956cee4"
+private const val WALLET_SELECTOR_INVALID_HASH = "0x0af806e0"
+private const val WALLET_SELECTOR_COMPETITION_NOT_OPEN = "0x8d2bc609"
+private const val WALLET_SELECTOR_PARTICIPANT_NOT_JOINED = "0x1bfa705d"
+private const val WALLET_SELECTOR_SUBMISSION_WINDOW_CLOSED = "0x6533356a"
+private const val WALLET_SELECTOR_SUBMISSION_ALREADY_RECORDED = "0x0d837dc5"
+private const val WALLET_SELECTOR_INVALID_SIGNATURE = "0x8baa579f"
 
 private fun nextReceiptWaitStartedAt(
     currentStartedAtMs: Long?,

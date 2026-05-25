@@ -211,6 +211,12 @@
     <string name="problem_details_requirement_start">Starts in: %1$s</string>
     <string name="problem_details_requirement_join">Registration until: %1$s</string>
     <string name="problem_details_requirement_submit">Submissions until: %1$s</string>
+    <string name="problem_details_action_title">On-chain actions</string>
+    <string name="problem_details_action_settle">Settle competition</string>
+    <string name="problem_details_action_settle_loading">Settling...</string>
+    <string name="problem_details_action_cancel">Cancel competition</string>
+    <string name="problem_details_action_cancel_loading">Cancelling...</string>
+    <string name="problem_details_action_unlock_at">Option unlocks at: %1$s</string>
     <string name="problem_details_editor_title">Code editor</string>
     <string name="problem_details_editor_language">Language</string>
     <string name="problem_details_editor_run">RUN</string>
@@ -235,6 +241,7 @@
     <string name="problem_details_run_result_expected">Expected: %1$s</string>
     <string name="problem_details_run_result_actual">Actual: %1$s</string>
     <string name="problem_details_run_result_hidden_failed">Hidden test failed.</string>
+    <string name="problem_details_copy_details">Copy details</string>
     <string name="problem_details_submit_submitting">Submitting solution...</string>
     <string name="problem_details_submit_popup_countdown">Time left before timeout: %1$s</string>
     <string name="problem_details_submit_popup_ok">OK</string>
@@ -248,7 +255,12 @@
     <string name="problem_details_submit_sandbox_result_hash">Sandbox result hash: %1$s</string>
     <string name="problem_details_submit_proxy_address">BlockchainTestContract proxy: %1$s</string>
     <string name="problem_details_submit_tx_hash">On-chain record tx: %1$s</string>
+    <string name="problem_details_submit_tx_hash_missing">On-chain record tx: not available yet</string>
     <string name="problem_details_submit_explorer">Open transaction in explorer: %1$s</string>
+    <string name="problem_details_submit_onchain_status_title">On-chain record status</string>
+    <string name="problem_details_submit_onchain_pending_no_tx">Judge passed, but the on-chain record transaction has not been sent or confirmed yet.</string>
+    <string name="problem_details_submit_onchain_pending_with_tx">Judge passed, but the backend has not confirmed the on-chain record for this transaction yet.</string>
+    <string name="problem_details_submit_onchain_error_title">On-chain record error</string>
 
     <string name="problem_title_template">Problem #%1$d – Algorithm optimization (%2$s)</string>
 

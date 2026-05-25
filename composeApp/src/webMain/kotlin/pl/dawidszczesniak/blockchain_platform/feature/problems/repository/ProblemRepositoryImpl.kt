@@ -3,7 +3,9 @@ package pl.dawidszczesniak.blockchain_platform.feature.problems.repository
 import pl.dawidszczesniak.blockchain_platform.feature.problems.datasource.ProblemRemoteDataSource
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.CreateProblemRequestDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ConfirmCreateProblemRequestDto
+import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ConfirmCompetitionLifecycleActionRequestDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ConfirmJoinProblemRequestDto
+import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ConfirmSubmissionResultRequestDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.RunProblemRequestDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ValidateCreateProblemRequestDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.CreatedProblem
@@ -49,6 +51,22 @@ class ProblemRepositoryImpl(
     override suspend fun confirmJoinProblemOnChain(problemId: Int, request: ConfirmJoinProblemRequestDto) =
         remoteDataSource.confirmJoinProblemOnChain(problemId, request)
 
+    override suspend fun prepareSettleCompetitionOnChain(problemId: Int) =
+        remoteDataSource.prepareSettleCompetitionOnChain(problemId)
+
+    override suspend fun confirmSettleCompetitionOnChain(
+        problemId: Int,
+        request: ConfirmCompetitionLifecycleActionRequestDto,
+    ) = remoteDataSource.confirmSettleCompetitionOnChain(problemId, request)
+
+    override suspend fun prepareCancelCompetitionOnChain(problemId: Int) =
+        remoteDataSource.prepareCancelCompetitionOnChain(problemId)
+
+    override suspend fun confirmCancelCompetitionOnChain(
+        problemId: Int,
+        request: ConfirmCompetitionLifecycleActionRequestDto,
+    ) = remoteDataSource.confirmCancelCompetitionOnChain(problemId, request)
+
     override suspend fun runProblemCode(problemId: Int, sourceCode: String, language: String) =
         remoteDataSource.runProblemCode(
             problemId = problemId,
@@ -60,6 +78,14 @@ class ProblemRepositoryImpl(
             problemId = problemId,
             request = RunProblemRequestDto(sourceCode = sourceCode, language = language),
         )
+
+    override suspend fun confirmSubmissionOnChain(
+        submissionId: Long,
+        request: ConfirmSubmissionResultRequestDto,
+    ) = remoteDataSource.confirmSubmissionOnChain(
+        submissionId = submissionId,
+        request = request,
+    )
 
     override suspend fun fetchSubmissionJudgeJob(jobId: Long) =
         remoteDataSource.fetchSubmissionJudgeJob(jobId)

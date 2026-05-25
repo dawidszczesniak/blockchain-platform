@@ -24,6 +24,7 @@ data class WalletNetworkConfigDto(
 @Serializable
 data class PlatformConfigDto(
     val proxyAddress: String? = null,
+    val operatorWalletAddress: String? = null,
     val chainId: Long? = null,
     val networkName: String,
     val walletNetwork: WalletNetworkConfigDto? = null,

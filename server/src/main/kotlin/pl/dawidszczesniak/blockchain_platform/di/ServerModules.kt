@@ -87,6 +87,16 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.PrepareJo
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.PrepareJoinProblemOnChainUseCaseImpl
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.ConfirmJoinProblemOnChainUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.ConfirmJoinProblemOnChainUseCaseImpl
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.PrepareSettleCompetitionOnChainUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.PrepareSettleCompetitionOnChainUseCaseImpl
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.ConfirmSettleCompetitionOnChainUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.ConfirmSettleCompetitionOnChainUseCaseImpl
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.PrepareCancelCompetitionOnChainUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.PrepareCancelCompetitionOnChainUseCaseImpl
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.ConfirmCancelCompetitionOnChainUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.ConfirmCancelCompetitionOnChainUseCaseImpl
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.ConfirmSubmissionResultOnChainUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.ConfirmSubmissionResultOnChainUseCaseImpl
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.CompetitionSettlementJobRepository
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.CompetitionSettlementJobRepositoryImpl
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.CompetitionSettlementWakeupSignal
@@ -96,7 +106,8 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.RunProble
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.RetrySubmissionJudgeJobUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.RetrySubmissionJudgeJobUseCaseImpl
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.SubmissionJudgeService
-import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.SubmissionReceiptRetryService
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.SubmissionOnchainPayloadRefresher
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.SubmissionOnchainPayloadRefresherImpl
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.SubmitProblemCodeUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.SubmitProblemCodeUseCaseImpl
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.SandboxConsensusEvaluator
@@ -151,6 +162,7 @@ internal fun serverModules(environment: Map<String, String>) = module {
     single<SubmissionJudgeJobRepository> { SubmissionJudgeJobRepositoryImpl(get()) }
     single<SubmissionJudgeQueue> { RedisSubmissionJudgeQueue(get()) }
     single { SubmissionJudgeJobMapper(get<BlockchainPlatformContractConfig>().receiptTimeoutMs) }
+    single<SubmissionOnchainPayloadRefresher> { SubmissionOnchainPayloadRefresherImpl(get(), get(), get(), get()) }
     single<CreateProblemReferenceValidationService> { CreateProblemReferenceValidationServiceImpl(get(), get()) }
     single { CreateProblemDraftFactory(get(), get()) }
     single<CompetitionIntentStore> { RedisCompetitionIntentStore(get(), get()) }
@@ -168,17 +180,26 @@ internal fun serverModules(environment: Map<String, String>) = module {
     factory<JoinProblemUseCase> { JoinProblemUseCaseImpl() }
     factory<PrepareJoinProblemOnChainUseCase> { PrepareJoinProblemOnChainUseCaseImpl(get(), get(), get(), get(), get()) }
     factory<ConfirmJoinProblemOnChainUseCase> { ConfirmJoinProblemOnChainUseCaseImpl(get(), get(), get(), get()) }
+    factory<PrepareSettleCompetitionOnChainUseCase> { PrepareSettleCompetitionOnChainUseCaseImpl(get(), get(), get()) }
+    factory<ConfirmSettleCompetitionOnChainUseCase> { ConfirmSettleCompetitionOnChainUseCaseImpl(get(), get(), get()) }
+    factory<PrepareCancelCompetitionOnChainUseCase> { PrepareCancelCompetitionOnChainUseCaseImpl(get(), get(), get(), get()) }
+    factory<ConfirmCancelCompetitionOnChainUseCase> { ConfirmCancelCompetitionOnChainUseCaseImpl(get(), get(), get()) }
+    factory<ConfirmSubmissionResultOnChainUseCase> { ConfirmSubmissionResultOnChainUseCaseImpl(get(), get(), get()) }
     factory<RunProblemCodeUseCase> { RunProblemCodeUseCaseImpl(get(), get()) }
-    single { SubmitProblemCodeUseCaseImpl(get(), get(), get(), get(), get(), get()) }
+    single { SubmitProblemCodeUseCaseImpl(get(), get(), get(), get(), get(), get(), get()) }
     single<SubmitProblemCodeUseCase> { get<SubmitProblemCodeUseCaseImpl>() }
     single<SubmissionJudgeService> { get<SubmitProblemCodeUseCaseImpl>() }
-    single<SubmissionReceiptRetryService> { get<SubmitProblemCodeUseCaseImpl>() }
     single<EnqueueProblemSubmissionUseCase> { EnqueueProblemSubmissionUseCaseImpl(get(), get(), get()) }
-    single<GetSubmissionJudgeJobUseCase> { GetSubmissionJudgeJobUseCaseImpl(get(), get(), get()) }
+    single<GetSubmissionJudgeJobUseCase> { GetSubmissionJudgeJobUseCaseImpl(get(), get(), get(), get()) }
     single<RetrySubmissionJudgeJobUseCase> { RetrySubmissionJudgeJobUseCaseImpl(get(), get(), get()) }
-    single { SubmissionJudgeWorker(get(), get(), get(), get()) }
-    single { CompetitionSettlementWorker(get(), get(), get(), get(), get()) }
-    factory { ProblemController(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
+    single { SubmissionJudgeWorker(get(), get(), get()) }
+    single { CompetitionSettlementWorker(get(), get(), get()) }
+    factory {
+        ProblemController(
+            get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(),
+            get(), get(), get(), get(), get(), get(), get(), get(), get()
+        )
+    }
 
     single<DashboardDao> { DashboardDaoImpl(get()) }
     single<DashboardReadRepository> { DashboardReadRepositoryImpl(get(), get(), get()) }

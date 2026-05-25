@@ -82,13 +82,14 @@ internal object ProblemTestsTable : Table("problem_tests") {
 
 internal object ProblemSubmissionsTable : Table("problem_submissions") {
     val submissionId = long("submission_id").autoIncrement()
+    val onchainSubmissionId = long("onchain_submission_id")
     val problemId = long("problem_id")
     val userId = long("user_id")
     val status = varchar("status", length = 16)
     val sourceCode = text("source_code")
     val language = varchar("language", length = 32)
     val codeHash = varchar("code_hash", length = 66)
-    val testsHash = varchar("tests_hash", length = 66)
+    val challengeHash = varchar("challenge_hash", length = 66)
     val resultHash = varchar("result_hash", length = 66)
     val consensusImageHash = varchar("consensus_image_hash", length = 128).nullable()
     val consensusNodes = integer("consensus_nodes")

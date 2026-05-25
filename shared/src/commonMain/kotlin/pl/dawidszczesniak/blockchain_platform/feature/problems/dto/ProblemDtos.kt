@@ -24,6 +24,11 @@ data class ProblemSummaryDto(
     val daysToJoinEnd: Int,
     val joinUntilLabel: String,
     val submitUntilLabel: String,
+    val onchainCompetitionId: Long? = null,
+    val creatorWalletAddress: String? = null,
+    val joinDeadlineEpochSeconds: Long? = null,
+    val submitDeadlineEpochSeconds: Long? = null,
+    val onchainSettlementStatus: String? = null,
 )
 
 @Serializable
@@ -170,6 +175,28 @@ data class PrepareJoinProblemResponseDto(
 )
 
 @Serializable
+data class PrepareCompetitionLifecycleActionResponseDto(
+    val chainId: Long,
+    val proxyAddress: String,
+    val explorerBaseUrl: String? = null,
+    val transaction: PreparedWalletTransactionDto,
+)
+
+@Serializable
+data class ConfirmCompetitionLifecycleActionRequestDto(
+    val txHash: String,
+)
+
+@Serializable
+data class CompetitionLifecycleActionResponseDto(
+    val competitionId: Long,
+    val settlementStatus: String,
+    val txHash: String,
+    val explorerUrl: String? = null,
+    val winnerWalletAddress: String? = null,
+)
+
+@Serializable
 data class ConfirmJoinProblemRequestDto(
     val intentId: String,
     val txHash: String,
@@ -179,6 +206,11 @@ data class ConfirmJoinProblemRequestDto(
 data class RunProblemRequestDto(
     val sourceCode: String,
     val language: String = "kotlin",
+)
+
+@Serializable
+data class ConfirmSubmissionResultRequestDto(
+    val txHash: String,
 )
 
 @Serializable
@@ -222,7 +254,13 @@ data class SubmitProblemResponseDto(
     val sandboxImageHash: String? = null,
     val sandboxResultHash: String,
     val commitmentHash: String,
+    val chainId: Long,
     val proxyAddress: String,
+    val walletTransaction: PreparedWalletTransactionDto? = null,
+    val signature: String? = null,
+    val signerWalletAddress: String? = null,
+    val onchainSimulationError: String? = null,
+    val onchainRecorded: Boolean = false,
     val txHash: String,
     val explorerUrl: String? = null,
 )

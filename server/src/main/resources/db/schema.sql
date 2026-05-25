@@ -81,13 +81,14 @@ CREATE TABLE IF NOT EXISTS problem_tests (
 
 CREATE TABLE IF NOT EXISTS problem_submissions (
     submission_id BIGSERIAL PRIMARY KEY,
+    onchain_submission_id BIGINT NOT NULL,
     problem_id BIGINT NOT NULL,
     user_id BIGINT NOT NULL,
     status VARCHAR(16) NOT NULL CHECK (status IN ('accepted', 'rejected', 'error')),
     source_code TEXT NOT NULL,
     language VARCHAR(32) NOT NULL,
     code_hash VARCHAR(66) NOT NULL,
-    tests_hash VARCHAR(66) NOT NULL,
+    challenge_hash VARCHAR(66) NOT NULL,
     result_hash VARCHAR(66) NOT NULL,
     consensus_image_hash VARCHAR(128),
     consensus_nodes INTEGER NOT NULL CHECK (consensus_nodes >= 0),
@@ -446,10 +447,31 @@ ALTER TABLE problem_submissions
     ADD COLUMN IF NOT EXISTS language VARCHAR(32);
 
 ALTER TABLE problem_submissions
-    ADD COLUMN IF NOT EXISTS code_hash VARCHAR(66);
+    ADD COLUMN IF NOT EXISTS onchain_submission_id BIGINT;
 
 ALTER TABLE problem_submissions
-    ADD COLUMN IF NOT EXISTS tests_hash VARCHAR(66);
+    ADD COLUMN IF NOT EXISTS code_hash VARCHAR(66);
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_name = 'problem_submissions'
+          AND column_name = 'tests_hash'
+    ) AND NOT EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_name = 'problem_submissions'
+          AND column_name = 'challenge_hash'
+    ) THEN
+        ALTER TABLE problem_submissions
+            RENAME COLUMN tests_hash TO challenge_hash;
+    END IF;
+END $$;
+
+ALTER TABLE problem_submissions
+    ADD COLUMN IF NOT EXISTS challenge_hash VARCHAR(66);
 
 ALTER TABLE problem_submissions
     ADD COLUMN IF NOT EXISTS result_hash VARCHAR(66);
@@ -541,6 +563,13 @@ SET source_code = COALESCE(source_code, '')
 WHERE source_code IS NULL;
 
 UPDATE problem_submissions
+SET onchain_submission_id = (
+    (FLOOR(EXTRACT(EPOCH FROM submitted_at) * 1000))::BIGINT * 1048576
+    + MOD(submission_id, 1048576)
+)
+WHERE onchain_submission_id IS NULL;
+
+UPDATE problem_submissions
 SET language = COALESCE(NULLIF(language, ''), 'unknown')
 WHERE language IS NULL OR language = '';
 
@@ -549,8 +578,8 @@ SET code_hash = COALESCE(NULLIF(code_hash, ''), '0x')
 WHERE code_hash IS NULL OR code_hash = '';
 
 UPDATE problem_submissions
-SET tests_hash = COALESCE(NULLIF(tests_hash, ''), '0x')
-WHERE tests_hash IS NULL OR tests_hash = '';
+SET challenge_hash = COALESCE(NULLIF(challenge_hash, ''), '0x')
+WHERE challenge_hash IS NULL OR challenge_hash = '';
 
 UPDATE problem_submissions
 SET result_hash = COALESCE(NULLIF(result_hash, ''), '0x')
@@ -584,13 +613,16 @@ ALTER TABLE problem_submissions
     ALTER COLUMN source_code SET NOT NULL;
 
 ALTER TABLE problem_submissions
+    ALTER COLUMN onchain_submission_id SET NOT NULL;
+
+ALTER TABLE problem_submissions
     ALTER COLUMN language SET NOT NULL;
 
 ALTER TABLE problem_submissions
     ALTER COLUMN code_hash SET DEFAULT '0x';
 
 ALTER TABLE problem_submissions
-    ALTER COLUMN tests_hash SET DEFAULT '0x';
+    ALTER COLUMN challenge_hash SET DEFAULT '0x';
 
 ALTER TABLE problem_submissions
     ALTER COLUMN result_hash SET DEFAULT '0x';
@@ -608,7 +640,7 @@ ALTER TABLE problem_submissions
     ALTER COLUMN code_hash SET NOT NULL;
 
 ALTER TABLE problem_submissions
-    ALTER COLUMN tests_hash SET NOT NULL;
+    ALTER COLUMN challenge_hash SET NOT NULL;
 
 ALTER TABLE problem_submissions
     ALTER COLUMN result_hash SET NOT NULL;
@@ -672,6 +704,15 @@ BEGIN
     ALTER TABLE problem_submissions
         ADD CONSTRAINT chk_problem_submissions_memory_used_kb_non_negative
         CHECK (memory_used_kb IS NULL OR memory_used_kb >= 0);
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+    ALTER TABLE problem_submissions
+        ADD CONSTRAINT chk_problem_submissions_onchain_submission_id_positive
+        CHECK (onchain_submission_id > 0);
 EXCEPTION
     WHEN duplicate_object THEN NULL;
 END $$;
@@ -800,6 +841,9 @@ CREATE INDEX IF NOT EXISTS idx_problem_submissions_problem_user
 
 CREATE INDEX IF NOT EXISTS idx_problem_submissions_onchain_record_tx
     ON problem_submissions(onchain_record_tx_hash);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_problem_submissions_onchain_submission_id
+    ON problem_submissions(onchain_submission_id);
 
 CREATE INDEX IF NOT EXISTS idx_problem_submission_judge_jobs_status_requested_at
     ON problem_submission_judge_jobs(status, requested_at);

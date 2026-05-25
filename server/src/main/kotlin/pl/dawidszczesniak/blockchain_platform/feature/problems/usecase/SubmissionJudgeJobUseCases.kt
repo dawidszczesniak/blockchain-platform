@@ -62,17 +62,27 @@ internal class GetSubmissionJudgeJobUseCaseImpl(
     private val repository: SubmissionJudgeJobRepository,
     private val queue: SubmissionJudgeQueue,
     private val mapper: SubmissionJudgeJobMapper,
+    private val submissionOnchainPayloadRefresher: SubmissionOnchainPayloadRefresher,
 ) : GetSubmissionJudgeJobUseCase {
     override fun invoke(userId: Long, jobId: Long): SubmissionJudgeJobDto {
         val record = repository.getForUser(jobId, userId)
             ?: throw SubmissionJudgeJobValidationException("Submission judge job not found.")
-        return mapper.toDto(
+        val dto = mapper.toDto(
             record = record,
             queuePosition = if (record.status == SubmissionJudgeJobStatus.Queued) {
                 queue.position(jobId)
             } else {
                 null
             },
+        )
+        val submissionId = record.submissionId ?: return dto
+        val existingPayload = dto.submissionResult ?: return dto
+        return dto.copy(
+            submissionResult = submissionOnchainPayloadRefresher.refresh(
+                userId = userId,
+                submissionId = submissionId,
+                existingPayload = existingPayload,
+            ),
         )
     }
 }

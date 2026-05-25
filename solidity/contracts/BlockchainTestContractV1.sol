@@ -8,11 +8,11 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
 
-/// @title BlockchainTestContract
-/// @notice Unified on-chain surface for competition escrow, settlement, and accepted result recording.
+/// @title BlockchainTestContractV1
+/// @notice Archived full V1 implementation kept for upgrade history and storage-layout reference.
 /// @custom:oz-upgrades
 /// @dev Deployed behind an ERC-1967 UUPS proxy. Persistent state lives in proxy storage.
-contract BlockchainTestContract is Initializable, Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTransient {
+contract BlockchainTestContractV1 is Initializable, Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTransient {
     using SafeERC20 for IERC20;
 
     enum CompetitionState {
@@ -295,8 +295,8 @@ contract BlockchainTestContract is Initializable, Ownable2StepUpgradeable, UUPSU
         Competition storage competition = competitions[competitionId];
         if (competition.creator == address(0)) revert InvalidCompetition();
         if (competition.state != CompetitionState.Open) revert CompetitionNotOpen();
-        bool registrationFailed = block.timestamp > competition.joinDeadline &&
-            competition.participantCount < competition.requiredParticipants;
+        bool registrationFailed =
+            block.timestamp > competition.joinDeadline && competition.participantCount < competition.requiredParticipants;
         bool submissionsFinished = block.timestamp > competition.submitDeadline;
         if (!registrationFailed && !submissionsFinished) {
             revert CompetitionNotReadyForCancellation();
@@ -347,11 +347,8 @@ contract BlockchainTestContract is Initializable, Ownable2StepUpgradeable, UUPSU
     ) external onlyOperator {
         if (competitionId == 0 || submissionId == 0 || participant == address(0)) revert InvalidSubmission();
         if (
-            submissionHash == bytes32(0) ||
-            codeHash == bytes32(0) ||
-            testsHash == bytes32(0) ||
-            resultHash == bytes32(0) ||
-            sandboxImageHash == bytes32(0)
+            submissionHash == bytes32(0) || codeHash == bytes32(0) || testsHash == bytes32(0)
+                || resultHash == bytes32(0) || sandboxImageHash == bytes32(0)
         ) {
             revert InvalidHash();
         }
@@ -382,8 +379,8 @@ contract BlockchainTestContract is Initializable, Ownable2StepUpgradeable, UUPSU
 
         uint256 currentBestSubmissionId = bestSubmissionIdByCompetition[competitionId];
         if (
-            currentBestSubmissionId == 0 ||
-            _isBetterSubmission(resultsBySubmissionId[submissionId], resultsBySubmissionId[currentBestSubmissionId])
+            currentBestSubmissionId == 0
+                || _isBetterSubmission(resultsBySubmissionId[submissionId], resultsBySubmissionId[currentBestSubmissionId])
         ) {
             bestSubmissionIdByCompetition[competitionId] = submissionId;
             emit BestSubmissionUpdated(competitionId, submissionId);

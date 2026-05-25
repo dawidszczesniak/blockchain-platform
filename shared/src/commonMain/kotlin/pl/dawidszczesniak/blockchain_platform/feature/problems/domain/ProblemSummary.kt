@@ -27,4 +27,9 @@ data class ProblemSummary(
     val daysToJoinEnd: Int,
     val joinUntilLabel: String,
     val submitUntilLabel: String,
+    val onchainCompetitionId: Long? = null,
+    val creatorWalletAddress: String? = null,
+    val joinDeadlineEpochSeconds: Long? = null,
+    val submitDeadlineEpochSeconds: Long? = null,
+    val onchainSettlementStatus: String? = null,
 )

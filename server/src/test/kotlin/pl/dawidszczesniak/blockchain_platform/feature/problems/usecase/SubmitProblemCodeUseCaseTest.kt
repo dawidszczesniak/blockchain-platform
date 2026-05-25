@@ -11,18 +11,22 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import org.web3j.utils.Numeric
+import pl.dawidszczesniak.blockchain_platform.feature.auth.BlockchainConfig
 import pl.dawidszczesniak.blockchain_platform.db.SubmissionAttemptStatus
 import pl.dawidszczesniak.blockchain_platform.db.SubmissionTestResultStatus
 import pl.dawidszczesniak.blockchain_platform.feature.platform.PaymentAssetConfig
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.RunProblemRequestDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.onchain.BlockchainPlatformContractClient
 import pl.dawidszczesniak.blockchain_platform.feature.problems.onchain.BlockchainPlatformContractConfig
-import pl.dawidszczesniak.blockchain_platform.feature.problems.onchain.BlockchainPlatformWriteResult
+import pl.dawidszczesniak.blockchain_platform.feature.problems.onchain.PreparedSignedSubmissionResult
 import pl.dawidszczesniak.blockchain_platform.feature.problems.onchain.PreparedCompetitionTransaction
 import pl.dawidszczesniak.blockchain_platform.feature.problems.onchain.PreparedCompetitionTransactions
 import pl.dawidszczesniak.blockchain_platform.feature.problems.onchain.SubmissionResultRecord
+import pl.dawidszczesniak.blockchain_platform.feature.problems.onchain.VerifiedSubmissionRecording
+import pl.dawidszczesniak.blockchain_platform.feature.problems.onchain.VerifiedCompetitionCancellation
 import pl.dawidszczesniak.blockchain_platform.feature.problems.onchain.VerifiedCompetitionCreation
 import pl.dawidszczesniak.blockchain_platform.feature.problems.onchain.VerifiedCompetitionJoin
+import pl.dawidszczesniak.blockchain_platform.feature.problems.onchain.VerifiedCompetitionSettlement
 import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.JoinProblemResult
 import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.PersistedSubmissionRecord
 import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.ProblemExecutionContext
@@ -104,7 +108,7 @@ class SubmitProblemCodeUseCaseTest {
                 message = "Output does not match expected value.",
             ),
         )
-        val sandboxClient = FakeSandboxClient(
+        val sandboxClient = FakeSandboxClient.repeated(
             nodeRuns = listOf(
                 validNodeRun(
                     nodeId = "sandbox-node-1",
@@ -121,6 +125,7 @@ class SubmitProblemCodeUseCaseTest {
             sandboxConfig = sandboxConfig,
             contractConfig = fakePlatformContractConfig(),
             contractClient = FakeBlockchainPlatformContractClient(),
+            blockchainConfig = fakeBlockchainConfig(),
         )
 
         val error = assertFailsWith<SubmitProblemValidationException> {
@@ -207,7 +212,7 @@ class SubmitProblemCodeUseCaseTest {
                 message = null,
             ),
         )
-        val sandboxClient = FakeSandboxClient(
+        val sandboxClient = FakeSandboxClient.repeated(
             nodeRuns = listOf(
                 validNodeRun(
                     nodeId = "sandbox-node-1",
@@ -224,6 +229,7 @@ class SubmitProblemCodeUseCaseTest {
             sandboxConfig = sandboxConfig,
             contractConfig = fakePlatformContractConfig(),
             contractClient = FakeBlockchainPlatformContractClient(),
+            blockchainConfig = fakeBlockchainConfig(),
         )
 
         val result = useCase(
@@ -305,7 +311,7 @@ class SubmitProblemCodeUseCaseTest {
                 message = null,
             ),
         )
-        val sandboxClient = FakeSandboxClient(
+        val sandboxClient = FakeSandboxClient.repeated(
             nodeRuns = listOf(
                 validNodeRun(
                     nodeId = "sandbox-node-1",
@@ -321,6 +327,7 @@ class SubmitProblemCodeUseCaseTest {
             sandboxConfig = sandboxConfig,
             contractConfig = fakePlatformContractConfig(),
             contractClient = FakeBlockchainPlatformContractClient(),
+            blockchainConfig = fakeBlockchainConfig(),
         )
 
         val result = useCase(
@@ -336,7 +343,7 @@ class SubmitProblemCodeUseCaseTest {
     }
 
     @Test
-    fun `uses median worst case runtime and memory from consensus nodes as official metrics`() {
+    fun `runs sandbox three times and uses median of three worst case attempts as official metrics`() {
         val repository = FakeProblemWriteRepository(
             executionContext = ProblemExecutionContext(
                 problemId = 7,
@@ -385,37 +392,103 @@ class SubmitProblemCodeUseCaseTest {
             nodeAttestationSecrets = secrets,
         )
         val contractClient = FakeBlockchainPlatformContractClient()
-        val sandboxClient = FakeSandboxClient(
-            nodeRuns = listOf(
-                validNodeRun(
-                    nodeId = "sandbox-node-1",
-                    nodeUrl = "http://sandbox-node-1",
-                    secret = secrets.getValue("sandbox-node-1"),
-                    results = acceptedAdditionResults(
-                        maxMemoryUsedKb = 1_000,
-                        maxExecutionTimeMs = 90,
+        val sandboxClient = FakeSandboxClient.withAttempts(
+            attemptNodeRuns = listOf(
+                listOf(
+                    validNodeRun(
+                        nodeId = "sandbox-node-1",
+                        nodeUrl = "http://sandbox-node-1",
+                        secret = secrets.getValue("sandbox-node-1"),
+                        results = acceptedAdditionResults(
+                            maxMemoryUsedKb = 1_000,
+                            maxExecutionTimeMs = 90,
+                        ),
+                        suiteExecutionTimeMs = 100,
                     ),
-                    suiteExecutionTimeMs = 100,
+                    validNodeRun(
+                        nodeId = "sandbox-node-2",
+                        nodeUrl = "http://sandbox-node-2",
+                        secret = secrets.getValue("sandbox-node-2"),
+                        results = acceptedAdditionResults(
+                            maxMemoryUsedKb = 1_100,
+                            maxExecutionTimeMs = 105,
+                        ),
+                        suiteExecutionTimeMs = 105,
+                    ),
+                    validNodeRun(
+                        nodeId = "sandbox-node-3",
+                        nodeUrl = "http://sandbox-node-3",
+                        secret = secrets.getValue("sandbox-node-3"),
+                        results = acceptedAdditionResults(
+                            maxMemoryUsedKb = 1_200,
+                            maxExecutionTimeMs = 150,
+                        ),
+                        suiteExecutionTimeMs = 150,
+                    ),
                 ),
-                validNodeRun(
-                    nodeId = "sandbox-node-2",
-                    nodeUrl = "http://sandbox-node-2",
-                    secret = secrets.getValue("sandbox-node-2"),
-                    results = acceptedAdditionResults(
-                        maxMemoryUsedKb = 1_100,
-                        maxExecutionTimeMs = 105,
+                listOf(
+                    validNodeRun(
+                        nodeId = "sandbox-node-1",
+                        nodeUrl = "http://sandbox-node-1",
+                        secret = secrets.getValue("sandbox-node-1"),
+                        results = acceptedAdditionResults(
+                            maxMemoryUsedKb = 800,
+                            maxExecutionTimeMs = 80,
+                        ),
+                        suiteExecutionTimeMs = 80,
                     ),
-                    suiteExecutionTimeMs = 105,
+                    validNodeRun(
+                        nodeId = "sandbox-node-2",
+                        nodeUrl = "http://sandbox-node-2",
+                        secret = secrets.getValue("sandbox-node-2"),
+                        results = acceptedAdditionResults(
+                            maxMemoryUsedKb = 900,
+                            maxExecutionTimeMs = 95,
+                        ),
+                        suiteExecutionTimeMs = 95,
+                    ),
+                    validNodeRun(
+                        nodeId = "sandbox-node-3",
+                        nodeUrl = "http://sandbox-node-3",
+                        secret = secrets.getValue("sandbox-node-3"),
+                        results = acceptedAdditionResults(
+                            maxMemoryUsedKb = 950,
+                            maxExecutionTimeMs = 110,
+                        ),
+                        suiteExecutionTimeMs = 110,
+                    ),
                 ),
-                validNodeRun(
-                    nodeId = "sandbox-node-3",
-                    nodeUrl = "http://sandbox-node-3",
-                    secret = secrets.getValue("sandbox-node-3"),
-                    results = acceptedAdditionResults(
-                        maxMemoryUsedKb = 3_000,
-                        maxExecutionTimeMs = 300,
+                listOf(
+                    validNodeRun(
+                        nodeId = "sandbox-node-1",
+                        nodeUrl = "http://sandbox-node-1",
+                        secret = secrets.getValue("sandbox-node-1"),
+                        results = acceptedAdditionResults(
+                            maxMemoryUsedKb = 1_500,
+                            maxExecutionTimeMs = 180,
+                        ),
+                        suiteExecutionTimeMs = 180,
                     ),
-                    suiteExecutionTimeMs = 300,
+                    validNodeRun(
+                        nodeId = "sandbox-node-2",
+                        nodeUrl = "http://sandbox-node-2",
+                        secret = secrets.getValue("sandbox-node-2"),
+                        results = acceptedAdditionResults(
+                            maxMemoryUsedKb = 1_600,
+                            maxExecutionTimeMs = 195,
+                        ),
+                        suiteExecutionTimeMs = 195,
+                    ),
+                    validNodeRun(
+                        nodeId = "sandbox-node-3",
+                        nodeUrl = "http://sandbox-node-3",
+                        secret = secrets.getValue("sandbox-node-3"),
+                        results = acceptedAdditionResults(
+                            maxMemoryUsedKb = 2_000,
+                            maxExecutionTimeMs = 220,
+                        ),
+                        suiteExecutionTimeMs = 220,
+                    ),
                 ),
             )
         )
@@ -425,6 +498,7 @@ class SubmitProblemCodeUseCaseTest {
             sandboxConfig = sandboxConfig,
             contractConfig = fakePlatformContractConfig(),
             contractClient = contractClient,
+            blockchainConfig = fakeBlockchainConfig(),
         )
 
         val result = useCase(
@@ -435,12 +509,14 @@ class SubmitProblemCodeUseCaseTest {
             ),
         )
 
-        assertEquals(105, result.runtimeMs)
-        assertEquals(1_100, result.memoryUsedKb)
-        assertEquals(105, assertNotNull(repository.lastSubmissionDraft).runtimeMs)
-        assertEquals(1_100, repository.lastSubmissionDraft?.memoryUsedKb)
-        assertEquals(105, contractClient.lastRecord?.runtimeMs)
-        assertEquals(1_100, contractClient.lastRecord?.memoryUsedKb)
+        assertEquals(3, sandboxClient.runSolutionOnAllNodesCalls)
+        assertEquals(150, result.runtimeMs)
+        assertEquals(1_200, result.memoryUsedKb)
+        assertEquals(150, assertNotNull(repository.lastSubmissionDraft).runtimeMs)
+        assertEquals(1_200, repository.lastSubmissionDraft?.memoryUsedKb)
+        assertEquals(150, contractClient.lastRecord?.runtimeMs)
+        assertEquals(1_200, contractClient.lastRecord?.memoryUsedKb)
+        assertFalse(contractClient.lastRecord?.onchainSubmissionId == result.submissionId)
     }
 }
 
@@ -483,6 +559,7 @@ private class FakeProblemWriteRepository(
         lastSubmissionDraft = draft
         return PersistedSubmissionRecord(
             submissionId = 1L,
+            onchainSubmissionId = draft.onchainSubmissionId,
         )
     }
 
@@ -520,10 +597,24 @@ private class FakeProblemWriteRepository(
     override fun fetchSubmissionReceiptRetryContext(submissionId: Long) =
         error("Not used in this test.")
 
+    override fun fetchSubmissionOnchainConfirmationContext(
+        userId: Long,
+        submissionId: Long,
+    ) = error("Not used in this test.")
+
+    override fun updateSubmissionAcceptedResultPayload(submissionId: Long, payloadJson: String) =
+        error("Not used in this test.")
+
     override fun fetchCompetitionSettlementSnapshot(problemId: Int) =
         error("Not used in this test.")
 
+    override fun fetchCompetitionLifecycleContext(problemId: Int) =
+        error("Not used in this test.")
+
     override fun fetchBestSettlementCandidate(problemId: Int) =
+        error("Not used in this test.")
+
+    override fun findUserIdByWalletAddress(walletAddress: String): Long? =
         error("Not used in this test.")
 
     override fun recordSettledWinner(
@@ -545,9 +636,21 @@ private class FakeProblemWriteRepository(
         error("Not used in this test.")
 }
 
-private class FakeSandboxClient(
-    private val nodeRuns: List<SandboxNodeRunOutput>,
+private class FakeSandboxClient private constructor(
+    private val attemptNodeRuns: List<List<SandboxNodeRunOutput>>,
 ) : SandboxClient {
+    var runSolutionOnAllNodesCalls = 0
+
+    companion object {
+        fun repeated(nodeRuns: List<SandboxNodeRunOutput>): FakeSandboxClient {
+            return FakeSandboxClient(List(3) { nodeRuns })
+        }
+
+        fun withAttempts(attemptNodeRuns: List<List<SandboxNodeRunOutput>>): FakeSandboxClient {
+            return FakeSandboxClient(attemptNodeRuns)
+        }
+    }
+
     override fun runSolution(sourceCode: String, language: String, tests: List<SandboxRunInput>): SandboxRunOutput =
         error("Not used in this test.")
 
@@ -557,14 +660,14 @@ private class FakeSandboxClient(
         tests: List<SandboxRunInput>,
         runId: String?,
         cancellation: SandboxRunCancellation?,
-    ): List<SandboxNodeRunOutput> = nodeRuns
+    ): List<SandboxNodeRunOutput> {
+        val index = runSolutionOnAllNodesCalls
+        runSolutionOnAllNodesCalls += 1
+        return attemptNodeRuns.getOrElse(index) { attemptNodeRuns.last() }
+    }
 }
 
 private class FakeBlockchainPlatformContractClient(
-    private val response: BlockchainPlatformWriteResult = BlockchainPlatformWriteResult(
-        success = true,
-        txHash = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-    ),
 ) : BlockchainPlatformContractClient {
     var lastRecord: SubmissionResultRecord? = null
 
@@ -604,26 +707,46 @@ private class FakeBlockchainPlatformContractClient(
         expectedEntryFeeAmountAtomic: String,
     ): VerifiedCompetitionJoin = error("Not used in this test.")
 
-    override fun settleCompetition(competitionId: Long): BlockchainPlatformWriteResult =
-        error("Not used in this test.")
-
-    override fun cancelCompetition(competitionId: Long): BlockchainPlatformWriteResult =
-        error("Not used in this test.")
-
-    override fun recordSubmissionResult(
+    override fun prepareSignedSubmissionResult(
         record: SubmissionResultRecord,
-        onProgress: (String) -> Unit,
-        onTransactionSent: (String) -> Unit,
-    ): BlockchainPlatformWriteResult {
+    ): PreparedSignedSubmissionResult {
         lastRecord = record
-        response.txHash?.let(onTransactionSent)
-        return response
+        return PreparedSignedSubmissionResult(
+            signatureHex = "0xsigned",
+            signerWalletAddress = fakePlatformContractConfig().operatorWalletAddress,
+            transaction = PreparedCompetitionTransaction(
+                to = fakePlatformContractConfig().proxyAddress,
+                data = "0xfeed",
+                valueHex = "0x0",
+            ),
+            simulationErrorMessage = null,
+        )
     }
 
-    override fun confirmSubmissionResultReceipt(
+    override fun verifySubmissionResultTransaction(
         txHash: String,
-        onProgress: (String) -> Unit,
-    ): BlockchainPlatformWriteResult = response
+        expectedParticipantWallet: String,
+        record: SubmissionResultRecord,
+        signatureHex: String,
+    ): VerifiedSubmissionRecording = error("Not used in this test.")
+
+    override fun prepareSettleCompetition(competitionId: Long): PreparedCompetitionTransaction =
+        error("Not used in this test.")
+
+    override fun verifySettleCompetitionTransaction(
+        txHash: String,
+        expectedSenderWallet: String,
+        expectedCompetitionId: Long,
+    ): VerifiedCompetitionSettlement = error("Not used in this test.")
+
+    override fun prepareCancelCompetition(competitionId: Long): PreparedCompetitionTransaction =
+        error("Not used in this test.")
+
+    override fun verifyCancelCompetitionTransaction(
+        txHash: String,
+        expectedSenderWallet: String,
+        expectedCompetitionId: Long,
+    ): VerifiedCompetitionCancellation = error("Not used in this test.")
 
     override fun close() = Unit
 }
@@ -638,6 +761,18 @@ private fun fakePlatformContractConfig(): BlockchainPlatformContractConfig {
         receiptPollIntervalMs = 2_000L,
         explorerTxBaseUrl = "https://sepolia.etherscan.io/tx",
         prepareIntentTtlSeconds = 900,
+    )
+}
+
+private fun fakeBlockchainConfig(): BlockchainConfig {
+    return BlockchainConfig(
+        appEnvironment = "local",
+        chainId = 11155111L,
+        networkName = "Sepolia",
+        nativeCurrencyName = "Ether",
+        nativeCurrencySymbol = "ETH",
+        ethRpcUrl = "https://rpc.example.invalid",
+        explorerBaseUrl = "https://sepolia.etherscan.io",
     )
 }
 

@@ -14,6 +14,7 @@ internal class PlatformController(
     fun getPlatformConfig(): PlatformConfigDto {
         return PlatformConfigDto(
             proxyAddress = contractConfig.proxyAddress,
+            operatorWalletAddress = contractConfig.operatorWalletAddress,
             chainId = blockchainConfig.chainId,
             networkName = blockchainConfig.networkName,
             walletNetwork = WalletNetworkConfigDto(

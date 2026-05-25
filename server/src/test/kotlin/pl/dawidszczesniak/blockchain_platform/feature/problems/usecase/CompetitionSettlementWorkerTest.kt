@@ -4,7 +4,6 @@ import java.time.Instant
 import java.time.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import pl.dawidszczesniak.blockchain_platform.db.CompetitionSettlementJobStatus
 import pl.dawidszczesniak.blockchain_platform.db.CompetitionSettlementJobType
@@ -13,14 +12,6 @@ import pl.dawidszczesniak.blockchain_platform.db.SubmissionAttemptStatus
 import pl.dawidszczesniak.blockchain_platform.db.SubmissionAttestationStatus
 import pl.dawidszczesniak.blockchain_platform.db.SubmissionTestResultStatus
 import pl.dawidszczesniak.blockchain_platform.db.ProblemLifecycleStatus
-import pl.dawidszczesniak.blockchain_platform.feature.problems.onchain.BlockchainPlatformContractClient
-import pl.dawidszczesniak.blockchain_platform.feature.problems.onchain.BlockchainPlatformContractConfig
-import pl.dawidszczesniak.blockchain_platform.feature.problems.onchain.BlockchainPlatformWriteResult
-import pl.dawidszczesniak.blockchain_platform.feature.problems.onchain.PreparedCompetitionTransaction
-import pl.dawidszczesniak.blockchain_platform.feature.problems.onchain.PreparedCompetitionTransactions
-import pl.dawidszczesniak.blockchain_platform.feature.problems.onchain.SubmissionResultRecord
-import pl.dawidszczesniak.blockchain_platform.feature.problems.onchain.VerifiedCompetitionCreation
-import pl.dawidszczesniak.blockchain_platform.feature.problems.onchain.VerifiedCompetitionJoin
 import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.CompetitionSettlementSnapshot
 import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.JoinProblemResult
 import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.NewProblemDraft
@@ -35,7 +26,7 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.Submis
 
 class CompetitionSettlementWorkerTest {
     @Test
-    fun `registration deadline job cancels competition and completes outstanding jobs`() {
+    fun `registration deadline job completes outstanding jobs and waits for user-triggered cancellation`() {
         val now = Instant.parse("2026-05-03T00:00:10Z")
         val repository = FakeSettlementProblemWriteRepository(
             snapshot = CompetitionSettlementSnapshot(
@@ -68,30 +59,23 @@ class CompetitionSettlementWorkerTest {
                 )
             ),
         )
-        val contractClient = FakeSettlementContractClient(
-            cancelResult = BlockchainPlatformWriteResult(success = true, txHash = "0xtx-cancel"),
-        )
         val worker = CompetitionSettlementWorker(
             repository = repository,
             jobRepository = jobRepository,
-            contractClient = contractClient,
-            contractConfig = fakeContractConfig(),
             wakeupSignal = CompetitionSettlementWakeupSignal(),
             nowProvider = { now },
         )
 
         worker.runOnce()
 
-        assertEquals(11L, contractClient.lastCancelledCompetitionId)
-        assertEquals(1, repository.cancelledProblemId)
-        assertEquals("0xtx-cancel", repository.cancelledTxHash)
         assertEquals(1, jobRepository.completedOutstandingProblemId)
         assertNull(repository.pendingError)
         assertNull(repository.failedError)
+        assertNull(jobRepository.rescheduledJobId)
     }
 
     @Test
-    fun `failed registration deadline job is rescheduled and leaves competition pending`() {
+    fun `failed registration deadline no longer reschedules worker because settlement is user-triggered`() {
         val now = Instant.parse("2026-05-03T00:00:10Z")
         val repository = FakeSettlementProblemWriteRepository(
             snapshot = CompetitionSettlementSnapshot(
@@ -124,25 +108,21 @@ class CompetitionSettlementWorkerTest {
                 )
             ),
         )
-        val contractClient = FakeSettlementContractClient(
-            cancelResult = BlockchainPlatformWriteResult(success = false, error = "rpc timeout"),
-        )
         val worker = CompetitionSettlementWorker(
             repository = repository,
             jobRepository = jobRepository,
-            contractClient = contractClient,
-            contractConfig = fakeContractConfig(),
             wakeupSignal = CompetitionSettlementWakeupSignal(),
             nowProvider = { now },
         )
 
         worker.runOnce()
 
-        assertEquals("rpc timeout", repository.pendingError)
+        assertNull(repository.pendingError)
         assertNull(repository.failedError)
-        assertEquals(100L, jobRepository.rescheduledJobId)
-        assertEquals("rpc timeout", jobRepository.rescheduledError)
-        assertNotNull(jobRepository.rescheduledAt)
+        assertEquals(1, jobRepository.completedOutstandingProblemId)
+        assertNull(jobRepository.rescheduledJobId)
+        assertNull(jobRepository.rescheduledError)
+        assertNull(jobRepository.rescheduledAt)
     }
 }
 
@@ -187,8 +167,18 @@ private class FakeSettlementProblemWriteRepository(
     ) = error("Not used in this test.")
     override fun markSubmissionResultFailed(submissionId: Long, error: String) = error("Not used in this test.")
     override fun fetchSubmissionReceiptRetryContext(submissionId: Long) = error("Not used in this test.")
+    override fun fetchSubmissionOnchainConfirmationContext(
+        userId: Long,
+        submissionId: Long,
+    ) = error("Not used in this test.")
+
+    override fun updateSubmissionAcceptedResultPayload(submissionId: Long, payloadJson: String) =
+        error("Not used in this test.")
+
     override fun fetchCompetitionSettlementSnapshot(problemId: Int): CompetitionSettlementSnapshot? = snapshot
+    override fun fetchCompetitionLifecycleContext(problemId: Int) = error("Not used in this test.")
     override fun fetchBestSettlementCandidate(problemId: Int): ProblemSettlementCandidate? = null
+    override fun findUserIdByWalletAddress(walletAddress: String): Long? = error("Not used in this test.")
     override fun recordSettledWinner(
         problemId: Int,
         winnerUserId: Long,
@@ -248,79 +238,4 @@ private class FakeCompetitionSettlementJobRepository(
     override fun nextAvailableAt(): Instant? = null
 
     override fun nextStaleRecoveryAt(staleLockThresholdMs: Long): Instant? = null
-}
-
-private class FakeSettlementContractClient(
-    private val cancelResult: BlockchainPlatformWriteResult,
-) : BlockchainPlatformContractClient {
-    var lastCancelledCompetitionId: Long? = null
-
-    override fun prepareCreateCompetition(
-        paymentAsset: pl.dawidszczesniak.blockchain_platform.feature.platform.PaymentAssetConfig,
-        competitionKey: String,
-        joinDeadlineEpochSeconds: Long,
-        submitDeadlineEpochSeconds: Long,
-        entryFeeAmountAtomic: String,
-        requiredParticipants: Int,
-        prizeAmountAtomic: String,
-    ): PreparedCompetitionTransactions = error("Not used in this test.")
-
-    override fun prepareJoinCompetition(
-        paymentAsset: pl.dawidszczesniak.blockchain_platform.feature.platform.PaymentAssetConfig,
-        competitionId: Long,
-        entryFeeAmountAtomic: String,
-    ): PreparedCompetitionTransactions = error("Not used in this test.")
-
-    override fun verifyCreateCompetitionTransaction(
-        txHash: String,
-        expectedCreatorWallet: String,
-        expectedPaymentAsset: pl.dawidszczesniak.blockchain_platform.feature.platform.PaymentAssetConfig,
-        expectedCompetitionKey: String,
-        expectedJoinDeadlineEpochSeconds: Long,
-        expectedSubmitDeadlineEpochSeconds: Long,
-        expectedEntryFeeAmountAtomic: String,
-        expectedRequiredParticipants: Int,
-        expectedPrizeAmountAtomic: String,
-    ): VerifiedCompetitionCreation = error("Not used in this test.")
-
-    override fun verifyJoinCompetitionTransaction(
-        txHash: String,
-        expectedParticipantWallet: String,
-        expectedPaymentAsset: pl.dawidszczesniak.blockchain_platform.feature.platform.PaymentAssetConfig,
-        expectedCompetitionId: Long,
-        expectedEntryFeeAmountAtomic: String,
-    ): VerifiedCompetitionJoin = error("Not used in this test.")
-
-    override fun settleCompetition(competitionId: Long): BlockchainPlatformWriteResult = error("Not used in this test.")
-
-    override fun cancelCompetition(competitionId: Long): BlockchainPlatformWriteResult {
-        lastCancelledCompetitionId = competitionId
-        return cancelResult
-    }
-
-    override fun recordSubmissionResult(
-        record: SubmissionResultRecord,
-        onProgress: (String) -> Unit,
-        onTransactionSent: (String) -> Unit,
-    ): BlockchainPlatformWriteResult = error("Not used in this test.")
-
-    override fun confirmSubmissionResultReceipt(
-        txHash: String,
-        onProgress: (String) -> Unit,
-    ): BlockchainPlatformWriteResult = error("Not used in this test.")
-
-    override fun close() = Unit
-}
-
-private fun fakeContractConfig(): BlockchainPlatformContractConfig {
-    return BlockchainPlatformContractConfig(
-        proxyAddress = "0x1111111111111111111111111111111111111111",
-        operatorPrivateKey = "0x1111111111111111111111111111111111111111111111111111111111111111",
-        gasLimit = 300_000L,
-        gasPriceWei = null,
-        receiptTimeoutMs = 120_000L,
-        receiptPollIntervalMs = 2_000L,
-        explorerTxBaseUrl = "https://sepolia.etherscan.io/tx",
-        prepareIntentTtlSeconds = 600,
-    )
 }

@@ -31,8 +31,6 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.SubmissionJud
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.SubmitProblemResponseDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.SubmissionJudgeOutcome
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.SubmissionJudgeService
-import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.SubmissionReceiptRetryService
-import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.SubmissionReceiptTimeoutException
 
 private val logger = LoggerFactory.getLogger("SubmissionJudgeWorker")
 
@@ -285,7 +283,6 @@ internal class SubmissionJudgeWorker(
     private val queue: SubmissionJudgeQueue,
     private val repository: SubmissionJudgeJobRepository,
     private val judgeService: SubmissionJudgeService,
-    private val retryService: SubmissionReceiptRetryService,
 ) : AutoCloseable {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val json = Json { ignoreUnknownKeys = true }
@@ -336,25 +333,12 @@ internal class SubmissionJudgeWorker(
                 logger.info("Submission judge job {} status: {}", jobId, message)
                 repository.updateRunningStatus(jobId, message)
             }
-            if (job.hasStoredReceiptRetryPayload()) {
-                val partialResponse = json.decodeFromString(SubmitProblemResponseDto.serializer(), job.resultPayloadJson.orEmpty())
-                SubmissionJudgeOutcome.Accepted(
-                    retryService.retryPendingReceipt(
-                        userId = job.userId,
-                        problemId = job.problemId,
-                        submissionId = requireNotNull(job.submissionId),
-                        partialResponse = partialResponse,
-                        reportStatus = reportStatus,
-                    )
-                )
-            } else {
-                judgeService.judge(
-                    userId = job.userId,
-                    problemId = job.problemId,
-                    request = request,
-                    reportStatus = reportStatus,
-                )
-            }
+            judgeService.judge(
+                userId = job.userId,
+                problemId = job.problemId,
+                request = request,
+                reportStatus = reportStatus,
+            )
         }.onSuccess { outcome ->
             when (outcome) {
                 is SubmissionJudgeOutcome.Accepted -> {
@@ -384,10 +368,6 @@ internal class SubmissionJudgeWorker(
             repository.completeError(
                 jobId = jobId,
                 message = error.message?.ifBlank { null } ?: "Judge worker failed.",
-                submissionId = (error as? SubmissionReceiptTimeoutException)?.submissionId,
-                resultPayloadJson = (error as? SubmissionReceiptTimeoutException)?.let {
-                    json.encodeToString(SubmitProblemResponseDto.serializer(), it.partialResponse)
-                },
             )
         }
     }

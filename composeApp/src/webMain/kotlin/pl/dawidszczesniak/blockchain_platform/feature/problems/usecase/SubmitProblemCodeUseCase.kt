@@ -1,10 +1,15 @@
 package pl.dawidszczesniak.blockchain_platform.feature.problems.usecase
 
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.SubmissionJudgeJobDto
+import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.SubmitProblemResponseDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.ProblemRepository
 
 interface SubmitProblemCodeUseCase {
     suspend operator fun invoke(problemId: Int, sourceCode: String, language: String): SubmissionJudgeJobDto
+}
+
+interface ConfirmSubmissionOnChainUseCase {
+    suspend operator fun invoke(submissionId: Long, txHash: String): SubmitProblemResponseDto
 }
 
 interface GetSubmissionJudgeJobUseCase {
@@ -23,6 +28,19 @@ class SubmitProblemCodeUseCaseImpl(
             problemId = problemId,
             sourceCode = sourceCode,
             language = language,
+        )
+    }
+}
+
+class ConfirmSubmissionOnChainUseCaseImpl(
+    private val repository: ProblemRepository,
+) : ConfirmSubmissionOnChainUseCase {
+    override suspend fun invoke(submissionId: Long, txHash: String): SubmitProblemResponseDto {
+        return repository.confirmSubmissionOnChain(
+            submissionId = submissionId,
+            request = pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ConfirmSubmissionResultRequestDto(
+                txHash = txHash,
+            ),
         )
     }
 }

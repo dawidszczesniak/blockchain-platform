@@ -28,13 +28,17 @@ OpenZeppelin references used for this setup:
 
 ## Architecture
 
-- `contracts/BlockchainTestContract.sol`
-  - OpenZeppelin upgradeable implementation contract
+- `solidity/contracts/BlockchainTestContractV1.sol`
+- `solidity/contracts/BlockchainTestContractV2.sol`
+- `solidity/contracts/BlockchainTestContractV3.sol`
+  - previous implementation kept as upgrade reference for V4
+- `solidity/contracts/BlockchainTestContractV4.sol`
+  - current OpenZeppelin upgradeable implementation contract
   - inherits `Ownable2StepUpgradeable`, `UUPSUpgradeable`, `ReentrancyGuardTransient`
   - initializer replaces constructor
   - supports native ETH plus whitelisted ERC-20 payment tokens such as USDC
   - rejects fee-on-transfer ERC-20s, so escrow math stays exact
-  - exposes `version()` returning `2.0.0`
+  - exposes `version()` returning `4.0.0`
 - UUPS proxy
   - deployed as ERC-1967 proxy
   - stores all persistent state
@@ -92,13 +96,15 @@ The frontend and backend were refactored around a generic `paymentAsset` model, 
 
 The project now uses Foundry instead of Hardhat for contract work.
 
+Solidity dependencies are no longer vendored under `lib/`. Foundry resolves them from official external packages installed into `node_modules` and mapped through [remappings.txt](/Users/computer.account/Desktop/blockchain-platform/remappings.txt).
+
 Added:
 
 - [foundry.toml](/Users/computer.account/Desktop/blockchain-platform/foundry.toml)
 - [remappings.txt](/Users/computer.account/Desktop/blockchain-platform/remappings.txt)
-- [DeployBlockchainTestContract.s.sol](/Users/computer.account/Desktop/blockchain-platform/script/DeployBlockchainTestContract.s.sol)
-- [UpgradeBlockchainTestContract.s.sol](/Users/computer.account/Desktop/blockchain-platform/script/UpgradeBlockchainTestContract.s.sol)
-- [ValidateBlockchainTestContract.s.sol](/Users/computer.account/Desktop/blockchain-platform/script/ValidateBlockchainTestContract.s.sol)
+- [DeployBlockchainTestContract.sol](/Users/computer.account/Desktop/blockchain-platform/solidity/scripts/DeployBlockchainTestContract.sol)
+- [UpgradeBlockchainTestContract.sol](/Users/computer.account/Desktop/blockchain-platform/solidity/scripts/UpgradeBlockchainTestContract.sol)
+- [ValidateBlockchainTestContract.sol](/Users/computer.account/Desktop/blockchain-platform/solidity/scripts/ValidateBlockchainTestContract.sol)
 
 Removed:
 
@@ -120,12 +126,16 @@ Node.js is still needed for OpenZeppelin Foundry upgrade safety validation. Open
 Run:
 
 ```bash
-forge install foundry-rs/forge-std
-forge install OpenZeppelin/openzeppelin-foundry-upgrades
-forge install OpenZeppelin/openzeppelin-contracts-upgradeable
+npm install
 ```
 
-The repo is already configured for the remappings OpenZeppelin requires for Contracts v5.
+This installs:
+
+- `forge-std` from the official `foundry-rs/forge-std` Git tag
+- `@openzeppelin/foundry-upgrades` from the official OpenZeppelin Git tag
+- `@openzeppelin/contracts` and `@openzeppelin/contracts-upgradeable` from official npm releases
+
+The repo remappings are already configured for this layout.
 
 ## Local App Development
 
@@ -196,10 +206,10 @@ set -a
 source .env.local
 set +a
 forge clean
-env -u ETH_RPC_URL forge script script/ValidateBlockchainTestContract.s.sol:ValidateBlockchainTestContract
+env -u ETH_RPC_URL forge script solidity/scripts/ValidateBlockchainTestContract.sol:ValidateBlockchainTestContract
 ```
 
-Deploy UUPS proxy:
+Deploy fresh V4 UUPS proxy:
 
 The deploy script uses platform fee `500` basis points by default and initializes owner, operator, and treasury to the wallet behind `ETH_PLATFORM_OPERATOR_PRIVATE_KEY`. If `ETH_PLATFORM_INITIAL_SUPPORTED_PAYMENT_TOKEN` is set, that ERC-20 is whitelisted from the first block of the proxy.
 
@@ -210,12 +220,12 @@ set -a
 source .env.local
 set +a
 forge clean
-forge script script/DeployBlockchainTestContract.s.sol:DeployBlockchainTestContract \
+forge script solidity/scripts/DeployBlockchainTestContract.sol:DeployBlockchainTestContract \
   --rpc-url "$ETH_RPC_URL" \
   --broadcast
 ```
 
-Upgrade proxy:
+Upgrade existing proxy to V4:
 
 Command:
 
@@ -224,13 +234,27 @@ set -a
 source .env.local
 set +a
 forge clean
-forge script script/UpgradeBlockchainTestContract.s.sol:UpgradeBlockchainTestContract \
+forge script solidity/scripts/UpgradeBlockchainTestContract.sol:UpgradeBlockchainTestContract \
   --rpc-url "$ETH_RPC_URL" \
   --sender "$(cast wallet address --private-key "$ETH_PLATFORM_OPERATOR_PRIVATE_KEY")" \
   --broadcast
 ```
 
 The `--sender` flag matters for upgrades because the proxy owner must authorize the UUPS upgrade.
+
+Post-upgrade sanity check:
+
+```bash
+cast call "$ETH_PLATFORM_PROXY_ADDRESS" "version()(string)" --rpc-url "$ETH_RPC_URL"
+```
+
+Expected result after the V4 rollout:
+
+```text
+4.0.0
+```
+
+The upgrade script prints the new implementation address. Keep that value for Etherscan proxy verification.
 
 ## Recommended Upgrade Discipline
 
@@ -277,9 +301,10 @@ Accepted submission:
 Settlement:
 
 1. backend worker finds competitions ready for settlement
-2. operator calls `settleCompetition(...)`
-3. if no winner can be produced, operator calls `cancelCompetition(...)`
-4. refunds stay claimable from the same proxy address
+2. worker marks the contest as awaiting user-triggered `settle` or `cancel`
+3. frontend calls `/problems/{problemId}/settle|cancel/prepare`, user signs the wallet transaction, then backend confirms it through `/confirm`
+4. backend verifies `CompetitionSettled` or `CompetitionCancelled` from the receipt and persists final state
+5. refunds stay claimable from the same proxy address
 
 ## Verification
 
@@ -312,7 +337,7 @@ OpenZeppelin validation:
 ```bash
 npm install
 forge clean
-env -u ETH_RPC_URL forge script script/ValidateBlockchainTestContract.s.sol:ValidateBlockchainTestContract
+env -u ETH_RPC_URL forge script solidity/scripts/ValidateBlockchainTestContract.sol:ValidateBlockchainTestContract
 ```
 
 Full local verification pass:

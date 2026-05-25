@@ -39,12 +39,22 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.PrepareJo
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.PrepareJoinProblemOnChainUseCaseImpl
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.ConfirmJoinProblemOnChainUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.ConfirmJoinProblemOnChainUseCaseImpl
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.PrepareSettleCompetitionOnChainUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.PrepareSettleCompetitionOnChainUseCaseImpl
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.ConfirmSettleCompetitionOnChainUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.ConfirmSettleCompetitionOnChainUseCaseImpl
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.PrepareCancelCompetitionOnChainUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.PrepareCancelCompetitionOnChainUseCaseImpl
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.ConfirmCancelCompetitionOnChainUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.ConfirmCancelCompetitionOnChainUseCaseImpl
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.RunProblemCodeUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.RunProblemCodeUseCaseImpl
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetSubmissionJudgeJobUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.GetSubmissionJudgeJobUseCaseImpl
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.RetrySubmissionJudgeJobUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.RetrySubmissionJudgeJobUseCaseImpl
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.ConfirmSubmissionOnChainUseCase
+import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.ConfirmSubmissionOnChainUseCaseImpl
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.SubmitProblemCodeUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.SubmitProblemCodeUseCaseImpl
 import pl.dawidszczesniak.blockchain_platform.app.AppViewModel
@@ -123,8 +133,13 @@ fun appModules() = module {
     factory<CancelCreateProblemValidationUseCase> { CancelCreateProblemValidationUseCaseImpl(get()) }
     factory<PrepareJoinProblemOnChainUseCase> { PrepareJoinProblemOnChainUseCaseImpl(get()) }
     factory<ConfirmJoinProblemOnChainUseCase> { ConfirmJoinProblemOnChainUseCaseImpl(get()) }
+    factory<PrepareSettleCompetitionOnChainUseCase> { PrepareSettleCompetitionOnChainUseCaseImpl(get()) }
+    factory<ConfirmSettleCompetitionOnChainUseCase> { ConfirmSettleCompetitionOnChainUseCaseImpl(get()) }
+    factory<PrepareCancelCompetitionOnChainUseCase> { PrepareCancelCompetitionOnChainUseCaseImpl(get()) }
+    factory<ConfirmCancelCompetitionOnChainUseCase> { ConfirmCancelCompetitionOnChainUseCaseImpl(get()) }
     factory<RunProblemCodeUseCase> { RunProblemCodeUseCaseImpl(get()) }
     factory<SubmitProblemCodeUseCase> { SubmitProblemCodeUseCaseImpl(get()) }
+    factory<ConfirmSubmissionOnChainUseCase> { ConfirmSubmissionOnChainUseCaseImpl(get()) }
     factory<GetSubmissionJudgeJobUseCase> { GetSubmissionJudgeJobUseCaseImpl(get()) }
     factory<RetrySubmissionJudgeJobUseCase> { RetrySubmissionJudgeJobUseCaseImpl(get()) }
     factory<PrepareCreateProblemOnChainUseCase> { PrepareCreateProblemOnChainUseCaseImpl(get()) }
@@ -141,7 +156,11 @@ fun appModules() = module {
     factory { BackendHealthViewModel(get()) }
     factory { BackendMaintenanceViewModel() }
     factory { CreateProblemViewModel(get(), get(), get(), get(), get(), get(), get()) }
-    factory { ProblemDetailsViewModel(get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
+    factory {
+        ProblemDetailsViewModel(
+            get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get()
+        )
+    }
     factory { ProblemsListViewModel(get()) }
     factory { MyProblemsViewModel(get()) }
     factory { MyParticipationViewModel(get(), get()) }

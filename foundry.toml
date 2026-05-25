@@ -1,9 +1,9 @@
 [profile.default]
-src = "contracts"
-script = "script"
-test = "test/foundry"
+src = "solidity/contracts"
+script = "solidity/scripts"
+test = "solidity/tests"
 out = "out"
-libs = ["lib"]
+libs = ["node_modules"]
 solc_version = "0.8.24"
 optimizer = true
 optimizer_runs = 200
@@ -11,3 +11,13 @@ ffi = true
 ast = true
 build_info = true
 extra_output = ["storageLayout"]
+fs_permissions = [
+  { access = "read", path = "./out" },
+  { access = "read-write", path = "./out/build-info" }
+]
+
+[lint]
+ignore = [
+  "solidity/contracts/BlockchainTestContractV1.sol",
+  "solidity/contracts/BlockchainTestContractV2.sol"
+]

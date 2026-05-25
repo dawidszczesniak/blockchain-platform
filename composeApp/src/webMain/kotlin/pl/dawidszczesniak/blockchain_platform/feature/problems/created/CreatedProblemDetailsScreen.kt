@@ -22,6 +22,9 @@ import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,6 +44,8 @@ import blockchain_platform.composeapp.generated.resources.my_problems_started
 import blockchain_platform.composeapp.generated.resources.my_problems_waiting
 import blockchain_platform.composeapp.generated.resources.nav_my_problems
 import blockchain_platform.composeapp.generated.resources.problem_details_back
+import blockchain_platform.composeapp.generated.resources.problem_details_action_cancel_loading
+import blockchain_platform.composeapp.generated.resources.problem_details_action_settle_loading
 import blockchain_platform.composeapp.generated.resources.problem_details_constraints_title
 import blockchain_platform.composeapp.generated.resources.problem_details_example_input
 import blockchain_platform.composeapp.generated.resources.problem_details_example_label
@@ -60,6 +65,10 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.CreatedPro
 import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.CreatedProblemStatus
 import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.ProblemExample
 import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.ProblemSummary
+import pl.dawidszczesniak.blockchain_platform.feature.problems.details.CompetitionLifecycleActionSection
+import pl.dawidszczesniak.blockchain_platform.feature.problems.details.CompetitionLifecycleActionState
+import pl.dawidszczesniak.blockchain_platform.feature.problems.details.ProblemDetailsProgressOverlay
+import pl.dawidszczesniak.blockchain_platform.feature.problems.details.ProblemDetailsViewModel
 import pl.dawidszczesniak.blockchain_platform.feature.problems.details.PublicReferenceSolutionSection
 import pl.dawidszczesniak.blockchain_platform.feature.problems.statement.ProblemStatementContent
 import pl.dawidszczesniak.blockchain_platform.feature.problems.statement.decodeProblemDescription
@@ -71,6 +80,9 @@ import kotlin.math.min
 fun CreatedProblemDetailsScreen(
     problem: ProblemSummary,
     createdProblem: CreatedProblem,
+    viewModel: ProblemDetailsViewModel,
+    isLoggedIn: Boolean,
+    onRequireLogin: () -> Unit,
     onBackToMyProblems: () -> Unit,
 ) {
     val statementContent = remember(problem.id, problem.description, problem.constraints, problem.examples) {
@@ -85,32 +97,37 @@ fun CreatedProblemDetailsScreen(
             },
         )
     }
+    val competitionActionState by viewModel.competitionActionState.collectAsState()
+    LaunchedEffect(problem.id, isLoggedIn) {
+        viewModel.loadCompetitionLifecycle(problem.id)
+    }
 
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        Row(modifier = Modifier.fillMaxWidth()) {
-            TextButton(onClick = onBackToMyProblems) {
-                Text(stringResource(Res.string.problem_details_back))
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val availableWidth = maxWidth
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Row(modifier = Modifier.fillMaxWidth()) {
+                TextButton(onClick = onBackToMyProblems) {
+                    Text(stringResource(Res.string.problem_details_back))
+                }
+                Spacer(Modifier.width(8.dp))
+                AssistChip(
+                    onClick = { },
+                    label = { Text(stringResource(Res.string.problem_details_title)) },
+                    colors = AssistChipDefaults.assistChipColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f),
+                        labelColor = MaterialTheme.colorScheme.onSurface,
+                    ),
+                    border = AssistChipDefaults.assistChipBorder(
+                        enabled = true,
+                        borderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.6f),
+                    ),
+                )
             }
-            Spacer(Modifier.width(8.dp))
-            AssistChip(
-                onClick = { },
-                label = { Text(stringResource(Res.string.problem_details_title)) },
-                colors = AssistChipDefaults.assistChipColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f),
-                    labelColor = MaterialTheme.colorScheme.onSurface,
-                ),
-                border = AssistChipDefaults.assistChipBorder(
-                    enabled = true,
-                    borderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.6f),
-                ),
-            )
-        }
 
-        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-            val compact = maxWidth < 980.dp
+            val compact = availableWidth < 980.dp
 
             if (compact) {
                 Column(
@@ -128,10 +145,15 @@ fun CreatedProblemDetailsScreen(
                         modifier = Modifier.fillMaxWidth(),
                         problem = problem,
                         createdProblem = createdProblem,
+                        competitionActionState = competitionActionState,
+                        isLoggedIn = isLoggedIn,
+                        onRequireLogin = onRequireLogin,
+                        onSettle = { viewModel.settleCompetition(problem.id) },
+                        onCancel = { viewModel.cancelCompetition(problem.id) },
                     )
                 }
             } else {
-                val paneWidth = (maxWidth - 14.dp) / 2
+                val paneWidth = (availableWidth - 14.dp) / 2
                 Row(
                     modifier = Modifier.fillMaxSize(),
                     horizontalArrangement = Arrangement.spacedBy(14.dp),
@@ -149,9 +171,25 @@ fun CreatedProblemDetailsScreen(
                             .fillMaxHeight(),
                         problem = problem,
                         createdProblem = createdProblem,
+                        competitionActionState = competitionActionState,
+                        isLoggedIn = isLoggedIn,
+                        onRequireLogin = onRequireLogin,
+                        onSettle = { viewModel.settleCompetition(problem.id) },
+                        onCancel = { viewModel.cancelCompetition(problem.id) },
                     )
                 }
             }
+        }
+
+        if (competitionActionState.isSettling || competitionActionState.isCancelling) {
+            ProblemDetailsProgressOverlay(
+                message = competitionActionState.statusMessage?.takeIf { it.isNotBlank() }
+                    ?: if (competitionActionState.isSettling) {
+                        stringResource(Res.string.problem_details_action_settle_loading)
+                    } else {
+                        stringResource(Res.string.problem_details_action_cancel_loading)
+                    },
+            )
         }
     }
 }
@@ -221,6 +259,11 @@ private fun CreatedProblemOwnerPane(
     modifier: Modifier,
     problem: ProblemSummary,
     createdProblem: CreatedProblem,
+    competitionActionState: CompetitionLifecycleActionState,
+    isLoggedIn: Boolean,
+    onRequireLogin: () -> Unit,
+    onSettle: () -> Unit,
+    onCancel: () -> Unit,
 ) {
     val detailsScroll = rememberScrollState()
     val required = max(1, createdProblem.requiredParticipants)
@@ -292,6 +335,15 @@ private fun CreatedProblemOwnerPane(
             )
             CreatedProblemDetailLine(
                 stringResource(Res.string.problem_details_requirement_submit, problem.submitUntilLabel)
+            )
+            CompetitionLifecycleActionSection(
+                problem = problem,
+                registeredParticipants = createdProblem.registeredParticipants,
+                uiState = competitionActionState,
+                isLoggedIn = isLoggedIn,
+                onRequireLogin = onRequireLogin,
+                onSettle = onSettle,
+                onCancel = onCancel,
             )
             createdProblemDetailLines(createdProblem).forEach { line ->
                 CreatedProblemDetailLine(line)

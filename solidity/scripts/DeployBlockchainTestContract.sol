@@ -4,14 +4,14 @@ pragma solidity ^0.8.24;
 import {console2} from "forge-std/console2.sol";
 import {Script} from "forge-std/Script.sol";
 import {Upgrades} from "openzeppelin-foundry-upgrades/Upgrades.sol";
-import {BlockchainTestContract} from "contracts/BlockchainTestContract.sol";
+import {BlockchainTestContractV4} from "../contracts/BlockchainTestContractV4.sol";
 
 contract DeployBlockchainTestContract is Script {
-    string internal constant CONTRACT_NAME = "BlockchainTestContract.sol:BlockchainTestContract";
+    string internal constant CONTRACT_NAME = "BlockchainTestContractV4.sol:BlockchainTestContractV4";
 
     function run() external returns (address proxy, address implementation) {
         bytes memory initializerData = abi.encodeCall(
-            BlockchainTestContract.initialize,
+                BlockchainTestContractV4.initialize,
             (
                 initialOwner(),
                 initialOperator(),

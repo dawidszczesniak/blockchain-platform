@@ -3,16 +3,20 @@ pragma solidity ^0.8.24;
 
 import {console2} from "forge-std/console2.sol";
 import {Script} from "forge-std/Script.sol";
+import {Options} from "openzeppelin-foundry-upgrades/Options.sol";
 import {Upgrades} from "openzeppelin-foundry-upgrades/Upgrades.sol";
 
 contract UpgradeBlockchainTestContract is Script {
-    string internal constant CONTRACT_NAME = "BlockchainTestContract.sol:BlockchainTestContract";
+    string internal constant CONTRACT_NAME = "BlockchainTestContractV4.sol:BlockchainTestContractV4";
+    string internal constant REFERENCE_CONTRACT = "BlockchainTestContractV3.sol:BlockchainTestContractV3";
 
     function run() external returns (address implementation) {
         address proxy = proxyAddress();
+        Options memory opts;
+        opts.referenceContract = REFERENCE_CONTRACT;
 
         vm.startBroadcast(walletPrivateKey());
-        Upgrades.upgradeProxy(proxy, CONTRACT_NAME, "");
+        Upgrades.upgradeProxy(proxy, CONTRACT_NAME, "", opts);
         vm.stopBroadcast();
 
         implementation = Upgrades.getImplementationAddress(proxy);

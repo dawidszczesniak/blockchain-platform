@@ -18,10 +18,13 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.CreateProblem
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.CreatedProblemDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ConfirmCreateProblemRequestDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ConfirmJoinProblemRequestDto
+import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ConfirmSubmissionResultRequestDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.CancelCreateProblemValidationRequestDto
+import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.CompetitionLifecycleActionResponseDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.JoinProblemResponseDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ParticipationProblemDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.PrepareCreateProblemResponseDto
+import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.PrepareCompetitionLifecycleActionResponseDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.PrepareJoinProblemResponseDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ProblemExampleDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ProblemSummaryDto
@@ -33,6 +36,7 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.SubmitProblem
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ValidateCreateProblemRequestDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ValidateCreateProblemResponseDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.CreateProblemValidationTestResultDto
+import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ConfirmCompetitionLifecycleActionRequestDto
 
 interface ProblemRemoteDataSource {
     suspend fun fetchProblems(): List<ProblemSummaryDto>
@@ -45,8 +49,19 @@ interface ProblemRemoteDataSource {
     suspend fun cancelCreateProblemValidation(runId: String)
     suspend fun prepareJoinProblemOnChain(problemId: Int): PrepareJoinProblemResponseDto
     suspend fun confirmJoinProblemOnChain(problemId: Int, request: ConfirmJoinProblemRequestDto): JoinProblemResponseDto
+    suspend fun prepareSettleCompetitionOnChain(problemId: Int): PrepareCompetitionLifecycleActionResponseDto
+    suspend fun confirmSettleCompetitionOnChain(
+        problemId: Int,
+        request: ConfirmCompetitionLifecycleActionRequestDto,
+    ): CompetitionLifecycleActionResponseDto
+    suspend fun prepareCancelCompetitionOnChain(problemId: Int): PrepareCompetitionLifecycleActionResponseDto
+    suspend fun confirmCancelCompetitionOnChain(
+        problemId: Int,
+        request: ConfirmCompetitionLifecycleActionRequestDto,
+    ): CompetitionLifecycleActionResponseDto
     suspend fun runProblemCode(problemId: Int, request: RunProblemRequestDto): RunProblemResponseDto
     suspend fun submitProblemCode(problemId: Int, request: RunProblemRequestDto): SubmissionJudgeJobDto
+    suspend fun confirmSubmissionOnChain(submissionId: Long, request: ConfirmSubmissionResultRequestDto): SubmitProblemResponseDto
     suspend fun fetchSubmissionJudgeJob(jobId: Long): SubmissionJudgeJobDto
     suspend fun retrySubmissionJudgeJob(jobId: Long): SubmissionJudgeJobDto
 }
@@ -86,6 +101,11 @@ class ProblemRemoteDataSourceImpl(
                 daysToJoinEnd = obj.requiredInt("daysToJoinEnd"),
                 joinUntilLabel = obj.requiredString("joinUntilLabel"),
                 submitUntilLabel = obj.requiredString("submitUntilLabel"),
+                onchainCompetitionId = obj.optionalLong("onchainCompetitionId"),
+                creatorWalletAddress = obj.optionalString("creatorWalletAddress"),
+                joinDeadlineEpochSeconds = obj.optionalLong("joinDeadlineEpochSeconds"),
+                submitDeadlineEpochSeconds = obj.optionalLong("submitDeadlineEpochSeconds"),
+                onchainSettlementStatus = obj.optionalString("onchainSettlementStatus"),
             )
         }
     }
@@ -209,6 +229,50 @@ class ProblemRemoteDataSourceImpl(
         return json.decodeFromString(JoinProblemResponseDto.serializer(), payload)
     }
 
+    override suspend fun prepareSettleCompetitionOnChain(problemId: Int): PrepareCompetitionLifecycleActionResponseDto {
+        val json = Json { ignoreUnknownKeys = true }
+        val payload = httpTextClient.postJson(
+            endpoint(apiBaseUrl, "/problems/$problemId/settle/prepare"),
+            "{}",
+        )
+        return json.decodeFromString(PrepareCompetitionLifecycleActionResponseDto.serializer(), payload)
+    }
+
+    override suspend fun confirmSettleCompetitionOnChain(
+        problemId: Int,
+        request: ConfirmCompetitionLifecycleActionRequestDto,
+    ): CompetitionLifecycleActionResponseDto {
+        val json = Json { ignoreUnknownKeys = true }
+        val body = json.encodeToString(ConfirmCompetitionLifecycleActionRequestDto.serializer(), request)
+        val payload = httpTextClient.postJson(
+            endpoint(apiBaseUrl, "/problems/$problemId/settle/confirm"),
+            body,
+        )
+        return json.decodeFromString(CompetitionLifecycleActionResponseDto.serializer(), payload)
+    }
+
+    override suspend fun prepareCancelCompetitionOnChain(problemId: Int): PrepareCompetitionLifecycleActionResponseDto {
+        val json = Json { ignoreUnknownKeys = true }
+        val payload = httpTextClient.postJson(
+            endpoint(apiBaseUrl, "/problems/$problemId/cancel/prepare"),
+            "{}",
+        )
+        return json.decodeFromString(PrepareCompetitionLifecycleActionResponseDto.serializer(), payload)
+    }
+
+    override suspend fun confirmCancelCompetitionOnChain(
+        problemId: Int,
+        request: ConfirmCompetitionLifecycleActionRequestDto,
+    ): CompetitionLifecycleActionResponseDto {
+        val json = Json { ignoreUnknownKeys = true }
+        val body = json.encodeToString(ConfirmCompetitionLifecycleActionRequestDto.serializer(), request)
+        val payload = httpTextClient.postJson(
+            endpoint(apiBaseUrl, "/problems/$problemId/cancel/confirm"),
+            body,
+        )
+        return json.decodeFromString(CompetitionLifecycleActionResponseDto.serializer(), payload)
+    }
+
     override suspend fun runProblemCode(
         problemId: Int,
         request: RunProblemRequestDto,
@@ -259,6 +323,19 @@ class ProblemRemoteDataSourceImpl(
             body,
         )
         return json.decodeFromString(SubmissionJudgeJobDto.serializer(), payload)
+    }
+
+    override suspend fun confirmSubmissionOnChain(
+        submissionId: Long,
+        request: ConfirmSubmissionResultRequestDto,
+    ): SubmitProblemResponseDto {
+        val json = Json { ignoreUnknownKeys = true }
+        val body = json.encodeToString(ConfirmSubmissionResultRequestDto.serializer(), request)
+        val payload = httpTextClient.postJson(
+            endpoint(apiBaseUrl, "/problems/submissions/$submissionId/confirm"),
+            body,
+        )
+        return json.decodeFromString(SubmitProblemResponseDto.serializer(), payload)
     }
 
     override suspend fun fetchSubmissionJudgeJob(jobId: Long): SubmissionJudgeJobDto {

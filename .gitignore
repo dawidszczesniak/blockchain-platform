@@ -30,3 +30,7 @@ Thumbs.db
 *.log
 __pycache__/
 *.pyc
+
+# Local helper notes
+upgrade_instructions.txt
+sepolia_contract_addresses.txt

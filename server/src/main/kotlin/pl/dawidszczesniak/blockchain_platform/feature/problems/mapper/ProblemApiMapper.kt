@@ -34,6 +34,11 @@ internal fun ProblemSummary.toDto(): ProblemSummaryDto {
         daysToJoinEnd = daysToJoinEnd,
         joinUntilLabel = joinUntilLabel,
         submitUntilLabel = submitUntilLabel,
+        onchainCompetitionId = onchainCompetitionId,
+        creatorWalletAddress = creatorWalletAddress,
+        joinDeadlineEpochSeconds = joinDeadlineEpochSeconds,
+        submitDeadlineEpochSeconds = submitDeadlineEpochSeconds,
+        onchainSettlementStatus = onchainSettlementStatus,
     )
 }
 

@@ -722,21 +722,75 @@ private external fun signPersonalMessage(
 @JsFun(
     """
 async (walletId, walletAddress, to, data, valueHex) => {
+  const toMessage = (value) => {
+    return typeof value === "string" ? value.trim() : "";
+  };
+  const pushMessage = (messages, value) => {
+    const message = toMessage(value);
+    if (message.length > 0 && !messages.includes(message)) {
+      messages.push(message);
+    }
+  };
+  const extractHexData = (value) => {
+    if (typeof value === "string") {
+      const match = value.match(/0x[0-9a-fA-F]{8,}/);
+      return match ? match[0] : null;
+    }
+    if (value && typeof value === "object") {
+      return extractHexData(value.data) || extractHexData(value.message) || null;
+    }
+    return null;
+  };
+  const collectMessages = (value, messages) => {
+    if (!value || typeof value !== "object") {
+      return;
+    }
+    pushMessage(messages, value.message);
+    pushMessage(messages, value.reason);
+    pushMessage(messages, value.details);
+    pushMessage(messages, value.shortMessage);
+    collectMessages(value.error, messages);
+    collectMessages(value.data, messages);
+    collectMessages(value.originalError, messages);
+    collectMessages(value.cause, messages);
+    if (typeof value.body === "string") {
+      pushMessage(messages, value.body);
+      try {
+        const parsed = JSON.parse(value.body);
+        collectMessages(parsed, messages);
+      } catch (_) {
+      }
+    }
+  };
   const providerRegistry = globalThis.__bpWalletProviders || {};
   const provider = providerRegistry[walletId];
   if (!provider || typeof provider.request !== "function") {
     throw new Error("Selected wallet is not available. Refresh wallet list.");
   }
-  const txHash = await provider.request({
-    method: "eth_sendTransaction",
-    params: [{
-      from: String(walletAddress),
-      to: String(to),
-      data: String(data),
-      value: String(valueHex || "0x0"),
-    }],
-  });
-  return String(txHash);
+  try {
+    const txHash = await provider.request({
+      method: "eth_sendTransaction",
+      params: [{
+        from: String(walletAddress),
+        to: String(to),
+        data: String(data),
+        value: String(valueHex || "0x0"),
+      }],
+    });
+    return String(txHash);
+  } catch (error) {
+    const messages = [];
+    collectMessages(error, messages);
+    const payload = {
+      message: messages[0] || "Wallet transaction request failed.",
+      walletError: {
+        messages,
+        code: error && typeof error === "object" && "code" in error ? error.code : null,
+        revertData: extractHexData(error),
+      },
+    };
+    throw new Error(JSON.stringify(payload));
+  }
 }
 """
 )

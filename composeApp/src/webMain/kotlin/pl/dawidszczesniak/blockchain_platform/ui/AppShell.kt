@@ -132,6 +132,9 @@ fun AppShell(
                             CreatedProblemDetailsScreen(
                                 problem = route.problem,
                                 createdProblem = route.createdProblem,
+                                viewModel = problemDetailsViewModel,
+                                isLoggedIn = isLoggedIn,
+                                onRequireLogin = onLoginClick,
                                 onBackToMyProblems = { onNavigate(Route.MyProblems) },
                             )
                         }

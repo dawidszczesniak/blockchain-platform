@@ -211,6 +211,12 @@
     <string name="problem_details_requirement_start">Start za: %1$s</string>
     <string name="problem_details_requirement_join">Rejestracja do: %1$s</string>
     <string name="problem_details_requirement_submit">Zgłoszenia do: %1$s</string>
+    <string name="problem_details_action_title">Akcje on-chain</string>
+    <string name="problem_details_action_settle">Rozlicz Konkurs</string>
+    <string name="problem_details_action_settle_loading">Rozliczanie...</string>
+    <string name="problem_details_action_cancel">Anuluj Konkurs</string>
+    <string name="problem_details_action_cancel_loading">Anulowanie...</string>
+    <string name="problem_details_action_unlock_at">Opcja zostanie odblokowana: %1$s</string>
     <string name="problem_details_editor_title">Edytor kodu</string>
     <string name="problem_details_editor_language">Język</string>
     <string name="problem_details_editor_run">RUN</string>
@@ -235,6 +241,7 @@
     <string name="problem_details_run_result_expected">Oczekiwane: %1$s</string>
     <string name="problem_details_run_result_actual">Otrzymane: %1$s</string>
     <string name="problem_details_run_result_hidden_failed">Ukryty test niezaliczony.</string>
+    <string name="problem_details_copy_details">Kopiuj szczegóły</string>
     <string name="problem_details_submit_submitting">Wysyłanie rozwiązania...</string>
     <string name="problem_details_submit_popup_countdown">Pozostały czas oczekiwania: %1$s</string>
     <string name="problem_details_submit_popup_ok">OK</string>
@@ -248,7 +255,12 @@
     <string name="problem_details_submit_sandbox_result_hash">Hash wyniku sandboxa: %1$s</string>
     <string name="problem_details_submit_proxy_address">Proxy BlockchainTestContract: %1$s</string>
     <string name="problem_details_submit_tx_hash">Tx zapisu on-chain: %1$s</string>
+    <string name="problem_details_submit_tx_hash_missing">Tx zapisu on-chain: brak jeszcze potwierdzonego hash-a</string>
     <string name="problem_details_submit_explorer">Otwórz transakcję w explorerze: %1$s</string>
+    <string name="problem_details_submit_onchain_status_title">Status zapisu on-chain</string>
+    <string name="problem_details_submit_onchain_pending_no_tx">Judge przeszedł, ale transakcja zapisu on-chain nie została jeszcze wysłana albo potwierdzona.</string>
+    <string name="problem_details_submit_onchain_pending_with_tx">Judge przeszedł, ale backend nie potwierdził jeszcze zapisu on-chain dla tej transakcji.</string>
+    <string name="problem_details_submit_onchain_error_title">Błąd zapisu on-chain</string>
 
     <string name="problem_title_template">Problem #%1$d – Optymalizacja algorytmu (%2$s)</string>
 

@@ -79,6 +79,19 @@ internal data class CompetitionSettlementSnapshot(
     val settlementStatus: String,
 )
 
+internal data class CompetitionLifecycleContext(
+    val problemId: Int,
+    val competitionId: Long,
+    val creatorWalletAddress: String,
+    val prizeAmountAtomic: String,
+    val requiredParticipants: Int,
+    val registeredParticipants: Int,
+    val joinUntilDate: LocalDate,
+    val submitUntilDate: LocalDate,
+    val settlementStatus: String,
+    val existingTxHash: String? = null,
+)
+
 internal data class ProblemSettlementCandidate(
     val submissionId: Long,
     val userId: Long,
@@ -134,13 +147,14 @@ internal data class SubmissionNodeAttestationDraft(
 )
 
 internal data class SubmissionRecordDraft(
+    val onchainSubmissionId: Long,
     val problemId: Int,
     val userId: Long,
     val status: SubmissionAttemptStatus,
     val sourceCode: String,
     val language: String,
     val codeHash: String,
-    val testsHash: String,
+    val challengeHash: String,
     val resultHash: String,
     val consensusImageHash: String?,
     val consensusNodes: Int,
@@ -153,6 +167,26 @@ internal data class SubmissionRecordDraft(
 
 internal data class PersistedSubmissionRecord(
     val submissionId: Long,
+    val onchainSubmissionId: Long,
+)
+
+internal data class SubmissionOnchainConfirmationContext(
+    val submissionId: Long,
+    val onchainSubmissionId: Long,
+    val problemId: Int,
+    val competitionId: Long,
+    val participantWalletAddress: String,
+    val codeHash: String,
+    val challengeHash: String,
+    val resultHash: String,
+    val consensusImageHash: String,
+    val consensusNodes: Int,
+    val commitmentHash: String,
+    val runtimeMs: Int,
+    val memoryUsedKb: Int,
+    val resultPayloadJson: String?,
+    val onchainRecordTxHash: String?,
+    val onchainRecordedAt: Instant?,
 )
 
 internal data class SubmissionReceiptRetryContext(
@@ -194,8 +228,12 @@ internal interface ProblemWriteRepository {
     fun markSubmissionResultPendingError(submissionId: Long, error: String, txHash: String? = null)
     fun markSubmissionResultFailed(submissionId: Long, error: String)
     fun fetchSubmissionReceiptRetryContext(submissionId: Long): SubmissionReceiptRetryContext?
+    fun fetchSubmissionOnchainConfirmationContext(userId: Long, submissionId: Long): SubmissionOnchainConfirmationContext?
+    fun updateSubmissionAcceptedResultPayload(submissionId: Long, payloadJson: String)
     fun fetchCompetitionSettlementSnapshot(problemId: Int): CompetitionSettlementSnapshot?
+    fun fetchCompetitionLifecycleContext(problemId: Int): CompetitionLifecycleContext?
     fun fetchBestSettlementCandidate(problemId: Int): ProblemSettlementCandidate?
+    fun findUserIdByWalletAddress(walletAddress: String): Long?
     fun recordSettledWinner(
         problemId: Int,
         winnerUserId: Long,

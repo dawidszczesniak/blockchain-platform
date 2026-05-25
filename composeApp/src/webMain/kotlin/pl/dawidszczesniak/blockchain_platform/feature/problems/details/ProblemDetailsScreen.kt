@@ -53,7 +53,10 @@ import androidx.compose.ui.unit.dp
 import blockchain_platform.composeapp.generated.resources.Res
 import blockchain_platform.composeapp.generated.resources.days_count
 import blockchain_platform.composeapp.generated.resources.problem_details_back
+import blockchain_platform.composeapp.generated.resources.problem_details_action_cancel_loading
+import blockchain_platform.composeapp.generated.resources.problem_details_action_settle_loading
 import blockchain_platform.composeapp.generated.resources.problem_details_constraints_title
+import blockchain_platform.composeapp.generated.resources.problem_details_copy_details
 import blockchain_platform.composeapp.generated.resources.problem_details_editor_language
 import blockchain_platform.composeapp.generated.resources.problem_details_editor_locked_join_action
 import blockchain_platform.composeapp.generated.resources.problem_details_editor_locked_join_action_loading
@@ -79,9 +82,14 @@ import blockchain_platform.composeapp.generated.resources.problem_details_run_ru
 import blockchain_platform.composeapp.generated.resources.problem_details_submit_consensus
 import blockchain_platform.composeapp.generated.resources.problem_details_submit_error_prefix
 import blockchain_platform.composeapp.generated.resources.problem_details_submit_hash
+import blockchain_platform.composeapp.generated.resources.problem_details_submit_onchain_error_title
+import blockchain_platform.composeapp.generated.resources.problem_details_submit_onchain_pending_no_tx
+import blockchain_platform.composeapp.generated.resources.problem_details_submit_onchain_pending_with_tx
+import blockchain_platform.composeapp.generated.resources.problem_details_submit_onchain_status_title
 import blockchain_platform.composeapp.generated.resources.problem_details_submit_proxy_address
 import blockchain_platform.composeapp.generated.resources.problem_details_submit_explorer
 import blockchain_platform.composeapp.generated.resources.problem_details_submit_tx_hash
+import blockchain_platform.composeapp.generated.resources.problem_details_submit_tx_hash_missing
 import blockchain_platform.composeapp.generated.resources.problem_details_submit_runtime
 import blockchain_platform.composeapp.generated.resources.problem_details_submit_result_title
 import blockchain_platform.composeapp.generated.resources.problem_details_submit_sandbox_result_hash
@@ -114,6 +122,7 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.RunProblemTes
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.SubmitProblemResponseDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.statement.ProblemStatementContent
 import pl.dawidszczesniak.blockchain_platform.feature.problems.statement.decodeProblemDescription
+import pl.dawidszczesniak.blockchain_platform.platform.copyTextToClipboard
 import pl.dawidszczesniak.blockchain_platform.ui.AppSurface
 
 @Composable
@@ -137,6 +146,7 @@ fun ProblemDetailsScreen(
         )
     }
     val gateState by viewModel.state.collectAsState()
+    val competitionActionState by viewModel.competitionActionState.collectAsState()
     LaunchedEffect(problem.id, isLoggedIn) {
         viewModel.load(
             problemId = problem.id,
@@ -144,6 +154,7 @@ fun ProblemDetailsScreen(
             requiredParticipants = problem.requiredParticipants,
             isLoggedIn = isLoggedIn,
         )
+        viewModel.loadCompetitionLifecycle(problem.id)
     }
 
     val registeredParticipants = max(
@@ -205,6 +216,12 @@ fun ProblemDetailsScreen(
                             modifier = Modifier.fillMaxWidth(),
                             problem = problem,
                             statementContent = statementContent,
+                            registeredParticipants = registeredParticipants,
+                            competitionActionState = competitionActionState,
+                            isLoggedIn = isLoggedIn,
+                            onRequireLogin = onRequireLogin,
+                            onSettle = { viewModel.settleCompetition(problem.id) },
+                            onCancel = { viewModel.cancelCompetition(problem.id) },
                         )
                         CodeEditorPane(
                             modifier = Modifier
@@ -218,7 +235,10 @@ fun ProblemDetailsScreen(
                             runErrorMessage = gateState.runErrorMessage,
                             runResult = gateState.runResult,
                             isSubmitting = gateState.isSubmitting,
+                            submitErrorMessage = gateState.submitErrorMessage,
                             submitResult = gateState.submitResult,
+                            submitInlineStatusMessage = gateState.submitInlineStatusMessage,
+                            submitInlineErrorMessage = gateState.submitInlineErrorMessage,
                             onRun = { viewModel.run(problem.id, solutionCode, "kotlin") },
                             onSubmit = { viewModel.submit(problem.id, solutionCode, "kotlin") },
                             onJoinRequest = {
@@ -242,6 +262,12 @@ fun ProblemDetailsScreen(
                                 .fillMaxHeight(),
                             problem = problem,
                             statementContent = statementContent,
+                            registeredParticipants = registeredParticipants,
+                            competitionActionState = competitionActionState,
+                            isLoggedIn = isLoggedIn,
+                            onRequireLogin = onRequireLogin,
+                            onSettle = { viewModel.settleCompetition(problem.id) },
+                            onCancel = { viewModel.cancelCompetition(problem.id) },
                         )
                         CodeEditorPane(
                             modifier = Modifier
@@ -255,7 +281,10 @@ fun ProblemDetailsScreen(
                             runErrorMessage = gateState.runErrorMessage,
                             runResult = gateState.runResult,
                             isSubmitting = gateState.isSubmitting,
+                            submitErrorMessage = gateState.submitErrorMessage,
                             submitResult = gateState.submitResult,
+                            submitInlineStatusMessage = gateState.submitInlineStatusMessage,
+                            submitInlineErrorMessage = gateState.submitInlineErrorMessage,
                             onRun = { viewModel.run(problem.id, solutionCode, "kotlin") },
                             onSubmit = { viewModel.submit(problem.id, solutionCode, "kotlin") },
                             onJoinRequest = {
@@ -272,6 +301,17 @@ fun ProblemDetailsScreen(
         }
 
         when {
+            competitionActionState.isSettling || competitionActionState.isCancelling -> {
+                ProblemDetailsProgressOverlay(
+                    message = competitionActionState.statusMessage?.takeIf { it.isNotBlank() }
+                        ?: if (competitionActionState.isSettling) {
+                            stringResource(Res.string.problem_details_action_settle_loading)
+                        } else {
+                            stringResource(Res.string.problem_details_action_cancel_loading)
+                        },
+                )
+            }
+
             gateState.isJoining -> {
                 ProblemDetailsProgressOverlay(
                     message = gateState.joinStatusMessage?.takeIf { it.isNotBlank() }
@@ -322,6 +362,12 @@ private fun ProblemStatementPane(
     modifier: Modifier,
     problem: ProblemSummary,
     statementContent: ProblemStatementContent,
+    registeredParticipants: Int,
+    competitionActionState: CompetitionLifecycleActionState,
+    isLoggedIn: Boolean,
+    onRequireLogin: () -> Unit,
+    onSettle: () -> Unit,
+    onCancel: () -> Unit,
 ) {
     val detailsScroll = rememberScrollState()
 
@@ -395,6 +441,15 @@ private fun ProblemStatementPane(
             )
             DetailLine(stringResource(Res.string.problem_details_requirement_join, problem.joinUntilLabel))
             DetailLine(stringResource(Res.string.problem_details_requirement_submit, problem.submitUntilLabel))
+            CompetitionLifecycleActionSection(
+                problem = problem,
+                registeredParticipants = registeredParticipants,
+                uiState = competitionActionState,
+                isLoggedIn = isLoggedIn,
+                onRequireLogin = onRequireLogin,
+                onSettle = onSettle,
+                onCancel = onCancel,
+            )
         }
     }
 }
@@ -443,13 +498,24 @@ private fun CodeEditorPane(
     runErrorMessage: String?,
     runResult: RunProblemResponseDto?,
     isSubmitting: Boolean,
+    submitErrorMessage: String?,
     submitResult: SubmitProblemResponseDto?,
+    submitInlineStatusMessage: String?,
+    submitInlineErrorMessage: String?,
     onRun: () -> Unit,
     onSubmit: () -> Unit,
     onJoinRequest: () -> Unit,
 ) {
     val editorBlocked = overlayState.show
     val paneScroll = rememberScrollState()
+    val copyPayload = visiblePaneCopyPayload(
+        runErrorMessage = runErrorMessage,
+        runResult = runResult,
+        submitErrorMessage = submitErrorMessage,
+        submitResult = submitResult,
+        submitInlineStatusMessage = submitInlineStatusMessage,
+        submitInlineErrorMessage = submitInlineErrorMessage,
+    )
 
     Box(modifier = modifier) {
         AppSurface(modifier = Modifier.fillMaxSize()) {
@@ -508,6 +574,14 @@ private fun CodeEditorPane(
                         Text(stringResource(Res.string.problem_details_editor_submit))
                     }
                 }
+                copyPayload?.let { payload ->
+                    Spacer(Modifier.height(4.dp))
+                    TextButton(
+                        onClick = { copyTextToClipboard(payload) },
+                    ) {
+                        Text(stringResource(Res.string.problem_details_copy_details))
+                    }
+                }
                 Spacer(Modifier.height(10.dp))
                 if (!runErrorMessage.isNullOrBlank()) {
                     Text(
@@ -523,7 +597,11 @@ private fun CodeEditorPane(
                 } else if (runResult != null) {
                     RunResultsPane(result = runResult)
                 } else if (submitResult != null) {
-                    SubmitResultPane(result = submitResult)
+                    SubmitResultPane(
+                        result = submitResult,
+                        onchainStatusMessage = submitInlineStatusMessage,
+                        onchainErrorMessage = submitInlineErrorMessage,
+                    )
                 }
             }
         }
@@ -625,7 +703,7 @@ private fun CodeEditorPane(
 }
 
 @Composable
-private fun ProblemDetailsProgressOverlay(message: String) {
+internal fun ProblemDetailsProgressOverlay(message: String) {
     val loadingDotsCount = rememberJoinOverlayLoadingDotsCount()
     Box(
         modifier = Modifier
@@ -832,62 +910,81 @@ private external fun currentEpochMillisJs(): Double
 private fun currentEpochMillis(): Long = currentEpochMillisJs().toLong()
 
 @Composable
-private fun SubmitResultPane(result: SubmitProblemResponseDto) {
+private fun SubmitResultPane(
+    result: SubmitProblemResponseDto,
+    onchainStatusMessage: String?,
+    onchainErrorMessage: String?,
+) {
     val summaryMemoryUsedKb = result.memoryUsedKb ?: result.results.mapNotNull { it.memoryUsedKb }.maxOrNull()
+    val txHashText = if (result.txHash.isBlank()) {
+        stringResource(Res.string.problem_details_submit_tx_hash_missing)
+    } else {
+        stringResource(Res.string.problem_details_submit_tx_hash, result.txHash)
+    }
+    val effectiveOnchainStatusMessage = onchainStatusMessage?.takeIf { it.isNotBlank() } ?: when {
+        result.onchainRecorded -> null
+        result.txHash.isBlank() -> stringResource(Res.string.problem_details_submit_onchain_pending_no_tx)
+        else -> stringResource(Res.string.problem_details_submit_onchain_pending_with_tx)
+    }
+    val onchainStateColor = if (!onchainErrorMessage.isNullOrBlank() || !effectiveOnchainStatusMessage.isNullOrBlank()) {
+        MaterialTheme.colorScheme.error
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    }
     Text(
         text = stringResource(Res.string.problem_details_submit_result_title),
         style = MaterialTheme.typography.titleSmall,
     )
     Spacer(Modifier.height(6.dp))
-    Text(
-        text = stringResource(Res.string.problem_details_run_result_passed, result.passed, result.total),
-        style = MaterialTheme.typography.bodyMedium,
-        color = if (result.allPassed) {
-            MaterialTheme.colorScheme.primary
-        } else {
-            MaterialTheme.colorScheme.onSurface
-        },
-    )
-    Text(
-        text = stringResource(
-            Res.string.problem_details_submit_consensus,
-            result.consensusReached,
-            result.consensusRequired,
-        ),
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
-    Text(
-        text = stringResource(Res.string.problem_details_submit_runtime, result.runtimeMs),
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
-    summaryMemoryUsedKb?.let { memoryUsedKb ->
-        Text(
-            text = "Memory: ${memoryUsedKb} KB",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-    Text(
-        text = stringResource(Res.string.problem_details_submit_hash, result.commitmentHash),
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
-    Text(
-        text = stringResource(Res.string.problem_details_submit_sandbox_result_hash, result.sandboxResultHash),
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
-    result.sandboxImageHash?.takeIf { it.isNotBlank() }?.let { imageHash ->
-        Text(
-            text = "Sandbox image hash: $imageHash",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
     SelectionContainer {
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                text = stringResource(Res.string.problem_details_run_result_passed, result.passed, result.total),
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (result.allPassed) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                },
+            )
+            Text(
+                text = stringResource(
+                    Res.string.problem_details_submit_consensus,
+                    result.consensusReached,
+                    result.consensusRequired,
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                text = stringResource(Res.string.problem_details_submit_runtime, result.runtimeMs),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            summaryMemoryUsedKb?.let { memoryUsedKb ->
+                Text(
+                    text = "Memory: ${memoryUsedKb} KB",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Text(
+                text = stringResource(Res.string.problem_details_submit_hash, result.commitmentHash),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                text = stringResource(Res.string.problem_details_submit_sandbox_result_hash, result.sandboxResultHash),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            result.sandboxImageHash?.takeIf { it.isNotBlank() }?.let { imageHash ->
+                Text(
+                    text = "Sandbox image hash: $imageHash",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             Text(
                 text = stringResource(
                     Res.string.problem_details_submit_proxy_address,
@@ -897,12 +994,13 @@ private fun SubmitResultPane(result: SubmitProblemResponseDto) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-                text = stringResource(
-                    Res.string.problem_details_submit_tx_hash,
-                    result.txHash,
-                ),
+                text = txHashText,
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = if (result.txHash.isBlank()) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
             )
             result.explorerUrl?.takeIf { it.isNotBlank() }?.let { url ->
                 Text(
@@ -911,8 +1009,142 @@ private fun SubmitResultPane(result: SubmitProblemResponseDto) {
                     color = MaterialTheme.colorScheme.primary,
                 )
             }
+            effectiveOnchainStatusMessage?.let { message ->
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = stringResource(Res.string.problem_details_submit_onchain_status_title),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = onchainStateColor,
+                )
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = onchainStateColor,
+                )
+            }
         }
     }
+    onchainErrorMessage?.takeIf { it.isNotBlank() }?.let { message ->
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = stringResource(Res.string.problem_details_submit_onchain_error_title),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+        )
+        Spacer(Modifier.height(4.dp))
+        ErrorConsoleMessage(
+            message = message,
+            isError = true,
+        )
+    }
+}
+
+@Composable
+private fun visiblePaneCopyPayload(
+    runErrorMessage: String?,
+    runResult: RunProblemResponseDto?,
+    submitErrorMessage: String?,
+    submitResult: SubmitProblemResponseDto?,
+    submitInlineStatusMessage: String?,
+    submitInlineErrorMessage: String?,
+): String? {
+    return when {
+        !runErrorMessage.isNullOrBlank() -> {
+            buildString {
+                appendLine(stringResource(Res.string.problem_details_run_error_console_title))
+                append(runErrorMessage)
+            }
+        }
+
+        runResult != null -> buildRunResultCopyPayload(runResult)
+        submitResult != null -> buildSubmitResultCopyPayload(
+            result = submitResult,
+            onchainStatusMessage = submitInlineStatusMessage,
+            onchainErrorMessage = submitInlineErrorMessage ?: submitErrorMessage,
+        )
+
+        else -> null
+    }
+}
+
+@Composable
+private fun buildSubmitResultCopyPayload(
+    result: SubmitProblemResponseDto,
+    onchainStatusMessage: String?,
+    onchainErrorMessage: String?,
+): String {
+    val summaryMemoryUsedKb = result.memoryUsedKb ?: result.results.mapNotNull { it.memoryUsedKb }.maxOrNull()
+    val effectiveOnchainStatusMessage = onchainStatusMessage?.takeIf { it.isNotBlank() } ?: when {
+        result.onchainRecorded -> null
+        result.txHash.isBlank() -> stringResource(Res.string.problem_details_submit_onchain_pending_no_tx)
+        else -> stringResource(Res.string.problem_details_submit_onchain_pending_with_tx)
+    }
+    val lines = buildList {
+        add(stringResource(Res.string.problem_details_submit_result_title))
+        add(stringResource(Res.string.problem_details_run_result_passed, result.passed, result.total))
+        add(
+            stringResource(
+                Res.string.problem_details_submit_consensus,
+                result.consensusReached,
+                result.consensusRequired,
+            ),
+        )
+        add(stringResource(Res.string.problem_details_submit_runtime, result.runtimeMs))
+        summaryMemoryUsedKb?.let { add("Memory: ${it} KB") }
+        add(stringResource(Res.string.problem_details_submit_hash, result.commitmentHash))
+        add(stringResource(Res.string.problem_details_submit_sandbox_result_hash, result.sandboxResultHash))
+        result.sandboxImageHash?.takeIf { it.isNotBlank() }?.let { add("Sandbox image hash: $it") }
+        add(stringResource(Res.string.problem_details_submit_proxy_address, result.proxyAddress))
+        add(
+            if (result.txHash.isBlank()) {
+                stringResource(Res.string.problem_details_submit_tx_hash_missing)
+            } else {
+                stringResource(Res.string.problem_details_submit_tx_hash, result.txHash)
+            },
+        )
+        result.explorerUrl?.takeIf { it.isNotBlank() }?.let {
+            add(stringResource(Res.string.problem_details_submit_explorer, it))
+        }
+        effectiveOnchainStatusMessage?.let {
+            add(stringResource(Res.string.problem_details_submit_onchain_status_title))
+            add(it)
+        }
+        onchainErrorMessage?.takeIf { it.isNotBlank() }?.let {
+            add(stringResource(Res.string.problem_details_submit_onchain_error_title))
+            add(it)
+        }
+    }
+    return lines.joinToString(separator = "\n")
+}
+
+@Composable
+private fun buildRunResultCopyPayload(result: RunProblemResponseDto): String {
+    val summaryMemoryUsedKb = result.memoryUsedKb ?: result.results.mapNotNull { it.memoryUsedKb }.maxOrNull()
+    val lines = buildList {
+        add(stringResource(Res.string.problem_details_run_result_passed, result.passed, result.total))
+        add("Runtime: ${result.runtimeMs} ms")
+        summaryMemoryUsedKb?.let { add("Memory: ${it} KB") }
+        result.results.forEach { testResult ->
+            add("")
+            add(stringResource(Res.string.problem_details_run_result_test_label, testResult.index))
+            add(runStatusLabel(testResult))
+            add(stringResource(Res.string.problem_details_run_result_time, testResult.executionTimeMs))
+            testResult.memoryUsedKb?.let { add("Memory: ${it} KB") }
+            if (testResult.hidden && !testResult.passed && testResult.message.isNullOrBlank()) {
+                add(stringResource(Res.string.problem_details_run_result_hidden_failed))
+            }
+            if (!testResult.hidden) {
+                testResult.expectedOutput?.takeIf { it.isNotBlank() }?.let {
+                    add(stringResource(Res.string.problem_details_run_result_expected, it))
+                }
+                testResult.actualOutput?.let {
+                    add(stringResource(Res.string.problem_details_run_result_actual, it))
+                }
+            }
+            testResult.message?.takeIf { it.isNotBlank() }?.let { add(it) }
+        }
+    }
+    return lines.joinToString(separator = "\n")
 }
 
 @Composable
