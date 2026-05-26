@@ -24,7 +24,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -37,9 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import blockchain_platform.composeapp.generated.resources.Res
-import blockchain_platform.composeapp.generated.resources.home_hero_description
 import blockchain_platform.composeapp.generated.resources.home_hero_primary_cta
-import blockchain_platform.composeapp.generated.resources.home_hero_secondary_cta
 import blockchain_platform.composeapp.generated.resources.home_hero_title_emphasis
 import blockchain_platform.composeapp.generated.resources.home_hero_title_lead
 import blockchain_platform.composeapp.generated.resources.home_stat_completed_note
@@ -48,7 +45,9 @@ import blockchain_platform.composeapp.generated.resources.home_stat_nodes_note
 import blockchain_platform.composeapp.generated.resources.home_stat_nodes_title
 import blockchain_platform.composeapp.generated.resources.home_stat_status_note
 import blockchain_platform.composeapp.generated.resources.home_stat_status_title
+import blockchain_platform.composeapp.generated.resources.home_updates_empty
 import blockchain_platform.composeapp.generated.resources.home_updates_title
+import blockchain_platform.composeapp.generated.resources.home_updates_unavailable
 import blockchain_platform.composeapp.generated.resources.nav_home
 import org.jetbrains.compose.resources.stringResource
 import pl.dawidszczesniak.blockchain_platform.di.LocalKoin
@@ -132,39 +131,18 @@ private fun HeroCopy(
             ),
             color = MaterialTheme.colorScheme.onSurface
         )
-        Spacer(Modifier.height(12.dp))
-        Text(
-            text = stringResource(Res.string.home_hero_description),
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
         Spacer(Modifier.height(18.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Button(
-                onClick = onNavigateToProblems,
-                shape = RoundedCornerShape(999.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary
-                )
-            ) {
-                Icon(Icons.AutoMirrored.Outlined.ArrowForward, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text(stringResource(Res.string.home_hero_primary_cta))
-            }
-            OutlinedButton(
-                onClick = { },
-                shape = RoundedCornerShape(999.dp),
-                colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = MaterialTheme.colorScheme.onSurface
-                ),
-                border = androidx.compose.foundation.BorderStroke(
-                    1.dp,
-                    MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)
-                )
-            ) {
-                Text(stringResource(Res.string.home_hero_secondary_cta))
-            }
+        Button(
+            onClick = onNavigateToProblems,
+            shape = RoundedCornerShape(999.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary
+            )
+        ) {
+            Icon(Icons.AutoMirrored.Outlined.ArrowForward, contentDescription = null)
+            Spacer(Modifier.width(8.dp))
+            Text(stringResource(Res.string.home_hero_primary_cta))
         }
     }
 }
@@ -305,8 +283,8 @@ private fun UpdatesList(
         if (updates.isEmpty()) {
             val emptyMessage = when {
                 state.isLoading -> null
-                state.errorMessage != null -> "Updates unavailable."
-                else -> "No updates yet."
+                state.errorMessage != null -> stringResource(Res.string.home_updates_unavailable)
+                else -> stringResource(Res.string.home_updates_empty)
             }
             AppSurface(
                 modifier = Modifier.fillMaxWidth(),

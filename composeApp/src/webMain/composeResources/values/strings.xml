@@ -158,6 +158,8 @@
     <string name="home_update_body_2">Faster test execution and deterministic scoring.</string>
     <string name="home_update_title_3">Payouts batch finalized</string>
     <string name="home_update_body_3">11 winners paid in the last reward cycle.</string>
+    <string name="home_updates_empty">No challenges added yet.</string>
+    <string name="home_updates_unavailable">Updates unavailable.</string>
 
     <string name="my_problem_participants">Participants: %1$d / %2$d</string>
     <string name="my_problem_started_on">Started: %1$s</string>
