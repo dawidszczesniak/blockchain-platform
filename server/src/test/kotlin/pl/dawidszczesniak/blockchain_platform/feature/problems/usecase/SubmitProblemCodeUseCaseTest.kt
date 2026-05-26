@@ -146,7 +146,7 @@ class SubmitProblemCodeUseCaseTest {
     }
 
     @Test
-    fun `stores max test execution time as submission runtime`() {
+    fun `stores summed cluster median runtime as submission runtime`() {
         val repository = FakeProblemWriteRepository(
             executionContext = ProblemExecutionContext(
                 problemId = 7,
@@ -240,12 +240,12 @@ class SubmitProblemCodeUseCaseTest {
             ),
         )
 
-        assertEquals(19, result.runtimeMs)
-        assertEquals(19, assertNotNull(repository.lastSubmissionDraft).runtimeMs)
+        assertEquals(30, result.runtimeMs)
+        assertEquals(30, assertNotNull(repository.lastSubmissionDraft).runtimeMs)
     }
 
     @Test
-    fun `falls back to max test execution time when suite runtime is unavailable`() {
+    fun `uses aggregated test runtimes when suite runtime is unavailable`() {
         val repository = FakeProblemWriteRepository(
             executionContext = ProblemExecutionContext(
                 problemId = 7,
@@ -338,12 +338,12 @@ class SubmitProblemCodeUseCaseTest {
             ),
         )
 
-        assertEquals(19, result.runtimeMs)
-        assertEquals(19, assertNotNull(repository.lastSubmissionDraft).runtimeMs)
+        assertEquals(30, result.runtimeMs)
+        assertEquals(30, assertNotNull(repository.lastSubmissionDraft).runtimeMs)
     }
 
     @Test
-    fun `runs sandbox three times and uses median of three worst case attempts as official metrics`() {
+    fun `runs one cluster pass and uses per test medians across consensus nodes as official metrics`() {
         val repository = FakeProblemWriteRepository(
             executionContext = ProblemExecutionContext(
                 problemId = 7,
@@ -403,7 +403,7 @@ class SubmitProblemCodeUseCaseTest {
                             maxMemoryUsedKb = 1_000,
                             maxExecutionTimeMs = 90,
                         ),
-                        suiteExecutionTimeMs = 100,
+                        suiteExecutionTimeMs = 172,
                     ),
                     validNodeRun(
                         nodeId = "sandbox-node-2",
@@ -413,7 +413,7 @@ class SubmitProblemCodeUseCaseTest {
                             maxMemoryUsedKb = 1_100,
                             maxExecutionTimeMs = 105,
                         ),
-                        suiteExecutionTimeMs = 105,
+                        suiteExecutionTimeMs = 202,
                     ),
                     validNodeRun(
                         nodeId = "sandbox-node-3",
@@ -423,71 +423,7 @@ class SubmitProblemCodeUseCaseTest {
                             maxMemoryUsedKb = 1_200,
                             maxExecutionTimeMs = 150,
                         ),
-                        suiteExecutionTimeMs = 150,
-                    ),
-                ),
-                listOf(
-                    validNodeRun(
-                        nodeId = "sandbox-node-1",
-                        nodeUrl = "http://sandbox-node-1",
-                        secret = secrets.getValue("sandbox-node-1"),
-                        results = acceptedAdditionResults(
-                            maxMemoryUsedKb = 800,
-                            maxExecutionTimeMs = 80,
-                        ),
-                        suiteExecutionTimeMs = 80,
-                    ),
-                    validNodeRun(
-                        nodeId = "sandbox-node-2",
-                        nodeUrl = "http://sandbox-node-2",
-                        secret = secrets.getValue("sandbox-node-2"),
-                        results = acceptedAdditionResults(
-                            maxMemoryUsedKb = 900,
-                            maxExecutionTimeMs = 95,
-                        ),
-                        suiteExecutionTimeMs = 95,
-                    ),
-                    validNodeRun(
-                        nodeId = "sandbox-node-3",
-                        nodeUrl = "http://sandbox-node-3",
-                        secret = secrets.getValue("sandbox-node-3"),
-                        results = acceptedAdditionResults(
-                            maxMemoryUsedKb = 950,
-                            maxExecutionTimeMs = 110,
-                        ),
-                        suiteExecutionTimeMs = 110,
-                    ),
-                ),
-                listOf(
-                    validNodeRun(
-                        nodeId = "sandbox-node-1",
-                        nodeUrl = "http://sandbox-node-1",
-                        secret = secrets.getValue("sandbox-node-1"),
-                        results = acceptedAdditionResults(
-                            maxMemoryUsedKb = 1_500,
-                            maxExecutionTimeMs = 180,
-                        ),
-                        suiteExecutionTimeMs = 180,
-                    ),
-                    validNodeRun(
-                        nodeId = "sandbox-node-2",
-                        nodeUrl = "http://sandbox-node-2",
-                        secret = secrets.getValue("sandbox-node-2"),
-                        results = acceptedAdditionResults(
-                            maxMemoryUsedKb = 1_600,
-                            maxExecutionTimeMs = 195,
-                        ),
-                        suiteExecutionTimeMs = 195,
-                    ),
-                    validNodeRun(
-                        nodeId = "sandbox-node-3",
-                        nodeUrl = "http://sandbox-node-3",
-                        secret = secrets.getValue("sandbox-node-3"),
-                        results = acceptedAdditionResults(
-                            maxMemoryUsedKb = 2_000,
-                            maxExecutionTimeMs = 220,
-                        ),
-                        suiteExecutionTimeMs = 220,
+                        suiteExecutionTimeMs = 292,
                     ),
                 ),
             )
@@ -509,13 +445,13 @@ class SubmitProblemCodeUseCaseTest {
             ),
         )
 
-        assertEquals(3, sandboxClient.runSolutionOnAllNodesCalls)
-        assertEquals(150, result.runtimeMs)
-        assertEquals(1_200, result.memoryUsedKb)
-        assertEquals(150, assertNotNull(repository.lastSubmissionDraft).runtimeMs)
-        assertEquals(1_200, repository.lastSubmissionDraft?.memoryUsedKb)
-        assertEquals(150, contractClient.lastRecord?.runtimeMs)
-        assertEquals(1_200, contractClient.lastRecord?.memoryUsedKb)
+        assertEquals(1, sandboxClient.runSolutionOnAllNodesCalls)
+        assertEquals(202, result.runtimeMs)
+        assertEquals(1_100, result.memoryUsedKb)
+        assertEquals(202, assertNotNull(repository.lastSubmissionDraft).runtimeMs)
+        assertEquals(1_100, repository.lastSubmissionDraft?.memoryUsedKb)
+        assertEquals(202, contractClient.lastRecord?.runtimeMs)
+        assertEquals(1_100, contractClient.lastRecord?.memoryUsedKb)
         assertFalse(contractClient.lastRecord?.onchainSubmissionId == result.submissionId)
     }
 }
@@ -643,7 +579,7 @@ private class FakeSandboxClient private constructor(
 
     companion object {
         fun repeated(nodeRuns: List<SandboxNodeRunOutput>): FakeSandboxClient {
-            return FakeSandboxClient(List(3) { nodeRuns })
+            return FakeSandboxClient(listOf(nodeRuns))
         }
 
         fun withAttempts(attemptNodeRuns: List<List<SandboxNodeRunOutput>>): FakeSandboxClient {
@@ -757,8 +693,6 @@ private fun fakePlatformContractConfig(): BlockchainPlatformContractConfig {
         operatorPrivateKey = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
         gasLimit = 700_000L,
         gasPriceWei = null,
-        receiptTimeoutMs = 120_000L,
-        receiptPollIntervalMs = 2_000L,
         explorerTxBaseUrl = "https://sepolia.etherscan.io/tx",
         prepareIntentTtlSeconds = 900,
     )

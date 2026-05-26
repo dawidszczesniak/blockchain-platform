@@ -37,8 +37,6 @@ internal data class BlockchainPlatformContractConfig(
     val operatorPrivateKey: String,
     val gasLimit: Long,
     val gasPriceWei: Long?,
-    val receiptTimeoutMs: Long,
-    val receiptPollIntervalMs: Long,
     val explorerTxBaseUrl: String?,
     val prepareIntentTtlSeconds: Int,
 ) {
@@ -80,14 +78,6 @@ internal data class BlockchainPlatformContractConfig(
                 gasPriceWei = env["ETH_PLATFORM_GAS_PRICE_WEI"]
                     ?.toLongOrNull()
                     ?.takeIf { it > 0L },
-                receiptTimeoutMs = env["ETH_PLATFORM_RECEIPT_TIMEOUT_MS"]
-                    ?.toLongOrNull()
-                    ?.coerceIn(5_000L, 300_000L)
-                    ?: DEFAULT_RECEIPT_TIMEOUT_MS,
-                receiptPollIntervalMs = env["ETH_PLATFORM_RECEIPT_POLL_INTERVAL_MS"]
-                    ?.toLongOrNull()
-                    ?.coerceIn(500L, 30_000L)
-                    ?: DEFAULT_RECEIPT_POLL_INTERVAL_MS,
                 explorerTxBaseUrl = blockchainConfig.explorerBaseUrl?.let { "$it/tx" },
                 prepareIntentTtlSeconds = env["ETH_PLATFORM_PREPARE_INTENT_TTL_SECONDS"]
                     ?.toIntOrNull()
@@ -924,8 +914,6 @@ private const val METHOD_SETTLE_COMPETITION = "settleCompetition"
 private const val METHOD_CANCEL_COMPETITION = "cancelCompetition"
 private const val METHOD_RECORD_SUBMISSION_RESULT = "recordSubmissionResult"
 private const val DEFAULT_GAS_LIMIT = 700_000L
-private const val DEFAULT_RECEIPT_TIMEOUT_MS = 300_000L
-private const val DEFAULT_RECEIPT_POLL_INTERVAL_MS = 2_000L
 private const val DEFAULT_PREPARE_INTENT_TTL_SECONDS = 900
 private const val ZERO_HEX = "0x0"
 private const val ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"

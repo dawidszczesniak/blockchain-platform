@@ -243,6 +243,14 @@
     <string name="problem_details_run_result_hidden_failed">Hidden test failed.</string>
     <string name="problem_details_copy_details">Copy details</string>
     <string name="problem_details_submit_submitting">Submitting solution...</string>
+    <string name="problem_details_submit_status_retry_onchain">Retrying the on-chain result record.</string>
+    <string name="problem_details_submit_status_retry_judging">Retrying the submission check.</string>
+    <string name="problem_details_submit_status_queue_waiting">Solution is waiting in the evaluation queue.</string>
+    <string name="problem_details_submit_status_queue_waiting_position">Solution is waiting in the evaluation queue. Position: %1$d.</string>
+    <string name="problem_details_submit_status_processing">Solution is being processed.</string>
+    <string name="problem_details_submit_status_confirm_wallet">Confirm the result record in your wallet.</string>
+    <string name="problem_details_submit_status_tx_sent_waiting_network">Transaction sent. Waiting for network confirmation.</string>
+    <string name="problem_details_submit_status_confirm_backend">Confirming the result record with the backend.</string>
     <string name="problem_details_submit_popup_countdown">Time left before timeout: %1$s</string>
     <string name="problem_details_submit_popup_ok">OK</string>
     <string name="problem_details_submit_popup_retry">Retry</string>

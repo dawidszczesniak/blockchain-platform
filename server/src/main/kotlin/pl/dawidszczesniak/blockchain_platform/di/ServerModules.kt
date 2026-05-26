@@ -161,7 +161,7 @@ internal fun serverModules(environment: Map<String, String>) = module {
     single<CreateProblemValidationCancellationRegistry> { CreateProblemValidationCancellationRegistryImpl() }
     single<SubmissionJudgeJobRepository> { SubmissionJudgeJobRepositoryImpl(get()) }
     single<SubmissionJudgeQueue> { RedisSubmissionJudgeQueue(get()) }
-    single { SubmissionJudgeJobMapper(get<BlockchainPlatformContractConfig>().receiptTimeoutMs) }
+    single { SubmissionJudgeJobMapper() }
     single<SubmissionOnchainPayloadRefresher> { SubmissionOnchainPayloadRefresherImpl(get(), get(), get(), get()) }
     single<CreateProblemReferenceValidationService> { CreateProblemReferenceValidationServiceImpl(get(), get()) }
     single { CreateProblemDraftFactory(get(), get()) }

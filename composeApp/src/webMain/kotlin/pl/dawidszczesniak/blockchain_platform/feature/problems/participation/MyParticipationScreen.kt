@@ -1,6 +1,5 @@
 package pl.dawidszczesniak.blockchain_platform.feature.problems.participation
 
-import androidx.compose.foundation.VerticalScrollbar
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -48,7 +47,9 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.Participat
 import pl.dawidszczesniak.blockchain_platform.di.LocalKoin
 import pl.dawidszczesniak.blockchain_platform.ui.AppInlineLoader
 import pl.dawidszczesniak.blockchain_platform.ui.AppPanelLoader
+import pl.dawidszczesniak.blockchain_platform.ui.AppScrollbarTrack
 import pl.dawidszczesniak.blockchain_platform.ui.AppSurface
+import pl.dawidszczesniak.blockchain_platform.ui.AppVerticalScrollbar
 
 @Composable
 fun MyParticipationScreen(
@@ -158,23 +159,15 @@ fun MyParticipationScreen(
                                 .fillMaxHeight()
                                 .padding(end = 6.dp)
                         ) {
-                            val shape = RoundedCornerShape(8.dp)
-
-                            Box(
+                            AppScrollbarTrack(
                                 modifier = Modifier
                                     .fillMaxHeight()
-                                    .width(8.dp)
-                                    .background(
-                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
-                                        shape = shape
-                                    )
                             )
 
-                            VerticalScrollbar(
+                            AppVerticalScrollbar(
                                 adapter = rememberScrollbarAdapter(listState),
                                 modifier = Modifier
                                     .fillMaxHeight()
-                                    .width(8.dp)
                             )
                         }
                     }

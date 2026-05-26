@@ -429,7 +429,6 @@ private fun runPayload(payload: JsonObject): LinkedHashMap<String, Any?> {
                         normalizedTests.maxOf { it.memoryLimitMb },
                     )
 
-                    val startedAt = System.nanoTime()
                     val workerResults = mutableListOf<LinkedHashMap<String, Any?>>()
                     var workerSession: WorkerSession? = null
                     try {
@@ -451,7 +450,9 @@ private fun runPayload(payload: JsonObject): LinkedHashMap<String, Any?> {
                     } finally {
                         workerSession?.let { stopWorker(it, graceful = true, runControl = runControl) }
                     }
-                    suiteExecutionTimeMs = elapsedMilliseconds(startedAt)
+                    suiteExecutionTimeMs = workerResults.sumOf { execution ->
+                        (execution["executionTimeMs"] as? Number)?.toInt() ?: 0
+                    }
                     workerResults.mapIndexed { index, execution ->
                         judgeTestResult(
                             execution = execution,

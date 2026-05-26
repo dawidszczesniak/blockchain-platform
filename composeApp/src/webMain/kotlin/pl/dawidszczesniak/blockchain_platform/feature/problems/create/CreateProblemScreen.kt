@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.rememberScrollbarAdapter
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -144,6 +145,8 @@ import kotlinx.coroutines.delay
 import kotlin.time.Instant
 import org.jetbrains.compose.resources.stringResource
 import pl.dawidszczesniak.blockchain_platform.di.LocalKoin
+import pl.dawidszczesniak.blockchain_platform.ui.AppScrollbarTrack
+import pl.dawidszczesniak.blockchain_platform.ui.AppVerticalScrollbar
 
 private object IntelliJCodePalette {
     val Panel = Color(0xFF2B2D30)
@@ -196,19 +199,51 @@ fun CreateProblemScreen() {
     }
     val state by viewModel.state.collectAsState()
     val runOverlayState = rememberRunOverlayState(state)
+    val scrollState = rememberScrollState()
 
     Box(modifier = Modifier.fillMaxSize()) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(18.dp)
+        Box(
+            modifier = Modifier.fillMaxSize(),
         ) {
-            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-                val isCompact = maxWidth < 980.dp
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(end = 22.dp)
+                    .verticalScroll(scrollState),
+                verticalArrangement = Arrangement.spacedBy(18.dp)
+            ) {
+                BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                    val isCompact = maxWidth < 980.dp
 
-                if (isCompact) {
-                    Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                    if (isCompact) {
+                        Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                            CreateProblemWorkspace(
+                                state = state,
+                                onPaymentAssetChange = { viewModel.onIntent(CreateProblemIntent.PaymentAssetChanged(it)) },
+                                onPrizeChange = { viewModel.onIntent(CreateProblemIntent.PrizeChanged(it)) },
+                                onParticipantsChange = { viewModel.onIntent(CreateProblemIntent.ParticipantsChanged(it)) },
+                                onEntryFeeChange = { viewModel.onIntent(CreateProblemIntent.EntryFeeChanged(it)) },
+                                onTitleChange = { viewModel.onIntent(CreateProblemIntent.TitleChanged(it)) },
+                                onDescriptionChange = { viewModel.onIntent(CreateProblemIntent.DescriptionChanged(it)) },
+                                onReferenceSolutionChange = { viewModel.onIntent(CreateProblemIntent.ReferenceSolutionChanged(it)) },
+                                onAddTest = { viewModel.onIntent(CreateProblemIntent.AddTest) },
+                                onToggleTest = { id -> viewModel.onIntent(CreateProblemIntent.ToggleTest(id)) },
+                                onRemoveTest = { id -> viewModel.onIntent(CreateProblemIntent.RemoveTest(id)) },
+                                onTestInputChange = { id, value ->
+                                    viewModel.onIntent(CreateProblemIntent.TestInputChanged(id, value))
+                                },
+                                onTestHiddenChange = { id, value ->
+                                    viewModel.onIntent(CreateProblemIntent.TestHiddenChanged(id, value))
+                                },
+                                onRunSingleTest = { id -> viewModel.onIntent(CreateProblemIntent.RunSingleTest(id)) },
+                                onRunAllTests = { viewModel.onIntent(CreateProblemIntent.RunAllTests) },
+                                onJoinUntilChange = { viewModel.onIntent(CreateProblemIntent.JoinUntilChanged(it)) },
+                                onSubmitUntilChange = { viewModel.onIntent(CreateProblemIntent.SubmitUntilChanged(it)) },
+                                onSubmit = { viewModel.onIntent(CreateProblemIntent.Submit) },
+                                isCompact = true,
+                            )
+                        }
+                    } else {
                         CreateProblemWorkspace(
                             state = state,
                             onPaymentAssetChange = { viewModel.onIntent(CreateProblemIntent.PaymentAssetChanged(it)) },
@@ -232,37 +267,22 @@ fun CreateProblemScreen() {
                             onJoinUntilChange = { viewModel.onIntent(CreateProblemIntent.JoinUntilChanged(it)) },
                             onSubmitUntilChange = { viewModel.onIntent(CreateProblemIntent.SubmitUntilChanged(it)) },
                             onSubmit = { viewModel.onIntent(CreateProblemIntent.Submit) },
-                            isCompact = true,
+                            isCompact = false,
                         )
                     }
-                } else {
-                    CreateProblemWorkspace(
-                        state = state,
-                        onPaymentAssetChange = { viewModel.onIntent(CreateProblemIntent.PaymentAssetChanged(it)) },
-                        onPrizeChange = { viewModel.onIntent(CreateProblemIntent.PrizeChanged(it)) },
-                        onParticipantsChange = { viewModel.onIntent(CreateProblemIntent.ParticipantsChanged(it)) },
-                        onEntryFeeChange = { viewModel.onIntent(CreateProblemIntent.EntryFeeChanged(it)) },
-                        onTitleChange = { viewModel.onIntent(CreateProblemIntent.TitleChanged(it)) },
-                        onDescriptionChange = { viewModel.onIntent(CreateProblemIntent.DescriptionChanged(it)) },
-                        onReferenceSolutionChange = { viewModel.onIntent(CreateProblemIntent.ReferenceSolutionChanged(it)) },
-                        onAddTest = { viewModel.onIntent(CreateProblemIntent.AddTest) },
-                        onToggleTest = { id -> viewModel.onIntent(CreateProblemIntent.ToggleTest(id)) },
-                        onRemoveTest = { id -> viewModel.onIntent(CreateProblemIntent.RemoveTest(id)) },
-                        onTestInputChange = { id, value ->
-                            viewModel.onIntent(CreateProblemIntent.TestInputChanged(id, value))
-                        },
-                        onTestHiddenChange = { id, value ->
-                            viewModel.onIntent(CreateProblemIntent.TestHiddenChanged(id, value))
-                        },
-                        onRunSingleTest = { id -> viewModel.onIntent(CreateProblemIntent.RunSingleTest(id)) },
-                        onRunAllTests = { viewModel.onIntent(CreateProblemIntent.RunAllTests) },
-                        onJoinUntilChange = { viewModel.onIntent(CreateProblemIntent.JoinUntilChanged(it)) },
-                        onSubmitUntilChange = { viewModel.onIntent(CreateProblemIntent.SubmitUntilChanged(it)) },
-                        onSubmit = { viewModel.onIntent(CreateProblemIntent.Submit) },
-                        isCompact = false,
-                    )
                 }
             }
+            AppScrollbarTrack(
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .fillMaxHeight(),
+            )
+            AppVerticalScrollbar(
+                adapter = rememberScrollbarAdapter(scrollState),
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .fillMaxHeight(),
+            )
         }
         CreateProblemRunOverlay(
             state = runOverlayState.value,
@@ -632,6 +652,8 @@ private fun CreateProblemForm(
         ReferenceValidationBenchmark(
             runtimeMs = state.validatedRuntimeMs,
             memoryUsedKb = state.validatedMemoryUsedKb,
+            tests = state.tests,
+            runResultsById = state.testRunResultsById,
         )
         state.runErrorMessage?.let { runErrorMessage ->
             SelectionContainer {
@@ -704,8 +726,16 @@ private fun CreateProblemForm(
 private fun ReferenceValidationBenchmark(
     runtimeMs: Int?,
     memoryUsedKb: Int?,
+    tests: List<CreateProblemTest>,
+    runResultsById: Map<Int, CreateProblemTestRunResult>,
 ) {
-    if (runtimeMs == null && memoryUsedKb == null) {
+    val outputs = tests.mapIndexedNotNull { index, test ->
+        runResultsById[test.id]
+            ?.output
+            ?.takeIf { it.isNotBlank() }
+            ?.let { output -> (index + 1) to output }
+    }
+    if (runtimeMs == null && memoryUsedKb == null && outputs.isEmpty()) {
         return
     }
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -722,6 +752,16 @@ private fun ReferenceValidationBenchmark(
                 style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
                 color = IntelliJCodePalette.Comment,
             )
+        }
+        outputs.forEach { (_, output) ->
+            Spacer(Modifier.height(4.dp))
+            SelectionContainer {
+                Text(
+                    text = stringResource(Res.string.create_problem_run_output, output),
+                    style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                    color = IntelliJCodePalette.Identifier,
+                )
+            }
         }
     }
 }
@@ -1409,16 +1449,6 @@ private fun TestCaseCard(
                                 else -> MaterialTheme.colorScheme.onSurfaceVariant
                             },
                         )
-                    }
-                    result.output?.let { output ->
-                        if (output.isNotBlank()) {
-                            Spacer(Modifier.height(4.dp))
-                            Text(
-                                text = stringResource(Res.string.create_problem_run_output, output),
-                                style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                                color = IntelliJCodePalette.Comment,
-                            )
-                        }
                     }
                     result.message?.let { message ->
                         Spacer(Modifier.height(4.dp))

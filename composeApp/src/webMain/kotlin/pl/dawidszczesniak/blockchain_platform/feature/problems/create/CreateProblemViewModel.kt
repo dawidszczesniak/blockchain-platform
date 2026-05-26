@@ -972,7 +972,6 @@ private fun CreateProblemState.toCreateProblemRequest(): CreateProblemRequestDto
             CreateProblemTestCaseDto(
                 inputData = test.input,
                 isHidden = test.isHidden,
-                timeoutMs = 1000,
                 memoryLimitMb = 256,
             )
         },
@@ -995,7 +994,6 @@ private fun CreateProblemState.toValidateCreateProblemRequest(
             CreateProblemTestCaseDto(
                 inputData = test.input,
                 isHidden = test.isHidden,
-                timeoutMs = 1000,
                 memoryLimitMb = 256,
             )
         },

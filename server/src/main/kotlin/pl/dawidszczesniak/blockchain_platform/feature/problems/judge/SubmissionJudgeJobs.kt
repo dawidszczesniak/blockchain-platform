@@ -373,9 +373,7 @@ internal class SubmissionJudgeWorker(
     }
 }
 
-internal class SubmissionJudgeJobMapper(
-    private val receiptTimeoutMs: Long? = null,
-) {
+internal class SubmissionJudgeJobMapper {
     private val json = Json { ignoreUnknownKeys = true }
 
     fun toDto(record: SubmissionJudgeJobRecord, queuePosition: Int? = null): SubmissionJudgeJobDto {
@@ -392,8 +390,6 @@ internal class SubmissionJudgeJobMapper(
             queuePosition = queuePosition,
             message = record.statusMessage,
             retryAllowed = record.isReceiptRetryable(),
-            awaitingReceiptConfirmation = record.isAwaitingReceiptConfirmation(),
-            receiptTimeoutMs = receiptTimeoutMs,
             submissionId = record.submissionId,
             runPreview = preview,
             submissionResult = result,

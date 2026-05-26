@@ -1,7 +1,6 @@
 package pl.dawidszczesniak.blockchain_platform.feature.problems.usecase
 
 import java.security.MessageDigest
-import java.util.UUID
 import org.slf4j.LoggerFactory
 import org.web3j.crypto.Hash
 import org.web3j.utils.Numeric
@@ -114,7 +113,7 @@ internal class SubmitProblemCodeUseCaseImpl(
             sandboxInputs.size,
             languageProfile.id,
         )
-        val evaluation = evaluateSubmissionAcrossAttempts(
+        val evaluation = evaluateSubmissionOnCluster(
             context = context,
             sourceCode = sourceCode,
             language = languageProfile.id,
@@ -124,22 +123,22 @@ internal class SubmitProblemCodeUseCaseImpl(
             sandboxConsensusEvaluator = sandboxConsensusEvaluator,
             sandboxConfig = sandboxConfig,
         )
-        val evaluatedNodes = evaluation.canonicalAttempt.consensus.evaluatedNodes
-        val consensusReached = evaluation.consensusReached
-        val consensusResultHash = evaluation.canonicalAttempt.consensus.resultHash
-        val consensusImageHash = evaluation.canonicalAttempt.consensus.imageHash
-        val consensusNodeIds = evaluation.canonicalAttempt.consensus.consensusNodeIds
-        val consensusNode = evaluation.canonicalAttempt.consensus.representativeNode
-        val evaluatedTests = evaluation.canonicalAttempt.evaluatedTests
+        val consensus = evaluation.consensus
+        val evaluatedNodes = consensus.evaluatedNodes
+        val consensusReached = consensus.consensusReached
+        val consensusResultHash = consensus.resultHash
+        val consensusImageHash = consensus.imageHash
+        val consensusNodeIds = consensus.consensusNodeIds
+        val consensusNode = consensus.representativeNode
+        val evaluatedTests = evaluation.evaluatedTests
         val passedCount = evaluatedTests.count { it.apiResult.passed }
         val allPassed = passedCount == evaluatedTests.size
-        val runtimeMs = evaluation.runtimeMs
-        val reportedMemoryUsedKb = evaluation.memoryUsedKb
+        val runtimeMs = consensus.runtimeMs
+        val reportedMemoryUsedKb = consensus.memoryUsedKb
         logger.info(
-            "Submission evaluation aggregated for problemId={}, userId={}: attempts={}, consensusReached={}/{}, runtimeMs={}, memoryUsedKb={}.",
+            "Submission evaluation aggregated for problemId={}, userId={}: consensusReached={}/{}, runtimeMs={}, memoryUsedKb={}.",
             problemId,
             userId,
-            evaluation.attempts.size,
             consensusReached,
             sandboxConfig.requiredConsensus,
             runtimeMs,
@@ -308,23 +307,12 @@ internal class SubmitProblemCodeUseCaseImpl(
     }
 }
 
-private data class SubmissionEvaluationAttempt(
-    val attemptNumber: Int,
+private data class SubmissionClusterEvaluation(
     val consensus: SandboxConsensusDecision,
     val evaluatedTests: List<EvaluatedSubmissionTest>,
-    val worstCaseRuntimeMs: Int,
-    val worstCaseMemoryUsedKb: Int?,
 )
 
-private data class SubmissionEvaluationAggregate(
-    val attempts: List<SubmissionEvaluationAttempt>,
-    val canonicalAttempt: SubmissionEvaluationAttempt,
-    val consensusReached: Int,
-    val runtimeMs: Int,
-    val memoryUsedKb: Int?,
-)
-
-private fun evaluateSubmissionAcrossAttempts(
+private fun evaluateSubmissionOnCluster(
     context: ProblemExecutionContext,
     sourceCode: String,
     language: String,
@@ -333,77 +321,47 @@ private fun evaluateSubmissionAcrossAttempts(
     sandboxClient: SandboxClient,
     sandboxConsensusEvaluator: SandboxConsensusEvaluator,
     sandboxConfig: SandboxConfig,
-): SubmissionEvaluationAggregate {
-    val attempts = (1..SUBMISSION_EVALUATION_ATTEMPTS).map { attemptNumber ->
-        reportStatus("Uruchamianie testów na sandboxach (proba $attemptNumber/$SUBMISSION_EVALUATION_ATTEMPTS).")
-        val nodeRuns = sandboxClient.runSolutionOnAllNodes(
-            sourceCode = sourceCode,
-            language = language,
-            tests = tests,
-            runId = "submission-${context.problemId}-${UUID.randomUUID()}-$attemptNumber",
-        )
-        if (nodeRuns.isEmpty()) {
-            throw SubmitProblemValidationException("No sandbox nodes are configured.")
-        }
+): SubmissionClusterEvaluation {
+    reportStatus("Uruchamianie testów na sandboxach.")
+    val nodeRuns = sandboxClient.runSolutionOnAllNodes(
+        sourceCode = sourceCode,
+        language = language,
+        tests = tests,
+    )
+    if (nodeRuns.isEmpty()) {
+        throw SubmitProblemValidationException("No sandbox nodes are configured.")
+    }
 
-        val consensus = runCatching {
-            sandboxConsensusEvaluator.evaluate(nodeRuns)
-        }.getOrElse { error ->
-            throw SubmitProblemValidationException(
-                error.message?.ifBlank { "Sandbox consensus could not be established." }
-                    ?: "Sandbox consensus could not be established."
-            )
-        }
-
-        val executionByTestId = consensus.representativeNode.results.associateBy { it.id }
-        val evaluatedTests = context.tests.map { test ->
-            val execution = executionByTestId[test.id]
-            if (execution == null) {
-                test.toMissingSubmissionResult()
-            } else {
-                test.evaluateSubmissionTest(execution)
-            }
-        }
-        val worstCaseRuntimeMs = consensusWorstCaseRuntimeMs(consensus)
-        val worstCaseMemoryUsedKb = consensusWorstCaseMemoryUsedKb(consensus)
-        logger.info(
-            "Submission attempt {}/{} for problemId={}, participantWallet={}: consensusReached={}/{}, worstCaseRuntimeMs={}, worstCaseMemoryUsedKb={}.",
-            attemptNumber,
-            SUBMISSION_EVALUATION_ATTEMPTS,
-            context.problemId,
-            context.participantWalletAddress,
-            consensus.consensusReached,
-            sandboxConfig.requiredConsensus,
-            worstCaseRuntimeMs,
-            worstCaseMemoryUsedKb,
-        )
-        SubmissionEvaluationAttempt(
-            attemptNumber = attemptNumber,
-            consensus = consensus,
-            evaluatedTests = evaluatedTests,
-            worstCaseRuntimeMs = worstCaseRuntimeMs,
-            worstCaseMemoryUsedKb = worstCaseMemoryUsedKb,
+    val consensus = runCatching {
+        sandboxConsensusEvaluator.evaluate(nodeRuns)
+    }.getOrElse { error ->
+        throw SubmitProblemValidationException(
+            error.message?.ifBlank { "Sandbox consensus could not be established." }
+                ?: "Sandbox consensus could not be established."
         )
     }
 
-    ensureConsistentAttemptOutputs(attempts)
-
-    val finalConsensusReached = attempts.minOf { it.consensus.consensusReached }
-    val canonicalAttempt = attempts.first { it.consensus.consensusReached == finalConsensusReached }
-    val runtimeMs = medianAttemptMetric(attempts.map { it.worstCaseRuntimeMs }) ?: 0
-    val memoryAttemptMetrics = attempts.map { it.worstCaseMemoryUsedKb }
-    val memoryUsedKb = if (memoryAttemptMetrics.all { it != null }) {
-        medianAttemptMetric(memoryAttemptMetrics.filterNotNull())
-    } else {
-        null
+    val executionByTestId = consensus.representativeNode.results.associateBy { it.id }
+    val evaluatedTests = context.tests.map { test ->
+        val execution = executionByTestId[test.id]
+        if (execution == null) {
+            test.toMissingSubmissionResult()
+        } else {
+            test.evaluateSubmissionTest(execution)
+        }
     }
-
-    return SubmissionEvaluationAggregate(
-        attempts = attempts,
-        canonicalAttempt = canonicalAttempt,
-        consensusReached = finalConsensusReached,
-        runtimeMs = runtimeMs,
-        memoryUsedKb = memoryUsedKb,
+    logger.info(
+        "Submission cluster evaluation for problemId={}, participantWallet={}: consensusReached={}/{}, runtimeMs={}, memoryUsedKb={}.",
+        context.problemId,
+        context.participantWalletAddress,
+        consensus.consensusReached,
+        sandboxConfig.requiredConsensus,
+        consensus.runtimeMs,
+        consensus.memoryUsedKb,
+    )
+    return SubmissionClusterEvaluation(
+        consensus = consensus,
+        evaluatedTests = evaluatedTests,
     )
 }
 
@@ -418,53 +376,6 @@ private enum class SubmitRunStatus {
     Failed,
     Error,
     Timeout,
-}
-
-private fun ensureConsistentAttemptOutputs(attempts: List<SubmissionEvaluationAttempt>) {
-    val resultHashes = attempts.map { it.consensus.resultHash }.distinct()
-    if (resultHashes.size != 1) {
-        throw SubmitProblemValidationException(
-            "Submission blocked: repeated sandbox attempts produced inconsistent result hashes."
-        )
-    }
-    val imageHashes = attempts.map { it.consensus.imageHash.orEmpty() }.distinct()
-    if (imageHashes.size != 1) {
-        throw SubmitProblemValidationException(
-            "Submission blocked: repeated sandbox attempts produced inconsistent sandbox images."
-        )
-    }
-}
-
-private fun consensusWorstCaseRuntimeMs(consensus: SandboxConsensusDecision): Int {
-    return consensusConsensusNodes(consensus)
-        .map { node ->
-            node.results.maxOfOrNull { it.executionTimeMs } ?: node.suiteExecutionTimeMs ?: 0
-        }
-        .maxOrNull()
-        ?: 0
-}
-
-private fun consensusWorstCaseMemoryUsedKb(consensus: SandboxConsensusDecision): Int? {
-    return consensusConsensusNodes(consensus)
-        .mapNotNull { node ->
-            node.results.mapNotNull { it.memoryUsedKb }.maxOrNull()
-        }
-        .maxOrNull()
-}
-
-private fun consensusConsensusNodes(consensus: SandboxConsensusDecision): List<EvaluatedNodeRun> {
-    return consensus.evaluatedNodes.filter { it.nodeId in consensus.consensusNodeIds }
-}
-
-private fun medianAttemptMetric(values: List<Int>): Int? {
-    if (values.isEmpty()) return null
-    val sorted = values.sorted()
-    val middle = sorted.size / 2
-    return if (sorted.size % 2 == 1) {
-        sorted[middle]
-    } else {
-        ((sorted[middle - 1].toLong() + sorted[middle].toLong()) / 2L).toInt()
-    }
 }
 
 private fun buildReceiptTimeoutMessage(
@@ -652,6 +563,5 @@ private fun keccakHex(text: String): String {
 }
 
 private const val MAX_SOURCE_CODE_CHARS = 120_000
-private const val SUBMISSION_EVALUATION_ATTEMPTS = 3
 private const val HIDDEN_TEST_FAILED_MESSAGE = "Hidden test failed."
 private const val DEFAULT_ATTESTATION_SCHEME = "hmac-sha256"

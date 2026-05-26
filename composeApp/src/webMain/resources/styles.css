@@ -16,3 +16,27 @@ html, body {
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
 }
+
+* {
+    scrollbar-color: #bdbdbd #4a4a4a;
+    scrollbar-width: auto;
+}
+
+*::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+    background: #4a4a4a;
+    border-radius: 8px;
+}
+
+*::-webkit-scrollbar-thumb {
+    background: #bdbdbd;
+    border-radius: 8px;
+}
+
+*::-webkit-scrollbar-corner {
+    background: #4a4a4a;
+}

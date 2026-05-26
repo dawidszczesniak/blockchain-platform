@@ -2,12 +2,14 @@
 
 package pl.dawidszczesniak.blockchain_platform.feature.problems.details
 
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -21,6 +23,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.rememberScrollbarAdapter
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
@@ -56,7 +59,6 @@ import blockchain_platform.composeapp.generated.resources.problem_details_back
 import blockchain_platform.composeapp.generated.resources.problem_details_action_cancel_loading
 import blockchain_platform.composeapp.generated.resources.problem_details_action_settle_loading
 import blockchain_platform.composeapp.generated.resources.problem_details_constraints_title
-import blockchain_platform.composeapp.generated.resources.problem_details_copy_details
 import blockchain_platform.composeapp.generated.resources.problem_details_editor_language
 import blockchain_platform.composeapp.generated.resources.problem_details_editor_locked_join_action
 import blockchain_platform.composeapp.generated.resources.problem_details_editor_locked_join_action_loading
@@ -83,18 +85,13 @@ import blockchain_platform.composeapp.generated.resources.problem_details_submit
 import blockchain_platform.composeapp.generated.resources.problem_details_submit_error_prefix
 import blockchain_platform.composeapp.generated.resources.problem_details_submit_hash
 import blockchain_platform.composeapp.generated.resources.problem_details_submit_onchain_error_title
-import blockchain_platform.composeapp.generated.resources.problem_details_submit_onchain_pending_no_tx
-import blockchain_platform.composeapp.generated.resources.problem_details_submit_onchain_pending_with_tx
-import blockchain_platform.composeapp.generated.resources.problem_details_submit_onchain_status_title
 import blockchain_platform.composeapp.generated.resources.problem_details_submit_proxy_address
 import blockchain_platform.composeapp.generated.resources.problem_details_submit_explorer
 import blockchain_platform.composeapp.generated.resources.problem_details_submit_tx_hash
-import blockchain_platform.composeapp.generated.resources.problem_details_submit_tx_hash_missing
 import blockchain_platform.composeapp.generated.resources.problem_details_submit_runtime
 import blockchain_platform.composeapp.generated.resources.problem_details_submit_result_title
 import blockchain_platform.composeapp.generated.resources.problem_details_submit_sandbox_result_hash
 import blockchain_platform.composeapp.generated.resources.problem_details_submit_submitting
-import blockchain_platform.composeapp.generated.resources.problem_details_submit_popup_countdown
 import blockchain_platform.composeapp.generated.resources.problem_details_submit_popup_ok
 import blockchain_platform.composeapp.generated.resources.problem_details_submit_popup_retry
 import blockchain_platform.composeapp.generated.resources.problem_details_submit_popup_retry_loading
@@ -120,9 +117,10 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.ProblemSum
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.RunProblemResponseDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.RunProblemTestResultDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.SubmitProblemResponseDto
+import pl.dawidszczesniak.blockchain_platform.ui.AppScrollbarTrack
+import pl.dawidszczesniak.blockchain_platform.ui.AppVerticalScrollbar
 import pl.dawidszczesniak.blockchain_platform.feature.problems.statement.ProblemStatementContent
 import pl.dawidszczesniak.blockchain_platform.feature.problems.statement.decodeProblemDescription
-import pl.dawidszczesniak.blockchain_platform.platform.copyTextToClipboard
 import pl.dawidszczesniak.blockchain_platform.ui.AppSurface
 
 @Composable
@@ -214,6 +212,7 @@ fun ProblemDetailsScreen(
                     ) {
                         ProblemStatementPane(
                             modifier = Modifier.fillMaxWidth(),
+                            showScrollbar = false,
                             problem = problem,
                             statementContent = statementContent,
                             registeredParticipants = registeredParticipants,
@@ -227,6 +226,7 @@ fun ProblemDetailsScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .heightIn(min = 320.dp),
+                            showScrollbar = false,
                             code = solutionCode,
                             onCodeChange = { solutionCode = it },
                             fillEditorSpace = false,
@@ -237,7 +237,6 @@ fun ProblemDetailsScreen(
                             isSubmitting = gateState.isSubmitting,
                             submitErrorMessage = gateState.submitErrorMessage,
                             submitResult = gateState.submitResult,
-                            submitInlineStatusMessage = gateState.submitInlineStatusMessage,
                             submitInlineErrorMessage = gateState.submitInlineErrorMessage,
                             onRun = { viewModel.run(problem.id, solutionCode, "kotlin") },
                             onSubmit = { viewModel.submit(problem.id, solutionCode, "kotlin") },
@@ -260,6 +259,7 @@ fun ProblemDetailsScreen(
                             modifier = Modifier
                                 .width(paneWidth)
                                 .fillMaxHeight(),
+                            showScrollbar = true,
                             problem = problem,
                             statementContent = statementContent,
                             registeredParticipants = registeredParticipants,
@@ -273,6 +273,7 @@ fun ProblemDetailsScreen(
                             modifier = Modifier
                                 .width(paneWidth)
                                 .fillMaxHeight(),
+                            showScrollbar = true,
                             code = solutionCode,
                             onCodeChange = { solutionCode = it },
                             fillEditorSpace = true,
@@ -283,7 +284,6 @@ fun ProblemDetailsScreen(
                             isSubmitting = gateState.isSubmitting,
                             submitErrorMessage = gateState.submitErrorMessage,
                             submitResult = gateState.submitResult,
-                            submitInlineStatusMessage = gateState.submitInlineStatusMessage,
                             submitInlineErrorMessage = gateState.submitInlineErrorMessage,
                             onRun = { viewModel.run(problem.id, solutionCode, "kotlin") },
                             onSubmit = { viewModel.submit(problem.id, solutionCode, "kotlin") },
@@ -328,13 +328,11 @@ fun ProblemDetailsScreen(
             gateState.isSubmitting || gateState.isSubmitRequestInFlight -> {
                 ProblemDetailsSubmitOverlay(
                     isLoading = true,
-                    message = gateState.submitStatusMessage?.takeIf { it.isNotBlank() }
+                    message = resolveProblemDetailsUiText(gateState.submitStatusMessage)?.takeIf { it.isNotBlank() }
                         ?: stringResource(Res.string.problem_details_submit_submitting),
                     errorMessage = null,
                     retryAllowed = false,
                     retryInFlight = false,
-                    receiptTimeoutMs = gateState.submitReceiptTimeoutMs,
-                    receiptWaitStartedAtMs = gateState.submitReceiptWaitStartedAtMs,
                     onDismiss = { },
                     onRetry = { },
                 )
@@ -347,8 +345,6 @@ fun ProblemDetailsScreen(
                     errorMessage = gateState.submitErrorMessage,
                     retryAllowed = gateState.submitRetryAllowed,
                     retryInFlight = false,
-                    receiptTimeoutMs = gateState.submitReceiptTimeoutMs,
-                    receiptWaitStartedAtMs = null,
                     onDismiss = viewModel::dismissSubmitPopup,
                     onRetry = viewModel::retrySubmit,
                 )
@@ -360,6 +356,7 @@ fun ProblemDetailsScreen(
 @Composable
 private fun ProblemStatementPane(
     modifier: Modifier,
+    showScrollbar: Boolean,
     problem: ProblemSummary,
     statementContent: ProblemStatementContent,
     registeredParticipants: Int,
@@ -372,84 +369,87 @@ private fun ProblemStatementPane(
     val detailsScroll = rememberScrollState()
 
     AppSurface(modifier = modifier) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .verticalScroll(detailsScroll),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Text(
-                text = problem.title,
-                style = MaterialTheme.typography.headlineSmall,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                text = stringResource(Res.string.problem_details_statement),
-                style = MaterialTheme.typography.titleMedium,
-            )
-            Text(
-                text = statementContent.statement,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            if (statementContent.constraints.isNotBlank()) {
+        ScrollablePane(
+            scrollState = detailsScroll,
+            showScrollbar = showScrollbar,
+        ) { contentModifier ->
+            Column(
+                modifier = contentModifier,
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Text(
+                    text = problem.title,
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    text = stringResource(Res.string.problem_details_constraints_title),
-                    style = MaterialTheme.typography.titleSmall,
+                    text = stringResource(Res.string.problem_details_statement),
+                    style = MaterialTheme.typography.titleMedium,
                 )
                 Text(
-                    text = statementContent.constraints,
+                    text = statementContent.statement,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-            }
-            if (statementContent.examples.isNotEmpty()) {
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = stringResource(Res.string.problem_details_examples_title),
-                    style = MaterialTheme.typography.titleSmall,
-                )
-                statementContent.examples.forEachIndexed { index, example ->
-                    ExampleBlock(index = index, example = example)
+                if (statementContent.constraints.isNotBlank()) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = stringResource(Res.string.problem_details_constraints_title),
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    Text(
+                        text = statementContent.constraints,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
-            }
-            if (problem.referenceSolutionCode.isNotBlank()) {
+                if (statementContent.examples.isNotEmpty()) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = stringResource(Res.string.problem_details_examples_title),
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    statementContent.examples.forEachIndexed { index, example ->
+                        ExampleBlock(index = index, example = example)
+                    }
+                }
+                if (problem.referenceSolutionCode.isNotBlank()) {
+                    Spacer(Modifier.height(4.dp))
+                    PublicReferenceSolutionSection(problem = problem)
+                }
                 Spacer(Modifier.height(4.dp))
-                PublicReferenceSolutionSection(problem = problem)
+                DetailLine(stringResource(Res.string.problem_details_requirement_participants, problem.requiredParticipants))
+                DetailLine(
+                    stringResource(
+                        Res.string.problem_details_requirement_prize,
+                        formatAmountWithSymbol(problem.paymentAsset, problem.prizeAmountAtomic),
+                    ),
+                )
+                DetailLine(
+                    stringResource(
+                        Res.string.problem_details_requirement_entry_fee,
+                        formatAmountWithSymbol(problem.paymentAsset, problem.entryFeeAmountAtomic),
+                    ),
+                )
+                DetailLine(
+                    stringResource(
+                        Res.string.problem_details_requirement_start,
+                        stringResource(Res.string.days_count, problem.daysToStart),
+                    ),
+                )
+                DetailLine(stringResource(Res.string.problem_details_requirement_join, problem.joinUntilLabel))
+                DetailLine(stringResource(Res.string.problem_details_requirement_submit, problem.submitUntilLabel))
+                CompetitionLifecycleActionSection(
+                    problem = problem,
+                    registeredParticipants = registeredParticipants,
+                    uiState = competitionActionState,
+                    isLoggedIn = isLoggedIn,
+                    onRequireLogin = onRequireLogin,
+                    onSettle = onSettle,
+                    onCancel = onCancel,
+                )
             }
-            Spacer(Modifier.height(4.dp))
-            DetailLine(stringResource(Res.string.problem_details_requirement_participants, problem.requiredParticipants))
-            DetailLine(
-                stringResource(
-                    Res.string.problem_details_requirement_prize,
-                    formatAmountWithSymbol(problem.paymentAsset, problem.prizeAmountAtomic),
-                ),
-            )
-            DetailLine(
-                stringResource(
-                    Res.string.problem_details_requirement_entry_fee,
-                    formatAmountWithSymbol(problem.paymentAsset, problem.entryFeeAmountAtomic),
-                ),
-            )
-            DetailLine(
-                stringResource(
-                    Res.string.problem_details_requirement_start,
-                    stringResource(Res.string.days_count, problem.daysToStart),
-                ),
-            )
-            DetailLine(stringResource(Res.string.problem_details_requirement_join, problem.joinUntilLabel))
-            DetailLine(stringResource(Res.string.problem_details_requirement_submit, problem.submitUntilLabel))
-            CompetitionLifecycleActionSection(
-                problem = problem,
-                registeredParticipants = registeredParticipants,
-                uiState = competitionActionState,
-                isLoggedIn = isLoggedIn,
-                onRequireLogin = onRequireLogin,
-                onSettle = onSettle,
-                onCancel = onCancel,
-            )
         }
     }
 }
@@ -490,6 +490,7 @@ private fun ExampleBlock(
 @Composable
 private fun CodeEditorPane(
     modifier: Modifier,
+    showScrollbar: Boolean,
     code: String,
     onCodeChange: (String) -> Unit,
     fillEditorSpace: Boolean,
@@ -500,7 +501,6 @@ private fun CodeEditorPane(
     isSubmitting: Boolean,
     submitErrorMessage: String?,
     submitResult: SubmitProblemResponseDto?,
-    submitInlineStatusMessage: String?,
     submitInlineErrorMessage: String?,
     onRun: () -> Unit,
     onSubmit: () -> Unit,
@@ -508,100 +508,88 @@ private fun CodeEditorPane(
 ) {
     val editorBlocked = overlayState.show
     val paneScroll = rememberScrollState()
-    val copyPayload = visiblePaneCopyPayload(
-        runErrorMessage = runErrorMessage,
-        runResult = runResult,
-        submitErrorMessage = submitErrorMessage,
-        submitResult = submitResult,
-        submitInlineStatusMessage = submitInlineStatusMessage,
-        submitInlineErrorMessage = submitInlineErrorMessage,
-    )
 
     Box(modifier = modifier) {
         AppSurface(modifier = Modifier.fillMaxSize()) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(paneScroll),
-            ) {
-                val editorModifier = if (fillEditorSpace) {
-                    Modifier
-                        .fillMaxWidth()
-                        .fillMaxHeight(0.76f)
-                } else {
-                    Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 260.dp)
-                }
-
-                Text(
-                    text = stringResource(Res.string.problem_details_editor_title),
-                    style = MaterialTheme.typography.titleMedium,
-                )
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    text = "${stringResource(Res.string.problem_details_editor_language)}: Kotlin",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(Modifier.height(10.dp))
-                OutlinedTextField(
-                    value = code,
-                    onValueChange = onCodeChange,
-                    modifier = editorModifier,
-                    enabled = !editorBlocked,
-                    textStyle = MaterialTheme.typography.bodyMedium.copy(
-                        fontFamily = FontFamily.Monospace,
-                    ),
-                    minLines = 16,
-                    maxLines = 50,
-                )
-                Spacer(Modifier.height(8.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ScrollablePane(
+                scrollState = paneScroll,
+                showScrollbar = showScrollbar,
+            ) { contentModifier ->
+                Column(
+                    modifier = contentModifier,
                 ) {
-                    OutlinedButton(
-                        onClick = onRun,
-                        enabled = !editorBlocked && !isRunning && !isSubmitting,
-                    ) {
-                        Text(stringResource(Res.string.problem_details_editor_run))
+                    val editorModifier = if (fillEditorSpace) {
+                        Modifier
+                            .fillMaxWidth()
+                            .fillMaxHeight(0.76f)
+                    } else {
+                        Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 260.dp)
                     }
-                    Button(
-                        onClick = onSubmit,
-                        enabled = !editorBlocked && !isRunning && !isSubmitting,
-                    ) {
-                        Text(stringResource(Res.string.problem_details_editor_submit))
-                    }
-                }
-                copyPayload?.let { payload ->
-                    Spacer(Modifier.height(4.dp))
-                    TextButton(
-                        onClick = { copyTextToClipboard(payload) },
-                    ) {
-                        Text(stringResource(Res.string.problem_details_copy_details))
-                    }
-                }
-                Spacer(Modifier.height(10.dp))
-                if (!runErrorMessage.isNullOrBlank()) {
+
                     Text(
-                        text = stringResource(Res.string.problem_details_run_error_console_title),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
+                        text = stringResource(Res.string.problem_details_editor_title),
+                        style = MaterialTheme.typography.titleMedium,
                     )
                     Spacer(Modifier.height(6.dp))
-                    ErrorConsoleMessage(
-                        message = runErrorMessage,
-                        isError = true,
+                    Text(
+                        text = "${stringResource(Res.string.problem_details_editor_language)}: Kotlin",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                } else if (runResult != null) {
-                    RunResultsPane(result = runResult)
-                } else if (submitResult != null) {
-                    SubmitResultPane(
-                        result = submitResult,
-                        onchainStatusMessage = submitInlineStatusMessage,
-                        onchainErrorMessage = submitInlineErrorMessage,
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedTextField(
+                        value = code,
+                        onValueChange = onCodeChange,
+                        modifier = editorModifier,
+                        enabled = !editorBlocked,
+                        textStyle = MaterialTheme.typography.bodyMedium.copy(
+                            fontFamily = FontFamily.Monospace,
+                        ),
+                        minLines = 16,
+                        maxLines = 50,
                     )
+                    Spacer(Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        OutlinedButton(
+                            onClick = onRun,
+                            enabled = !editorBlocked && !isRunning && !isSubmitting,
+                        ) {
+                            Text(stringResource(Res.string.problem_details_editor_run))
+                        }
+                        Button(
+                            onClick = onSubmit,
+                            enabled = !editorBlocked && !isRunning && !isSubmitting,
+                        ) {
+                            Text(stringResource(Res.string.problem_details_editor_submit))
+                        }
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    if (!runErrorMessage.isNullOrBlank()) {
+                        SelectionContainer {
+                            Text(
+                                text = stringResource(Res.string.problem_details_run_error_console_title),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        }
+                        Spacer(Modifier.height(6.dp))
+                        ErrorConsoleMessage(
+                            message = runErrorMessage,
+                            isError = true,
+                        )
+                    } else if (runResult != null) {
+                        RunResultsPane(result = runResult)
+                    } else if (submitResult != null) {
+                        SubmitResultPane(
+                            result = submitResult,
+                            onchainErrorMessage = submitInlineErrorMessage,
+                        )
+                    }
                 }
             }
         }
@@ -703,6 +691,54 @@ private fun CodeEditorPane(
 }
 
 @Composable
+private fun ColumnScope.ScrollablePane(
+    scrollState: ScrollState,
+    showScrollbar: Boolean,
+    content: @Composable (Modifier) -> Unit,
+) {
+    if (showScrollbar) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f, fill = true),
+        ) {
+            content(
+                Modifier
+                    .fillMaxSize()
+                    .padding(end = 16.dp)
+                    .verticalScroll(scrollState),
+            )
+            PaneScrollbar(
+                scrollState = scrollState,
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .fillMaxHeight(),
+            )
+        }
+    } else {
+        content(
+            Modifier
+                .fillMaxWidth()
+                .verticalScroll(scrollState),
+        )
+    }
+}
+
+@Composable
+private fun PaneScrollbar(
+    scrollState: ScrollState,
+    modifier: Modifier = Modifier,
+) {
+    AppScrollbarTrack(
+        modifier = modifier,
+    )
+    AppVerticalScrollbar(
+        adapter = rememberScrollbarAdapter(scrollState),
+        modifier = modifier,
+    )
+}
+
+@Composable
 internal fun ProblemDetailsProgressOverlay(message: String) {
     val loadingDotsCount = rememberJoinOverlayLoadingDotsCount()
     Box(
@@ -753,31 +789,10 @@ private fun ProblemDetailsSubmitOverlay(
     errorMessage: String?,
     retryAllowed: Boolean,
     retryInFlight: Boolean,
-    receiptTimeoutMs: Long?,
-    receiptWaitStartedAtMs: Long?,
     onDismiss: () -> Unit,
     onRetry: () -> Unit,
 ) {
     val loadingDotsCount = rememberJoinOverlayLoadingDotsCount()
-    var nowMs by remember(receiptWaitStartedAtMs, receiptTimeoutMs, isLoading) {
-        mutableStateOf(currentEpochMillis())
-    }
-    LaunchedEffect(receiptWaitStartedAtMs, receiptTimeoutMs, isLoading) {
-        if (!isLoading || receiptWaitStartedAtMs == null || receiptTimeoutMs == null) {
-            return@LaunchedEffect
-        }
-        while (true) {
-            nowMs = currentEpochMillis()
-            delay(250)
-        }
-    }
-    val remainingMs = remember(nowMs, receiptWaitStartedAtMs, receiptTimeoutMs) {
-        if (receiptWaitStartedAtMs == null || receiptTimeoutMs == null) {
-            null
-        } else {
-            (receiptTimeoutMs - (nowMs - receiptWaitStartedAtMs)).coerceAtLeast(0L)
-        }
-    }
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -815,17 +830,6 @@ private fun ProblemDetailsSubmitOverlay(
                         color = MaterialTheme.colorScheme.onSurface,
                         textAlign = TextAlign.Center,
                     )
-                    remainingMs?.let { ms ->
-                        Text(
-                            text = stringResource(
-                                Res.string.problem_details_submit_popup_countdown,
-                                formatDurationAsMinutesSeconds(ms),
-                            ),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center,
-                        )
-                    }
                 } else {
                     ErrorConsoleMessage(
                         message = errorMessage.orEmpty(),
@@ -897,47 +901,28 @@ private fun String.withoutTrailingEllipsis(): String {
     return trimEnd().removeSuffix("...").trimEnd('.').trimEnd()
 }
 
-private fun formatDurationAsMinutesSeconds(durationMs: Long): String {
-    val totalSeconds = (durationMs / 1_000L).coerceAtLeast(0L)
-    val minutes = totalSeconds / 60L
-    val seconds = totalSeconds % 60L
-    return "${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}"
+@Composable
+private fun resolveProblemDetailsUiText(message: ProblemDetailsUiText?): String? {
+    return when (message) {
+        null -> null
+        is ProblemDetailsUiText.Raw -> message.value
+        is ProblemDetailsUiText.Resource -> stringResource(message.resource, *message.args.toTypedArray())
+    }
 }
-
-@JsFun("() => Date.now()")
-private external fun currentEpochMillisJs(): Double
-
-private fun currentEpochMillis(): Long = currentEpochMillisJs().toLong()
 
 @Composable
 private fun SubmitResultPane(
     result: SubmitProblemResponseDto,
-    onchainStatusMessage: String?,
     onchainErrorMessage: String?,
 ) {
     val summaryMemoryUsedKb = result.memoryUsedKb ?: result.results.mapNotNull { it.memoryUsedKb }.maxOrNull()
-    val txHashText = if (result.txHash.isBlank()) {
-        stringResource(Res.string.problem_details_submit_tx_hash_missing)
-    } else {
-        stringResource(Res.string.problem_details_submit_tx_hash, result.txHash)
-    }
-    val effectiveOnchainStatusMessage = onchainStatusMessage?.takeIf { it.isNotBlank() } ?: when {
-        result.onchainRecorded -> null
-        result.txHash.isBlank() -> stringResource(Res.string.problem_details_submit_onchain_pending_no_tx)
-        else -> stringResource(Res.string.problem_details_submit_onchain_pending_with_tx)
-    }
-    val onchainStateColor = if (!onchainErrorMessage.isNullOrBlank() || !effectiveOnchainStatusMessage.isNullOrBlank()) {
-        MaterialTheme.colorScheme.error
-    } else {
-        MaterialTheme.colorScheme.onSurfaceVariant
-    }
-    Text(
-        text = stringResource(Res.string.problem_details_submit_result_title),
-        style = MaterialTheme.typography.titleSmall,
-    )
-    Spacer(Modifier.height(6.dp))
     SelectionContainer {
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                text = stringResource(Res.string.problem_details_submit_result_title),
+                style = MaterialTheme.typography.titleSmall,
+            )
+            Spacer(Modifier.height(4.dp))
             Text(
                 text = stringResource(Res.string.problem_details_run_result_passed, result.passed, result.total),
                 style = MaterialTheme.typography.bodyMedium,
@@ -993,15 +978,13 @@ private fun SubmitResultPane(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Text(
-                text = txHashText,
-                style = MaterialTheme.typography.bodySmall,
-                color = if (result.txHash.isBlank()) {
-                    MaterialTheme.colorScheme.error
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
-            )
+            result.txHash.takeIf { it.isNotBlank() }?.let { txHash ->
+                Text(
+                    text = stringResource(Res.string.problem_details_submit_tx_hash, txHash),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             result.explorerUrl?.takeIf { it.isNotBlank() }?.let { url ->
                 Text(
                     text = stringResource(Res.string.problem_details_submit_explorer, url),
@@ -1009,28 +992,17 @@ private fun SubmitResultPane(
                     color = MaterialTheme.colorScheme.primary,
                 )
             }
-            effectiveOnchainStatusMessage?.let { message ->
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = stringResource(Res.string.problem_details_submit_onchain_status_title),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = onchainStateColor,
-                )
-                Text(
-                    text = message,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = onchainStateColor,
-                )
-            }
         }
     }
     onchainErrorMessage?.takeIf { it.isNotBlank() }?.let { message ->
         Spacer(Modifier.height(6.dp))
-        Text(
-            text = stringResource(Res.string.problem_details_submit_onchain_error_title),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.error,
-        )
+        SelectionContainer {
+            Text(
+                text = stringResource(Res.string.problem_details_submit_onchain_error_title),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
         Spacer(Modifier.height(4.dp))
         ErrorConsoleMessage(
             message = message,
@@ -1040,137 +1012,33 @@ private fun SubmitResultPane(
 }
 
 @Composable
-private fun visiblePaneCopyPayload(
-    runErrorMessage: String?,
-    runResult: RunProblemResponseDto?,
-    submitErrorMessage: String?,
-    submitResult: SubmitProblemResponseDto?,
-    submitInlineStatusMessage: String?,
-    submitInlineErrorMessage: String?,
-): String? {
-    return when {
-        !runErrorMessage.isNullOrBlank() -> {
-            buildString {
-                appendLine(stringResource(Res.string.problem_details_run_error_console_title))
-                append(runErrorMessage)
-            }
-        }
-
-        runResult != null -> buildRunResultCopyPayload(runResult)
-        submitResult != null -> buildSubmitResultCopyPayload(
-            result = submitResult,
-            onchainStatusMessage = submitInlineStatusMessage,
-            onchainErrorMessage = submitInlineErrorMessage ?: submitErrorMessage,
-        )
-
-        else -> null
-    }
-}
-
-@Composable
-private fun buildSubmitResultCopyPayload(
-    result: SubmitProblemResponseDto,
-    onchainStatusMessage: String?,
-    onchainErrorMessage: String?,
-): String {
-    val summaryMemoryUsedKb = result.memoryUsedKb ?: result.results.mapNotNull { it.memoryUsedKb }.maxOrNull()
-    val effectiveOnchainStatusMessage = onchainStatusMessage?.takeIf { it.isNotBlank() } ?: when {
-        result.onchainRecorded -> null
-        result.txHash.isBlank() -> stringResource(Res.string.problem_details_submit_onchain_pending_no_tx)
-        else -> stringResource(Res.string.problem_details_submit_onchain_pending_with_tx)
-    }
-    val lines = buildList {
-        add(stringResource(Res.string.problem_details_submit_result_title))
-        add(stringResource(Res.string.problem_details_run_result_passed, result.passed, result.total))
-        add(
-            stringResource(
-                Res.string.problem_details_submit_consensus,
-                result.consensusReached,
-                result.consensusRequired,
-            ),
-        )
-        add(stringResource(Res.string.problem_details_submit_runtime, result.runtimeMs))
-        summaryMemoryUsedKb?.let { add("Memory: ${it} KB") }
-        add(stringResource(Res.string.problem_details_submit_hash, result.commitmentHash))
-        add(stringResource(Res.string.problem_details_submit_sandbox_result_hash, result.sandboxResultHash))
-        result.sandboxImageHash?.takeIf { it.isNotBlank() }?.let { add("Sandbox image hash: $it") }
-        add(stringResource(Res.string.problem_details_submit_proxy_address, result.proxyAddress))
-        add(
-            if (result.txHash.isBlank()) {
-                stringResource(Res.string.problem_details_submit_tx_hash_missing)
-            } else {
-                stringResource(Res.string.problem_details_submit_tx_hash, result.txHash)
-            },
-        )
-        result.explorerUrl?.takeIf { it.isNotBlank() }?.let {
-            add(stringResource(Res.string.problem_details_submit_explorer, it))
-        }
-        effectiveOnchainStatusMessage?.let {
-            add(stringResource(Res.string.problem_details_submit_onchain_status_title))
-            add(it)
-        }
-        onchainErrorMessage?.takeIf { it.isNotBlank() }?.let {
-            add(stringResource(Res.string.problem_details_submit_onchain_error_title))
-            add(it)
-        }
-    }
-    return lines.joinToString(separator = "\n")
-}
-
-@Composable
-private fun buildRunResultCopyPayload(result: RunProblemResponseDto): String {
-    val summaryMemoryUsedKb = result.memoryUsedKb ?: result.results.mapNotNull { it.memoryUsedKb }.maxOrNull()
-    val lines = buildList {
-        add(stringResource(Res.string.problem_details_run_result_passed, result.passed, result.total))
-        add("Runtime: ${result.runtimeMs} ms")
-        summaryMemoryUsedKb?.let { add("Memory: ${it} KB") }
-        result.results.forEach { testResult ->
-            add("")
-            add(stringResource(Res.string.problem_details_run_result_test_label, testResult.index))
-            add(runStatusLabel(testResult))
-            add(stringResource(Res.string.problem_details_run_result_time, testResult.executionTimeMs))
-            testResult.memoryUsedKb?.let { add("Memory: ${it} KB") }
-            if (testResult.hidden && !testResult.passed && testResult.message.isNullOrBlank()) {
-                add(stringResource(Res.string.problem_details_run_result_hidden_failed))
-            }
-            if (!testResult.hidden) {
-                testResult.expectedOutput?.takeIf { it.isNotBlank() }?.let {
-                    add(stringResource(Res.string.problem_details_run_result_expected, it))
-                }
-                testResult.actualOutput?.let {
-                    add(stringResource(Res.string.problem_details_run_result_actual, it))
-                }
-            }
-            testResult.message?.takeIf { it.isNotBlank() }?.let { add(it) }
-        }
-    }
-    return lines.joinToString(separator = "\n")
-}
-
-@Composable
 private fun RunResultsPane(result: RunProblemResponseDto) {
     val summaryMemoryUsedKb = result.memoryUsedKb ?: result.results.mapNotNull { it.memoryUsedKb }.maxOrNull()
-    Text(
-        text = stringResource(Res.string.problem_details_run_result_passed, result.passed, result.total),
-        style = MaterialTheme.typography.bodyMedium,
-        color = if (result.allPassed) {
-            MaterialTheme.colorScheme.primary
-        } else {
-            MaterialTheme.colorScheme.onSurface
-        },
-    )
-    Spacer(Modifier.height(4.dp))
-    Text(
-        text = "Runtime: ${result.runtimeMs} ms",
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
-    summaryMemoryUsedKb?.let { memoryUsedKb ->
-        Text(
-            text = "Memory: ${memoryUsedKb} KB",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+    SelectionContainer {
+        Column {
+            Text(
+                text = stringResource(Res.string.problem_details_run_result_passed, result.passed, result.total),
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (result.allPassed) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                },
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = "Runtime: ${result.runtimeMs} ms",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            summaryMemoryUsedKb?.let { memoryUsedKb ->
+                Text(
+                    text = "Memory: ${memoryUsedKb} KB",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
     }
     Spacer(Modifier.height(8.dp))
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1181,65 +1049,74 @@ private fun RunResultsPane(result: RunProblemResponseDto) {
                     containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
                 ),
             ) {
-                Column(
-                    modifier = Modifier.padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    Text(
-                        text = stringResource(Res.string.problem_details_run_result_test_label, testResult.index),
-                        style = MaterialTheme.typography.titleSmall,
-                    )
-                    Text(
-                        text = runStatusLabel(testResult),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = runStatusColor(testResult),
-                    )
-                    Text(
-                        text = stringResource(
-                            Res.string.problem_details_run_result_time,
-                            testResult.executionTimeMs,
-                        ),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    testResult.memoryUsedKb?.let { memoryUsedKb ->
+                SelectionContainer {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
                         Text(
-                            text = "Memory: ${memoryUsedKb} KB",
+                            text = stringResource(Res.string.problem_details_run_result_test_label, testResult.index),
+                            style = MaterialTheme.typography.titleSmall,
+                        )
+                        Text(
+                            text = runStatusLabel(testResult),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = runStatusColor(testResult),
+                        )
+                        Text(
+                            text = stringResource(
+                                Res.string.problem_details_run_result_time,
+                                testResult.executionTimeMs,
+                            ),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                    }
-                    if (testResult.hidden && !testResult.passed && testResult.message.isNullOrBlank()) {
-                        Text(
-                            text = stringResource(Res.string.problem_details_run_result_hidden_failed),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    if (!testResult.hidden) {
-                        testResult.expectedOutput?.takeIf { it.isNotBlank() }?.let { expected ->
+                        testResult.memoryUsedKb?.let { memoryUsedKb ->
                             Text(
-                                text = stringResource(Res.string.problem_details_run_result_expected, expected),
+                                text = "Memory: ${memoryUsedKb} KB",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
-                        testResult.actualOutput?.let { actual ->
+                        if (testResult.hidden && !testResult.passed && testResult.message.isNullOrBlank()) {
                             Text(
-                                text = stringResource(Res.string.problem_details_run_result_actual, actual),
+                                text = stringResource(Res.string.problem_details_run_result_hidden_failed),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
+                        if (!testResult.hidden) {
+                            testResult.expectedOutput?.takeIf { it.isNotBlank() }?.let { expected ->
+                                Text(
+                                    text = stringResource(Res.string.problem_details_run_result_expected, expected),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            testResult.actualOutput?.let { actual ->
+                                Text(
+                                    text = stringResource(Res.string.problem_details_run_result_actual, actual),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
                     }
-                    testResult.message?.takeIf { it.isNotBlank() }?.let { message ->
-                        val status = testResult.status.uppercase()
+                }
+                testResult.message?.takeIf { it.isNotBlank() }?.let { message ->
+                    val status = testResult.status.uppercase()
+                    Column(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
                         if (testResult.hidden && status == "FAILED") {
-                            Text(
-                                text = message,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
+                            SelectionContainer {
+                                Text(
+                                    text = message,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
                         } else {
                             ErrorConsoleMessage(
                                 message = message,

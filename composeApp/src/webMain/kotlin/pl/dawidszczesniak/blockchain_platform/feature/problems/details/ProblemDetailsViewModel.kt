@@ -2,6 +2,15 @@
 
 package pl.dawidszczesniak.blockchain_platform.feature.problems.details
 
+import blockchain_platform.composeapp.generated.resources.Res
+import blockchain_platform.composeapp.generated.resources.problem_details_submit_status_confirm_backend
+import blockchain_platform.composeapp.generated.resources.problem_details_submit_status_confirm_wallet
+import blockchain_platform.composeapp.generated.resources.problem_details_submit_status_processing
+import blockchain_platform.composeapp.generated.resources.problem_details_submit_status_queue_waiting
+import blockchain_platform.composeapp.generated.resources.problem_details_submit_status_queue_waiting_position
+import blockchain_platform.composeapp.generated.resources.problem_details_submit_status_retry_judging
+import blockchain_platform.composeapp.generated.resources.problem_details_submit_status_retry_onchain
+import blockchain_platform.composeapp.generated.resources.problem_details_submit_status_tx_sent_waiting_network
 import kotlin.math.max
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -21,6 +30,7 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import org.jetbrains.compose.resources.StringResource
 import pl.dawidszczesniak.blockchain_platform.feature.login.WalletProvider
 import pl.dawidszczesniak.blockchain_platform.feature.login.WalletSessionStore
 import pl.dawidszczesniak.blockchain_platform.feature.login.WalletTransactionRequest
@@ -42,6 +52,17 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.RetrySubm
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.RunProblemCodeUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.SubmitProblemCodeUseCase
 
+sealed interface ProblemDetailsUiText {
+    data class Raw(
+        val value: String,
+    ) : ProblemDetailsUiText
+
+    data class Resource(
+        val resource: StringResource,
+        val args: List<Any> = emptyList(),
+    ) : ProblemDetailsUiText
+}
+
 data class ProblemDetailsGateState(
     val isMembershipLoading: Boolean = true,
     val isJoined: Boolean = false,
@@ -55,15 +76,11 @@ data class ProblemDetailsGateState(
     val isSubmitting: Boolean = false,
     val isSubmitRequestInFlight: Boolean = false,
     val activeSubmissionJobId: Long? = null,
-    val submitStatusMessage: String? = null,
+    val submitStatusMessage: ProblemDetailsUiText? = null,
     val submitErrorMessage: String? = null,
     val submitResult: SubmitProblemResponseDto? = null,
-    val submitInlineStatusMessage: String? = null,
     val submitInlineErrorMessage: String? = null,
     val submitRetryAllowed: Boolean = false,
-    val isAwaitingReceiptConfirmation: Boolean = false,
-    val submitReceiptTimeoutMs: Long? = null,
-    val submitReceiptWaitStartedAtMs: Long? = null,
 )
 
 data class CompetitionLifecycleActionState(
@@ -139,12 +156,8 @@ class ProblemDetailsViewModel(
                 submitStatusMessage = null,
                 submitErrorMessage = null,
                 submitResult = if (isNewProblem) null else current.submitResult,
-                submitInlineStatusMessage = if (isNewProblem) null else current.submitInlineStatusMessage,
                 submitInlineErrorMessage = if (isNewProblem) null else current.submitInlineErrorMessage,
                 submitRetryAllowed = false,
-                isAwaitingReceiptConfirmation = false,
-                submitReceiptTimeoutMs = null,
-                submitReceiptWaitStartedAtMs = null,
             )
         }
         if (!isLoggedIn) {
@@ -156,7 +169,6 @@ class ProblemDetailsViewModel(
                     isSubmitting = false,
                     isSubmitRequestInFlight = false,
                     activeSubmissionJobId = null,
-                    isAwaitingReceiptConfirmation = false,
                 )
             }
             return
@@ -492,7 +504,6 @@ class ProblemDetailsViewModel(
                 current.copy(
                     runErrorMessage = "Source code cannot be empty.",
                     runResult = null,
-                    submitInlineStatusMessage = null,
                     submitInlineErrorMessage = null,
                 )
             }
@@ -505,7 +516,6 @@ class ProblemDetailsViewModel(
                 submitStatusMessage = null,
                 submitErrorMessage = null,
                 submitResult = null,
-                submitInlineStatusMessage = null,
                 submitInlineErrorMessage = null,
             )
         }
@@ -545,7 +555,6 @@ class ProblemDetailsViewModel(
                 current.copy(
                     submitErrorMessage = "Source code cannot be empty.",
                     submitResult = null,
-                    submitInlineStatusMessage = null,
                     submitInlineErrorMessage = null,
                 )
             }
@@ -561,12 +570,8 @@ class ProblemDetailsViewModel(
                 runErrorMessage = null,
                 runResult = null,
                 submitResult = null,
-                submitInlineStatusMessage = null,
                 submitInlineErrorMessage = null,
                 submitRetryAllowed = false,
-                isAwaitingReceiptConfirmation = false,
-                submitReceiptTimeoutMs = null,
-                submitReceiptWaitStartedAtMs = null,
             )
         }
         activeScope().launch {
@@ -602,9 +607,9 @@ class ProblemDetailsViewModel(
                 isSubmitting = true,
                 isSubmitRequestInFlight = false,
                 submitStatusMessage = if (pendingResult != null && !pendingResult.onchainRecorded) {
-                    "Ponawiam zapis wyniku on-chain."
+                    uiText(Res.string.problem_details_submit_status_retry_onchain)
                 } else {
-                    "Ponawiam sprawdzanie zadania."
+                    uiText(Res.string.problem_details_submit_status_retry_judging)
                 },
                 submitErrorMessage = null,
                 submitRetryAllowed = false,
@@ -648,9 +653,6 @@ class ProblemDetailsViewModel(
                     submitStatusMessage = null,
                     submitErrorMessage = null,
                     submitRetryAllowed = false,
-                    isAwaitingReceiptConfirmation = false,
-                    submitReceiptTimeoutMs = null,
-                    submitReceiptWaitStartedAtMs = null,
                 )
             }
         }
@@ -677,16 +679,8 @@ class ProblemDetailsViewModel(
                 submitStatusMessage = statusMessage,
                 submitErrorMessage = null,
                 submitResult = current.submitResult,
-                submitInlineStatusMessage = null,
                 submitInlineErrorMessage = null,
                 submitRetryAllowed = false,
-                isAwaitingReceiptConfirmation = job.awaitingReceiptConfirmation,
-                submitReceiptTimeoutMs = job.receiptTimeoutMs,
-                submitReceiptWaitStartedAtMs = nextReceiptWaitStartedAt(
-                    currentStartedAtMs = current.submitReceiptWaitStartedAtMs,
-                    wasAwaitingReceipt = current.isAwaitingReceiptConfirmation,
-                    isAwaitingReceipt = job.awaitingReceiptConfirmation,
-                ),
             )
         }
     }
@@ -699,11 +693,6 @@ class ProblemDetailsViewModel(
                 submitStatusMessage = null,
                 submitErrorMessage = message,
                 submitResult = pendingResult ?: current.submitResult,
-                submitInlineStatusMessage = if (pendingResult?.onchainRecorded == false) {
-                    buildInlineOnchainSubmissionStatusMessage(pendingResult)
-                } else {
-                    null
-                },
                 submitInlineErrorMessage = if (pendingResult?.onchainRecorded == false) {
                     message
                 } else {
@@ -711,13 +700,6 @@ class ProblemDetailsViewModel(
                 },
                 submitRetryAllowed = pendingResult?.onchainRecorded == false &&
                     pendingResult.onchainSimulationError.isNullOrBlank(),
-                isAwaitingReceiptConfirmation = false,
-                submitReceiptTimeoutMs = if (pendingResult?.onchainRecorded == false && !pendingResult.txHash.isNullOrBlank()) {
-                    WALLET_RECEIPT_TIMEOUT_MS
-                } else {
-                    null
-                },
-                submitReceiptWaitStartedAtMs = null,
             )
         }
     }
@@ -732,12 +714,8 @@ class ProblemDetailsViewModel(
                 submitStatusMessage = null,
                 submitErrorMessage = null,
                 submitResult = result,
-                submitInlineStatusMessage = null,
                 submitInlineErrorMessage = null,
                 submitRetryAllowed = false,
-                isAwaitingReceiptConfirmation = false,
-                submitReceiptTimeoutMs = null,
-                submitReceiptWaitStartedAtMs = null,
             )
         }
     }
@@ -761,13 +739,10 @@ class ProblemDetailsViewModel(
                 current.copy(
                     isSubmitting = true,
                     activeSubmissionJobId = jobId,
-                    submitStatusMessage = "Potwierdź zapis wyniku w portfelu.",
+                    submitStatusMessage = uiText(Res.string.problem_details_submit_status_confirm_wallet),
                     submitErrorMessage = null,
                     submitResult = pendingResult,
                     submitRetryAllowed = false,
-                    isAwaitingReceiptConfirmation = false,
-                    submitReceiptTimeoutMs = null,
-                    submitReceiptWaitStartedAtMs = null,
                 )
             }
             walletProvider.sendTransaction(
@@ -786,17 +761,10 @@ class ProblemDetailsViewModel(
             current.copy(
                 isSubmitting = true,
                 activeSubmissionJobId = jobId,
-                submitStatusMessage = "Transakcja wysłana. Czekam na potwierdzenie w sieci.",
+                submitStatusMessage = uiText(Res.string.problem_details_submit_status_tx_sent_waiting_network),
                 submitErrorMessage = null,
                 submitResult = sentResult,
                 submitRetryAllowed = false,
-                isAwaitingReceiptConfirmation = true,
-                submitReceiptTimeoutMs = WALLET_RECEIPT_TIMEOUT_MS,
-                submitReceiptWaitStartedAtMs = nextReceiptWaitStartedAt(
-                    currentStartedAtMs = current.submitReceiptWaitStartedAtMs,
-                    wasAwaitingReceipt = current.isAwaitingReceiptConfirmation,
-                    isAwaitingReceipt = true,
-                ),
             )
         }
         val receipt = walletProvider.waitForTransactionReceipt(walletId, txHash)
@@ -804,13 +772,10 @@ class ProblemDetailsViewModel(
             current.copy(
                 isSubmitting = true,
                 activeSubmissionJobId = jobId,
-                submitStatusMessage = "Potwierdzam zapis wyniku z backendem.",
+                submitStatusMessage = uiText(Res.string.problem_details_submit_status_confirm_backend),
                 submitErrorMessage = null,
                 submitResult = sentResult.copy(txHash = receipt.transactionHash),
                 submitRetryAllowed = false,
-                isAwaitingReceiptConfirmation = false,
-                submitReceiptTimeoutMs = null,
-                submitReceiptWaitStartedAtMs = null,
             )
         }
         return confirmSubmissionOnChainUseCase(
@@ -872,12 +837,8 @@ class ProblemDetailsViewModel(
                             ),
                             runResult = job.runPreview,
                             submitResult = null,
-                            submitInlineStatusMessage = null,
                             submitInlineErrorMessage = null,
                             submitRetryAllowed = false,
-                            isAwaitingReceiptConfirmation = false,
-                            submitReceiptTimeoutMs = null,
-                            submitReceiptWaitStartedAtMs = null,
                         )
                     }
                     return
@@ -891,13 +852,9 @@ class ProblemDetailsViewModel(
                             submitStatusMessage = null,
                             submitErrorMessage = job.message ?: "Judge zakończył się błędem.",
                             submitResult = null,
-                            submitInlineStatusMessage = null,
                             submitInlineErrorMessage = null,
                             activeSubmissionJobId = job.jobId,
                             submitRetryAllowed = job.retryAllowed,
-                            isAwaitingReceiptConfirmation = false,
-                            submitReceiptTimeoutMs = job.receiptTimeoutMs,
-                            submitReceiptWaitStartedAtMs = null,
                         )
                     }
                     return
@@ -931,30 +888,28 @@ private fun humanizeSubmitValidationMessage(raw: String): String {
     return raw
 }
 
-private fun humanizeSubmissionJobStatus(status: String, queuePosition: Int?, message: String?): String {
-    message?.trim()?.takeIf { it.isNotBlank() }?.let { return it }
+private fun humanizeSubmissionJobStatus(
+    status: String,
+    queuePosition: Int?,
+    message: String?,
+): ProblemDetailsUiText {
+    message?.trim()?.takeIf { it.isNotBlank() }?.let { return ProblemDetailsUiText.Raw(it) }
     return when (status.trim().lowercase()) {
         "queued" -> {
             if (queuePosition != null && queuePosition > 0) {
-                "Rozwiązanie czeka w kolejce judge. Pozycja: $queuePosition."
+                uiText(Res.string.problem_details_submit_status_queue_waiting_position, queuePosition)
             } else {
-                "Rozwiązanie czeka w kolejce judge."
+                uiText(Res.string.problem_details_submit_status_queue_waiting)
             }
         }
 
-        "running" -> "Rozwiązanie jest przetwarzane."
-        else -> status
+        "running" -> uiText(Res.string.problem_details_submit_status_processing)
+        else -> ProblemDetailsUiText.Raw(status)
     }
 }
 
-private fun buildInlineOnchainSubmissionStatusMessage(result: SubmitProblemResponseDto): String {
-    return if (!result.onchainSimulationError.isNullOrBlank()) {
-        "Wynik przeszedł judge, ale backend zatrzymał wysyłkę po symulacji reverta on-chain."
-    } else if (result.txHash.isBlank()) {
-        "Wynik przeszedł judge, ale transakcja zapisu on-chain nie została jeszcze wysłana albo potwierdzona."
-    } else {
-        "Wynik przeszedł judge, ale zapis on-chain dla tej transakcji nie został jeszcze potwierdzony przez backend."
-    }
+private fun uiText(resource: StringResource, vararg args: Any): ProblemDetailsUiText {
+    return ProblemDetailsUiText.Resource(resource = resource, args = args.toList())
 }
 
 private fun extractEmbeddedJsonObject(raw: String): JsonObject? {
@@ -1051,7 +1006,6 @@ private val SUBMIT_BLOCKED_PATTERN =
     Regex("""Submission blocked: (\d+)/(\d+) tests did not pass\. Solution was not submitted\.""")
 
 private const val SUBMISSION_JOB_POLL_INTERVAL_MS = 1_000L
-private const val WALLET_RECEIPT_TIMEOUT_MS = 180_000L
 private const val WALLET_SELECTOR_INVALID_COMPETITION = "0x1bb8aef5"
 private const val WALLET_SELECTOR_INVALID_SUBMISSION = "0xf956cee4"
 private const val WALLET_SELECTOR_INVALID_HASH = "0x0af806e0"
@@ -1060,20 +1014,6 @@ private const val WALLET_SELECTOR_PARTICIPANT_NOT_JOINED = "0x1bfa705d"
 private const val WALLET_SELECTOR_SUBMISSION_WINDOW_CLOSED = "0x6533356a"
 private const val WALLET_SELECTOR_SUBMISSION_ALREADY_RECORDED = "0x0d837dc5"
 private const val WALLET_SELECTOR_INVALID_SIGNATURE = "0x8baa579f"
-
-private fun nextReceiptWaitStartedAt(
-    currentStartedAtMs: Long?,
-    wasAwaitingReceipt: Boolean,
-    isAwaitingReceipt: Boolean,
-): Long? {
-    return if (isAwaitingReceipt) {
-        currentStartedAtMs ?: currentEpochMillis()
-    } else if (wasAwaitingReceipt) {
-        null
-    } else {
-        currentStartedAtMs
-    }
-}
 
 private enum class SubmissionJobUiStatus {
     Queued,
@@ -1094,8 +1034,3 @@ private enum class SubmissionJobUiStatus {
         }
     }
 }
-
-@JsFun("() => Date.now()")
-private external fun currentEpochMillisJs(): Double
-
-private fun currentEpochMillis(): Long = currentEpochMillisJs().toLong()

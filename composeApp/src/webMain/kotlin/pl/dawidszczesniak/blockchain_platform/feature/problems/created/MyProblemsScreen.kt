@@ -1,6 +1,5 @@
 package pl.dawidszczesniak.blockchain_platform.feature.problems.created
 
-import androidx.compose.foundation.VerticalScrollbar
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -71,7 +70,9 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.CreatedPro
 import pl.dawidszczesniak.blockchain_platform.di.LocalKoin
 import pl.dawidszczesniak.blockchain_platform.ui.AppInlineLoader
 import pl.dawidszczesniak.blockchain_platform.ui.AppPanelLoader
+import pl.dawidszczesniak.blockchain_platform.ui.AppScrollbarTrack
 import pl.dawidszczesniak.blockchain_platform.ui.AppSurface
+import pl.dawidszczesniak.blockchain_platform.ui.AppVerticalScrollbar
 import kotlin.math.max
 import kotlin.math.min
 
@@ -173,23 +174,15 @@ fun MyProblemsScreen(
                                 .fillMaxHeight()
                                 .padding(end = 6.dp)
                         ) {
-                            val shape = RoundedCornerShape(8.dp)
-
-                            Box(
+                            AppScrollbarTrack(
                                 modifier = Modifier
                                     .fillMaxHeight()
-                                    .width(8.dp)
-                                    .background(
-                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
-                                        shape = shape
-                                    )
                             )
 
-                            VerticalScrollbar(
+                            AppVerticalScrollbar(
                                 adapter = rememberScrollbarAdapter(listState),
                                 modifier = Modifier
                                     .fillMaxHeight()
-                                    .width(8.dp)
                             )
                         }
                     }

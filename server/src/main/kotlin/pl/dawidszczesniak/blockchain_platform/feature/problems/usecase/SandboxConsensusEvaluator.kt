@@ -57,23 +57,20 @@ internal class SandboxConsensusEvaluator(
             )
         }
 
-        val representativeNode = consensusEntry.value.first()
-        val runtimeMs = medianInt(
-            consensusEntry.value.mapNotNull { node ->
-                node.results.maxOfOrNull { it.executionTimeMs } ?: node.suiteExecutionTimeMs
-            }
-        ) ?: 0
-        val memoryUsedKb = medianInt(
-            consensusEntry.value.mapNotNull { node ->
-                node.results.mapNotNull { it.memoryUsedKb }.maxOrNull()
-            }
+        val consensusNodes = consensusEntry.value
+        val aggregatedResults = aggregateConsensusResults(consensusNodes)
+        val runtimeMs = aggregatedResults.sumOf { it.executionTimeMs }
+        val memoryUsedKb = aggregatedResults.mapNotNull { it.memoryUsedKb }.maxOrNull()
+        val representativeNode = consensusNodes.first().copy(
+            suiteExecutionTimeMs = runtimeMs,
+            results = aggregatedResults,
         )
 
         return SandboxConsensusDecision(
             evaluatedNodes = evaluatedNodes,
             representativeNode = representativeNode,
             consensusReached = consensusReached,
-            consensusNodeIds = consensusEntry.value.map { it.nodeId }.toSet(),
+            consensusNodeIds = consensusNodes.map { it.nodeId }.toSet(),
             resultHash = consensusEntry.key.first,
             imageHash = consensusEntry.key.second.takeIf { it.isNotBlank() },
             runtimeMs = runtimeMs,
@@ -239,6 +236,36 @@ internal class SandboxConsensusEvaluator(
             status = SubmissionAttestationStatus.Ok,
             isValid = true,
             message = null,
+        )
+    }
+}
+
+private fun aggregateConsensusResults(
+    consensusNodes: List<EvaluatedNodeRun>,
+): List<SandboxRunTestOutput> {
+    val referenceResults = consensusNodes.firstOrNull()?.results.orEmpty()
+    if (referenceResults.isEmpty()) {
+        return emptyList()
+    }
+
+    return referenceResults.map { referenceResult ->
+        val matchingResults = consensusNodes.map { node ->
+            node.results.firstOrNull { candidate ->
+                candidate.id == referenceResult.id && candidate.order == referenceResult.order
+            } ?: throw IllegalStateException(
+                "Consensus node '${node.nodeId}' is missing test result ${referenceResult.id}/${referenceResult.order}."
+            )
+        }
+        val executionTimeMs = medianInt(matchingResults.map { it.executionTimeMs }) ?: 0
+        val memoryValues = matchingResults.map { it.memoryUsedKb }
+        val memoryUsedKb = if (memoryValues.all { it != null }) {
+            medianInt(memoryValues.filterNotNull())
+        } else {
+            null
+        }
+        referenceResult.copy(
+            executionTimeMs = executionTimeMs,
+            memoryUsedKb = memoryUsedKb,
         )
     }
 }

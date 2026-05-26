@@ -55,6 +55,7 @@ internal class CreateProblemReferenceValidationServiceImpl(
     private val sandboxClient: SandboxClient,
     private val sandboxConsensusEvaluator: SandboxConsensusEvaluator,
 ) : CreateProblemReferenceValidationService {
+    @Suppress("UNUSED_PARAMETER")
     override fun validateReferenceSolution(
         referenceSolutionLanguage: String,
         referenceSolutionCode: String,
@@ -79,31 +80,12 @@ internal class CreateProblemReferenceValidationServiceImpl(
 
         val tests = parseStructuredTests(testCases)
         cancellation?.throwIfCancelled()
-        val firstRun = executeReferenceSolution(
+        return executeReferenceSolution(
             referenceSolutionCode = referenceSolutionCode,
             tests = tests,
             validationRunId = validationRunId,
             cancellation = cancellation,
         )
-        if (!requireDeterminism || !firstRun.allSuccessful) {
-            return firstRun
-        }
-
-        cancellation?.throwIfCancelled()
-        val secondRun = executeReferenceSolution(
-            referenceSolutionCode = referenceSolutionCode,
-            tests = tests,
-            validationRunId = validationRunId,
-            cancellation = cancellation,
-        )
-        val firstOutputs = firstRun.tests.map { it.output }
-        val secondOutputs = secondRun.tests.map { it.output }
-        if (!secondRun.allSuccessful || firstOutputs != secondOutputs) {
-            throw CreateProblemValidationException(
-                "Reference solution produced non-deterministic outputs across repeated runs."
-            )
-        }
-        return firstRun
     }
 
     private fun parseStructuredTests(testCases: List<CreateProblemTestCaseDto>): List<NewProblemTestDraft> {
@@ -129,11 +111,6 @@ internal class CreateProblemReferenceValidationServiceImpl(
                     "testCases[$humanIndex].inputData is too long. Max length is $MAX_TEST_INPUT_CHARS characters."
                 )
             }
-            if (testCase.timeoutMs !in 1..MAX_TEST_TIMEOUT_MS) {
-                throw CreateProblemValidationException(
-                    "testCases[$humanIndex].timeoutMs must be in range 1..$MAX_TEST_TIMEOUT_MS."
-                )
-            }
             if (testCase.memoryLimitMb !in 1..MAX_TEST_MEMORY_LIMIT_MB) {
                 throw CreateProblemValidationException(
                     "testCases[$humanIndex].memoryLimitMb must be in range 1..$MAX_TEST_MEMORY_LIMIT_MB."
@@ -145,7 +122,7 @@ internal class CreateProblemReferenceValidationServiceImpl(
                 validatorCode = "",
                 validatorLanguage = CREATE_PROBLEM_SUPPORTED_LANGUAGE,
                 isHidden = testCase.isHidden,
-                timeoutMs = testCase.timeoutMs,
+                timeoutMs = DEFAULT_CREATE_PROBLEM_TEST_TIMEOUT_MS,
                 memoryLimitMb = testCase.memoryLimitMb,
             )
         }
@@ -263,7 +240,7 @@ internal fun normalizeCreateProblemOutput(raw: String): String {
 
 internal const val CREATE_PROBLEM_SUPPORTED_LANGUAGE = "kotlin"
 internal const val MAX_TEST_CASES = 100
-internal const val MAX_TEST_TIMEOUT_MS = 60_000
+internal const val DEFAULT_CREATE_PROBLEM_TEST_TIMEOUT_MS = 1_000
 internal const val MAX_TEST_MEMORY_LIMIT_MB = 2048
 internal const val MAX_REFERENCE_SOLUTION_CHARS = 120_000
 internal const val MAX_TEST_INPUT_CHARS = 64_000

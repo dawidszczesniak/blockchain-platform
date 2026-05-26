@@ -3,7 +3,6 @@ package pl.dawidszczesniak.blockchain_platform.ui
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
-import androidx.compose.material3.Text
 import androidx.compose.material3.Typography
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
@@ -115,10 +114,12 @@ private val IntelliJTypography = Typography(
 fun AppTheme(
     content: @Composable () -> Unit
 ) {
-    MaterialTheme(
-        colorScheme = IntelliJDarkColors,
-        typography = IntelliJTypography,
-        shapes = AppShapes,
-        content = content,
-    )
+    ProvideAppScrollbarStyle {
+        MaterialTheme(
+            colorScheme = IntelliJDarkColors,
+            typography = IntelliJTypography,
+            shapes = AppShapes,
+            content = content,
+        )
+    }
 }

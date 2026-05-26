@@ -44,6 +44,7 @@ import java.nio.charset.StandardCharsets
 import java.util.Base64
 
 private const val DEFAULT_WARMUP_ITERATIONS = 25
+private const val MEASURED_ITERATIONS = 3
 private const val GC_SETTLE_MILLIS = 50L
 private const val MAX_STDOUT_BYTES = 1_048_576
 private const val MAX_STDERR_BYTES = 1_048_576
@@ -69,6 +70,15 @@ private data class WorkerResponse(
 private data class ExecutionResult(
     val output: String,
     val stderr: String,
+)
+
+private data class MeasuredRunSample(
+    val status: String,
+    val output: String,
+    val stderr: String,
+    val executionTimeNs: Long,
+    val memoryUsedKb: Long?,
+    val internalError: String? = null,
 )
 
 private class ExecutionFailureException(
@@ -338,53 +348,30 @@ private fun performRun(
             System.gc()
             System.runFinalization()
             Thread.sleep(GC_SETTLE_MILLIS)
-
-            val allocatedBefore = currentAllocatedBytes()
-            val startedAt = System.nanoTime()
-            val result = try {
-                plan.execute(input)
-            } catch (error: ExecutionFailureException) {
-                val executionTimeNs = System.nanoTime() - startedAt
-                val allocatedAfter = currentAllocatedBytes()
-                val memoryUsedKb = if (
-                    allocatedBefore != null &&
-                    allocatedAfter != null &&
-                    allocatedAfter >= allocatedBefore
-                ) {
-                    ((allocatedAfter - allocatedBefore) + 1023L) / 1024L
-                } else {
-                    null
-                }
+            val measuredRuns = List(MEASURED_ITERATIONS) {
+                measureExecutionSample(plan, input)
+            }
+            val referenceRun = measuredRuns.first()
+            if (measuredRuns.any { !it.matches(referenceRun) }) {
                 return WorkerResponse(
                     testId = testId,
                     status = "ERROR",
-                    outputBase64 = encodeBase64(error.output),
-                    stderrBase64 = encodeBase64(error.stderr),
-                    executionTimeNs = executionTimeNs,
-                    memoryUsedKb = memoryUsedKb,
-                    internalErrorBase64 = encodeBase64(throwableToString(rootCause(error))),
+                    outputBase64 = encodeBase64(referenceRun.output),
+                    stderrBase64 = encodeBase64(referenceRun.stderr),
+                    executionTimeNs = medianLong(measuredRuns.map { it.executionTimeNs }),
+                    memoryUsedKb = medianNullableLong(measuredRuns.map { it.memoryUsedKb }),
+                    internalErrorBase64 = encodeBase64("Repeated measurement runs produced inconsistent outputs or errors."),
                 )
-            }
-            val executionTimeNs = System.nanoTime() - startedAt
-            val allocatedAfter = currentAllocatedBytes()
-            val memoryUsedKb = if (
-                allocatedBefore != null &&
-                allocatedAfter != null &&
-                allocatedAfter >= allocatedBefore
-            ) {
-                ((allocatedAfter - allocatedBefore) + 1023L) / 1024L
-            } else {
-                null
             }
 
             WorkerResponse(
                 testId = testId,
-                status = "OK",
-                outputBase64 = encodeBase64(result.output),
-                stderrBase64 = encodeBase64(result.stderr),
-                executionTimeNs = executionTimeNs,
-                memoryUsedKb = memoryUsedKb,
-                internalErrorBase64 = null,
+                status = referenceRun.status,
+                outputBase64 = encodeBase64(referenceRun.output),
+                stderrBase64 = encodeBase64(referenceRun.stderr),
+                executionTimeNs = medianLong(measuredRuns.map { it.executionTimeNs }),
+                memoryUsedKb = medianNullableLong(measuredRuns.map { it.memoryUsedKb }),
+                internalErrorBase64 = referenceRun.internalError?.let(::encodeBase64),
             )
         }
     } catch (error: Throwable) {
@@ -398,6 +385,72 @@ private fun performRun(
             internalErrorBase64 = encodeBase64(throwableToString(rootCause(error))),
         )
     }
+}
+
+private fun measureExecutionSample(
+    plan: ExecutionPlan,
+    input: String,
+): MeasuredRunSample {
+    val allocatedBefore = currentAllocatedBytes()
+    val startedAt = System.nanoTime()
+    return try {
+        val result = plan.execute(input)
+        val executionTimeNs = System.nanoTime() - startedAt
+        val allocatedAfter = currentAllocatedBytes()
+        MeasuredRunSample(
+            status = "OK",
+            output = result.output,
+            stderr = result.stderr,
+            executionTimeNs = executionTimeNs,
+            memoryUsedKb = allocatedMemoryDeltaKb(allocatedBefore, allocatedAfter),
+        )
+    } catch (error: ExecutionFailureException) {
+        val executionTimeNs = System.nanoTime() - startedAt
+        val allocatedAfter = currentAllocatedBytes()
+        MeasuredRunSample(
+            status = "ERROR",
+            output = error.output,
+            stderr = error.stderr,
+            executionTimeNs = executionTimeNs,
+            memoryUsedKb = allocatedMemoryDeltaKb(allocatedBefore, allocatedAfter),
+            internalError = throwableToString(rootCause(error)),
+        )
+    }
+}
+
+private fun allocatedMemoryDeltaKb(
+    allocatedBefore: Long?,
+    allocatedAfter: Long?,
+): Long? {
+    if (
+        allocatedBefore == null ||
+        allocatedAfter == null ||
+        allocatedAfter < allocatedBefore
+    ) {
+        return null
+    }
+    return ((allocatedAfter - allocatedBefore) + 1023L) / 1024L
+}
+
+private fun MeasuredRunSample.matches(other: MeasuredRunSample): Boolean {
+    return status == other.status &&
+        output == other.output &&
+        stderr == other.stderr &&
+        internalError == other.internalError
+}
+
+private fun medianLong(values: List<Long>): Long {
+    require(values.isNotEmpty()) { "medianLong requires at least one value." }
+    val sorted = values.sorted()
+    return sorted[sorted.size / 2]
+}
+
+private fun medianNullableLong(values: List<Long?>): Long? {
+    val presentValues = values.filterNotNull()
+    if (presentValues.size != values.size || presentValues.isEmpty()) {
+        return null
+    }
+    return medianLong(presentValues)
 }
 
 fun main(args: Array<String>) {

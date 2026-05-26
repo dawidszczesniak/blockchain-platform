@@ -210,7 +210,7 @@ internal class CreateProblemDraftFactory(
                 validatorCode = "",
                 validatorLanguage = CREATE_PROBLEM_SUPPORTED_LANGUAGE,
                 isHidden = testCase.isHidden,
-                timeoutMs = testCase.timeoutMs,
+                timeoutMs = DEFAULT_CREATE_PROBLEM_TEST_TIMEOUT_MS,
                 memoryLimitMb = testCase.memoryLimitMb,
             )
         }
