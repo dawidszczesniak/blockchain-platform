@@ -29,6 +29,7 @@ fun App() {
                 onNavigate = { appViewModel.onIntent(AppIntent.Navigate(it)) },
                 isLoggedIn = state.isLoggedIn,
                 isRestoringSession = state.isRestoringSession,
+                sessionExpirationReason = state.sessionExpirationReason,
                 onLoginClick = {
                     appViewModel.onIntent(AppIntent.OpenLogin)
                 },
@@ -37,6 +38,9 @@ fun App() {
                 },
                 onLogout = {
                     appViewModel.onIntent(AppIntent.Logout)
+                },
+                onDismissSessionExpired = {
+                    appViewModel.onIntent(AppIntent.DismissSessionExpiredNotice)
                 }
             )
         }

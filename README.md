@@ -167,6 +167,13 @@ Backend, frontend build, Docker Compose, and Foundry scripts use one configurati
 
 `.env.local` is mandatory for local development, must keep `APP_ENV=local`, and must define the local DB, Redis, auth, Ethereum, and sandbox settings the backend loads at startup.
 
+Auth session defaults are intentionally conservative:
+
+- `AUTH_SESSION_TTL_SECONDS` defaults to `86400` (24 hours absolute lifetime).
+- `AUTH_SESSION_IDLE_TIMEOUT_SECONDS` defaults to `7200` (2 hours without authenticated activity).
+- `AUTH_MAX_ACTIVE_SESSIONS_PER_USER` defaults to `1`; a new login revokes the user's previous session.
+- `AUTH_SESSION_SAME_SITE` defaults to `Strict`. Use `None` only when the frontend and backend must run cross-site, and only together with `AUTH_SESSION_SECURE=true`.
+
 Before running `forge script`, export that file into your shell:
 
 ```bash

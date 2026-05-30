@@ -72,6 +72,7 @@ import pl.dawidszczesniak.blockchain_platform.feature.login.WalletProvider
 import pl.dawidszczesniak.blockchain_platform.feature.login.WalletSessionStore
 import pl.dawidszczesniak.blockchain_platform.feature.maintenance.BackendHealthViewModel
 import pl.dawidszczesniak.blockchain_platform.feature.maintenance.BackendMaintenanceViewModel
+import pl.dawidszczesniak.blockchain_platform.feature.maintenance.ClientConnectivityMonitor
 import pl.dawidszczesniak.blockchain_platform.feature.problems.participation.MyParticipationViewModel
 import pl.dawidszczesniak.blockchain_platform.feature.problems.participation.ParticipationSyncStore
 import pl.dawidszczesniak.blockchain_platform.feature.problems.created.MyProblemsViewModel
@@ -82,12 +83,15 @@ import pl.dawidszczesniak.blockchain_platform.feature.settings.SettingsViewModel
 import pl.dawidszczesniak.blockchain_platform.feature.settings.AppLanguageStore
 import pl.dawidszczesniak.blockchain_platform.network.BrowserHttpTextClient
 import pl.dawidszczesniak.blockchain_platform.network.HttpTextClient
+import pl.dawidszczesniak.blockchain_platform.network.SessionExpirationNotifier
 
 fun appModules() = module {
     single { AppConfigProvider.config }
     single { AppLanguageStore() }
     single { ParticipationSyncStore() }
-    single<HttpTextClient> { BrowserHttpTextClient() }
+    single { ClientConnectivityMonitor() }
+    single { SessionExpirationNotifier() }
+    single<HttpTextClient> { BrowserHttpTextClient(sessionExpirationNotifier = get()) }
     single<ProblemRemoteDataSource> {
         ProblemRemoteDataSourceImpl(
             apiBaseUrl = get<AppConfig>().apiBaseUrl,
@@ -149,11 +153,11 @@ fun appModules() = module {
     factory<GetDashboardUpdatesUseCase> { GetDashboardUpdatesUseCaseImpl(get()) }
     factory<GetPlatformConfigUseCase> { GetPlatformConfigUseCaseImpl(get()) }
     factory<LoginUseCase> { LoginUseCaseImpl(get(), get(), get(), get()) }
-    factory { AppViewModel(get(), get(), get()) }
+    factory { AppViewModel(get(), get(), get(), get(), get()) }
     factory { HomeViewModel(get(), get(), get()) }
     factory { LoginViewModel(get(), get()) }
     factory { SettingsViewModel(get(), get(), get()) }
-    factory { BackendHealthViewModel(get()) }
+    factory { BackendHealthViewModel(get(), get()) }
     factory { BackendMaintenanceViewModel() }
     factory { CreateProblemViewModel(get(), get(), get(), get(), get(), get(), get()) }
     factory {

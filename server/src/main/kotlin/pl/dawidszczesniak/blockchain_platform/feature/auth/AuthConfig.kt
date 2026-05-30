@@ -23,6 +23,8 @@ internal data class AuthConfig(
     val sessionSignKey: String,
     val sessionSecureCookie: Boolean,
     val sessionTtlSeconds: Long,
+    val sessionIdleTimeoutSeconds: Long,
+    val maxActiveSessionsPerUser: Int,
     val sessionSameSite: SessionSameSite,
     val trustProxyHeaders: Boolean,
     val trustedOrigins: Set<String>,
@@ -52,11 +54,19 @@ internal data class AuthConfig(
             val sessionTtlSeconds = env["AUTH_SESSION_TTL_SECONDS"]
                 ?.toLongOrNull()
                 ?.coerceIn(60, 60L * 60L * 24L * 30L)
-                ?: 60L * 60L * 24L * 14L
+                ?: 60L * 60L * 24L
+            val sessionIdleTimeoutSeconds = env["AUTH_SESSION_IDLE_TIMEOUT_SECONDS"]
+                ?.toLongOrNull()
+                ?.coerceIn(60, sessionTtlSeconds)
+                ?: minOf(60L * 60L * 2L, sessionTtlSeconds)
+            val maxActiveSessionsPerUser = env["AUTH_MAX_ACTIVE_SESSIONS_PER_USER"]
+                ?.toIntOrNull()
+                ?.coerceIn(1, 50)
+                ?: 1
             val sessionSameSite = env["AUTH_SESSION_SAME_SITE"]
                 ?.trim()
                 ?.let { parseSameSite(it) }
-                ?: SessionSameSite.Lax
+                ?: SessionSameSite.Strict
             val trustProxyHeaders = (
                 env["AUTH_TRUST_PROXY_HEADERS"]
                     ?.trim()
@@ -118,6 +128,8 @@ internal data class AuthConfig(
                 sessionSignKey = signKey,
                 sessionSecureCookie = secureCookie,
                 sessionTtlSeconds = sessionTtlSeconds,
+                sessionIdleTimeoutSeconds = sessionIdleTimeoutSeconds,
+                maxActiveSessionsPerUser = maxActiveSessionsPerUser,
                 sessionSameSite = sessionSameSite,
                 trustProxyHeaders = trustProxyHeaders,
                 trustedOrigins = trustedOrigins,

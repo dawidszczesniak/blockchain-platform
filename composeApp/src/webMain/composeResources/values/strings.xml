@@ -276,6 +276,17 @@
 
     <string name="backend_unavailable_title">Backend unavailable</string>
     <string name="backend_unavailable_body">Some data may be out of date. Please try again later.</string>
+    <string name="network_offline_title">No internet connection</string>
+    <string name="network_offline_waiting">Waiting for the connection to return</string>
+    <string name="network_offline_body">Check your Wi-Fi or network connection. The app will resume automatically.</string>
+    <string name="session_expired_title">Session expired</string>
+    <string name="session_expired_body">Sign in with your wallet again to continue working with your account.</string>
+    <string name="session_expired_idle_title">Signed out due to inactivity</string>
+    <string name="session_expired_idle_body">There was no authenticated activity for a while. Sign in with your wallet again to continue.</string>
+    <string name="session_expired_absolute_title">Session expired</string>
+    <string name="session_expired_absolute_body">The maximum signed-in time has passed. Sign in with your wallet again to continue.</string>
+    <string name="session_expired_action">Sign in again</string>
+    <string name="session_expired_dismiss">Close</string>
     <string name="maintenance_title">We\u2019re performing maintenance</string>
     <string name="maintenance_body">The platform will be back shortly.</string>
 </resources>

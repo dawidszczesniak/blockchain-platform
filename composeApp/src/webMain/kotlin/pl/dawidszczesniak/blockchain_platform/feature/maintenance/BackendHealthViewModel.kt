@@ -19,25 +19,32 @@ data class BackendHealthState(
 
 sealed interface BackendHealthIntent {
     data object Start : BackendHealthIntent
+    data object RefreshNow : BackendHealthIntent
 }
 
 class BackendHealthViewModel(
     private val appConfig: AppConfig,
-    private val intervalMs: Long = 15_000L,
+    private val clientConnectivityMonitor: ClientConnectivityMonitor,
+    private val intervalMs: Long = 2_000L,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val _state = MutableStateFlow(BackendHealthState())
     val state: StateFlow<BackendHealthState> = _state.asStateFlow()
     private var pollingStarted: Boolean = false
+    private var refreshInFlight: Boolean = false
 
     init {
         onIntent(BackendHealthIntent.Start)
+        watchClientConnectivity()
     }
 
     fun onIntent(intent: BackendHealthIntent) {
         when (intent) {
             BackendHealthIntent.Start -> {
                 startPollingIfNeeded()
+            }
+            BackendHealthIntent.RefreshNow -> {
+                refreshHealthAsync()
             }
         }
     }
@@ -51,14 +58,56 @@ class BackendHealthViewModel(
         pollingStarted = true
         scope.launch {
             while (isActive) {
-                val isAvailable = runCatching {
-                    checkBackendHealth(appConfig.apiBaseUrl)
-                }.getOrDefault(false)
+                refreshHealth()
+                delay(intervalMs)
+            }
+        }
+    }
+
+    private fun watchClientConnectivity() {
+        scope.launch {
+            clientConnectivityMonitor.state.collect { connectivity ->
+                if (connectivity.isOnline) {
+                    refreshHealthAsync()
+                } else {
+                    _state.update { current ->
+                        current.copy(isAvailable = null)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun refreshHealthAsync() {
+        scope.launch {
+            refreshHealth()
+        }
+    }
+
+    private suspend fun refreshHealth() {
+        if (refreshInFlight) {
+            return
+        }
+        refreshInFlight = true
+        try {
+            if (!clientConnectivityMonitor.state.value.isOnline) {
+                _state.update { current ->
+                    current.copy(isAvailable = null)
+                }
+                return
+            }
+
+            val isAvailable = runCatching {
+                checkBackendHealth(appConfig.apiBaseUrl)
+            }.getOrDefault(false)
+
+            if (clientConnectivityMonitor.state.value.isOnline) {
                 _state.update { current ->
                     current.copy(isAvailable = isAvailable)
                 }
-                delay(intervalMs)
             }
+        } finally {
+            refreshInFlight = false
         }
     }
 }

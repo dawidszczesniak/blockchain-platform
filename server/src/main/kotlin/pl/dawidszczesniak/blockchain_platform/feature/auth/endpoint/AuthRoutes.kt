@@ -79,7 +79,11 @@ internal fun Route.authRoutes() {
                 controller.verifyChallenge(request)
             }
             val sessionCookie = withContext(Dispatchers.IO) {
-                sessionStore.createSession(session, authConfig.sessionTtlSeconds)
+                sessionStore.createSession(
+                    session = session,
+                    ttlSeconds = authConfig.sessionTtlSeconds,
+                    maxActiveSessionsPerUser = authConfig.maxActiveSessionsPerUser,
+                )
             }
             call.sessions.set(sessionCookie)
             call.respond(response)

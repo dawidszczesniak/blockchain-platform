@@ -16,6 +16,7 @@ internal data class AuthSession(
     val userId: Long,
     val walletAddress: String,
     val issuedAtEpochSeconds: Long,
+    val lastSeenAtEpochSeconds: Long,
 )
 
 internal fun ApplicationCall.requireAuthSession(
@@ -30,7 +31,16 @@ internal fun ApplicationCall.requireAuthSession(
     }
 
     val nowEpochSeconds = System.currentTimeMillis() / 1000L
-    val session = sessionStore.fetchActiveSession(sessionId, nowEpochSeconds)
+    val session = try {
+        sessionStore.fetchActiveSession(
+            sessionId = sessionId,
+            nowEpochSeconds = nowEpochSeconds,
+            idleTimeoutSeconds = authConfig.sessionIdleTimeoutSeconds,
+        )
+    } catch (error: AuthSessionExpiredException) {
+        sessions.clear<AuthSessionCookie>()
+        throw AuthRequiredException(error.message ?: error.reason.authMessage())
+    }
     if (session == null) {
         sessions.clear<AuthSessionCookie>()
         throw AuthRequiredException("Session expired. Please login again.")
@@ -38,7 +48,7 @@ internal fun ApplicationCall.requireAuthSession(
     if (nowEpochSeconds - session.issuedAtEpochSeconds > authConfig.sessionTtlSeconds) {
         sessionStore.deleteSession(sessionId)
         sessions.clear<AuthSessionCookie>()
-        throw AuthRequiredException("Session expired. Please login again.")
+        throw AuthRequiredException(AuthSessionExpirationReason.AbsoluteTimeout.authMessage())
     }
     return session
 }

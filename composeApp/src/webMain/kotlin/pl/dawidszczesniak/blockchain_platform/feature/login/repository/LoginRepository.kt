@@ -1,6 +1,7 @@
 package pl.dawidszczesniak.blockchain_platform.feature.login.repository
 
 import pl.dawidszczesniak.blockchain_platform.feature.auth.dto.AuthChallengeResponseDto
+import pl.dawidszczesniak.blockchain_platform.network.SessionExpirationReason
 
 interface LoginRepository {
     suspend fun createChallenge(walletAddress: String, chainId: Long): AuthChallengeResponseDto
@@ -9,6 +10,11 @@ interface LoginRepository {
     suspend fun getSessionWallet(): String?
     suspend fun logout()
 }
+
+class SessionExpiredException(
+    val reason: SessionExpirationReason,
+    message: String,
+) : IllegalStateException(message)
 
 data class LoginSession(
     val walletAddress: String,

@@ -20,10 +20,12 @@ internal class AuthController(
 
     fun verifyChallenge(request: AuthVerifyRequestDto): Pair<AuthSession, AuthVerifyResponseDto> {
         val verified = verifyWalletChallengeUseCase(request)
+        val nowEpochSeconds = System.currentTimeMillis() / 1000L
         val session = AuthSession(
             userId = verified.userId,
             walletAddress = verified.walletAddress,
-            issuedAtEpochSeconds = System.currentTimeMillis() / 1000L,
+            issuedAtEpochSeconds = nowEpochSeconds,
+            lastSeenAtEpochSeconds = nowEpochSeconds,
         )
         val response = AuthVerifyResponseDto(walletAddress = verified.walletAddress)
         return session to response

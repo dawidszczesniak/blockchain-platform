@@ -276,6 +276,17 @@
 
     <string name="backend_unavailable_title">Backend niedostępny</string>
     <string name="backend_unavailable_body">Część danych może być nieaktualna. Spróbuj ponownie później.</string>
+    <string name="network_offline_title">Brak połączenia z internetem</string>
+    <string name="network_offline_waiting">Czekam na powrót połączenia</string>
+    <string name="network_offline_body">Sprawdź Wi-Fi albo połączenie sieciowe. Aplikacja wznowi działanie automatycznie.</string>
+    <string name="session_expired_title">Sesja wygasła</string>
+    <string name="session_expired_body">Zaloguj się ponownie portfelem, aby kontynuować pracę na koncie.</string>
+    <string name="session_expired_idle_title">Wylogowano z powodu bezczynności</string>
+    <string name="session_expired_idle_body">Przez dłuższy czas nie było aktywności wymagającej zalogowania. Zaloguj się ponownie portfelem, aby kontynuować.</string>
+    <string name="session_expired_absolute_title">Sesja wygasła</string>
+    <string name="session_expired_absolute_body">Minął maksymalny czas zalogowania. Zaloguj się ponownie portfelem, aby kontynuować.</string>
+    <string name="session_expired_action">Zaloguj ponownie</string>
+    <string name="session_expired_dismiss">Zamknij</string>
     <string name="maintenance_title">Trwają prace serwisowe</string>
     <string name="maintenance_body">Strona wkrótce wróci.</string>
 </resources>
