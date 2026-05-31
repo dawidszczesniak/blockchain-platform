@@ -258,7 +258,7 @@ internal class ProblemReadRepositoryImpl(
     override fun registerUserForProblem(userId: Long, problemId: Int): JoinProblemResult {
         return transactionRunner.inTransaction {
             val normalizedProblemId = problemId.toLong()
-            val problemRow = problemDao.fetchOpenProblemRow(normalizedProblemId)
+            val problemRow = problemDao.fetchOpenProblemRowForUpdate(normalizedProblemId)
                 ?: throw IllegalArgumentException("Problem not found or not open.")
             val requiredParticipants = problemRow[ProblemsTable.requiredParticipants]
             val joinUntilDate = problemRow[ProblemsTable.joinUntilDate]
@@ -286,7 +286,7 @@ internal class ProblemReadRepositoryImpl(
                         userId = userId,
                     )
                     if (!nowRegistered) {
-                    throw error
+                        throw error
                     }
                 }
             }
@@ -309,7 +309,7 @@ internal class ProblemReadRepositoryImpl(
     ): JoinProblemResult {
         return transactionRunner.inTransaction {
             val normalizedProblemId = problemId.toLong()
-            val problemRow = problemDao.fetchOpenProblemRow(normalizedProblemId)
+            val problemRow = problemDao.fetchOpenProblemRowForUpdate(normalizedProblemId)
                 ?: throw IllegalArgumentException("Problem not found or not open.")
             val requiredParticipants = problemRow[ProblemsTable.requiredParticipants]
             val joinUntilDate = problemRow[ProblemsTable.joinUntilDate]
@@ -457,6 +457,7 @@ internal class ProblemReadRepositoryImpl(
             draft.testResults.forEach { test ->
                 ProblemSubmissionTestResultsTable.insert {
                     it[ProblemSubmissionTestResultsTable.submissionId] = submissionId
+                    it[ProblemSubmissionTestResultsTable.problemId] = draft.problemId.toLong()
                     it[problemTestId] = test.problemTestId
                     it[resultStatus] = test.status.dbValue
                     it[executionTimeMs] = test.executionTimeMs

@@ -108,6 +108,7 @@ internal object ProblemSubmissionsTable : Table("problem_submissions") {
 
 internal object ProblemSubmissionTestResultsTable : Table("problem_submission_test_results") {
     val submissionId = long("submission_id")
+    val problemId = long("problem_id")
     val problemTestId = long("problem_test_id")
     val resultStatus = varchar("result_status", length = 16)
     val executionTimeMs = integer("execution_time_ms")

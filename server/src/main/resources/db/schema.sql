@@ -5,7 +5,7 @@
 -- 4) problem_tests: ordered test definitions per problem.
 -- 5) problem_submissions: attempt history (many submissions per user and problem).
 -- 6) problem_submission_test_results: per-test verdicts for a single submission.
--- 7) problem_winners: history of user wins per problem.
+-- 7) problem_winners: single winner settlement record per problem.
 
 CREATE TABLE IF NOT EXISTS users (
     user_id BIGSERIAL PRIMARY KEY,
@@ -76,7 +76,9 @@ CREATE TABLE IF NOT EXISTS problem_tests (
     is_hidden BOOLEAN NOT NULL DEFAULT TRUE,
     timeout_ms INTEGER NOT NULL DEFAULT 1000 CHECK (timeout_ms > 0),
     memory_limit_mb INTEGER NOT NULL DEFAULT 256 CHECK (memory_limit_mb > 0),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_problem_tests_problem_id_problem_test_id
+        UNIQUE (problem_id, problem_test_id)
 );
 
 CREATE TABLE IF NOT EXISTS problem_submissions (
@@ -101,21 +103,36 @@ CREATE TABLE IF NOT EXISTS problem_submissions (
     onchain_record_error TEXT,
     onchain_recorded_at TIMESTAMPTZ,
     submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT chk_problem_submissions_source_code_length
+        CHECK (char_length(source_code) <= 120000),
+    CONSTRAINT uq_problem_submissions_submission_problem
+        UNIQUE (submission_id, problem_id),
+    CONSTRAINT uq_problem_submissions_submission_problem_user
+        UNIQUE (submission_id, problem_id, user_id),
     FOREIGN KEY (problem_id, user_id)
         REFERENCES problem_participants(problem_id, user_id)
         ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS problem_submission_test_results (
-    submission_id BIGINT NOT NULL REFERENCES problem_submissions(submission_id) ON DELETE CASCADE,
-    problem_test_id BIGINT NOT NULL REFERENCES problem_tests(problem_test_id) ON DELETE CASCADE,
+    submission_id BIGINT NOT NULL,
+    problem_id BIGINT NOT NULL,
+    problem_test_id BIGINT NOT NULL,
     result_status VARCHAR(16) NOT NULL
         CHECK (result_status IN ('passed', 'failed', 'error', 'timeout')),
     execution_time_ms INTEGER NOT NULL CHECK (execution_time_ms >= 0),
     memory_used_kb INTEGER CHECK (memory_used_kb >= 0),
     message TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    PRIMARY KEY (submission_id, problem_test_id)
+    PRIMARY KEY (submission_id, problem_test_id),
+    CONSTRAINT fk_problem_submission_test_results_submission_problem
+        FOREIGN KEY (submission_id, problem_id)
+        REFERENCES problem_submissions(submission_id, problem_id)
+        ON DELETE CASCADE,
+    CONSTRAINT fk_problem_submission_test_results_problem_test
+        FOREIGN KEY (problem_id, problem_test_id)
+        REFERENCES problem_tests(problem_id, problem_test_id)
+        ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS problem_submission_judge_jobs (
@@ -132,7 +149,12 @@ CREATE TABLE IF NOT EXISTS problem_submission_judge_jobs (
     submission_id BIGINT REFERENCES problem_submissions(submission_id) ON DELETE SET NULL,
     requested_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     started_at TIMESTAMPTZ,
-    completed_at TIMESTAMPTZ
+    completed_at TIMESTAMPTZ,
+    CONSTRAINT chk_problem_submission_judge_jobs_source_code_length
+        CHECK (char_length(source_code) <= 120000),
+    CONSTRAINT fk_problem_submission_judge_jobs_submission_context
+        FOREIGN KEY (submission_id, problem_id, user_id)
+        REFERENCES problem_submissions(submission_id, problem_id, user_id)
 );
 
 CREATE TABLE IF NOT EXISTS competition_settlement_jobs (
@@ -186,6 +208,7 @@ CREATE TABLE IF NOT EXISTS problem_winners (
     settlement_from_wallet VARCHAR(66),
     won_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (problem_id, winner_user_id),
+    CONSTRAINT uq_problem_winners_problem_id UNIQUE (problem_id),
     FOREIGN KEY (problem_id, winner_user_id)
         REFERENCES problem_participants(problem_id, user_id)
         ON DELETE CASCADE
@@ -811,6 +834,149 @@ EXCEPTION
     WHEN duplicate_object THEN NULL;
 END $$;
 
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conrelid = 'problem_tests'::regclass
+          AND conname = 'uq_problem_tests_problem_id_problem_test_id'
+    ) THEN
+        ALTER TABLE problem_tests
+            ADD CONSTRAINT uq_problem_tests_problem_id_problem_test_id
+            UNIQUE (problem_id, problem_test_id);
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conrelid = 'problem_submissions'::regclass
+          AND conname = 'uq_problem_submissions_submission_problem'
+    ) THEN
+        ALTER TABLE problem_submissions
+            ADD CONSTRAINT uq_problem_submissions_submission_problem
+            UNIQUE (submission_id, problem_id);
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conrelid = 'problem_submissions'::regclass
+          AND conname = 'uq_problem_submissions_submission_problem_user'
+    ) THEN
+        ALTER TABLE problem_submissions
+            ADD CONSTRAINT uq_problem_submissions_submission_problem_user
+            UNIQUE (submission_id, problem_id, user_id);
+    END IF;
+END $$;
+
+ALTER TABLE problem_submission_test_results
+    ADD COLUMN IF NOT EXISTS problem_id BIGINT;
+
+UPDATE problem_submission_test_results r
+SET problem_id = s.problem_id
+FROM problem_submissions s
+WHERE r.submission_id = s.submission_id
+  AND r.problem_id IS NULL;
+
+ALTER TABLE problem_submission_test_results
+    ALTER COLUMN problem_id SET NOT NULL;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conrelid = 'problem_submission_test_results'::regclass
+          AND conname = 'fk_problem_submission_test_results_submission_problem'
+    ) THEN
+        ALTER TABLE problem_submission_test_results
+            ADD CONSTRAINT fk_problem_submission_test_results_submission_problem
+            FOREIGN KEY (submission_id, problem_id)
+            REFERENCES problem_submissions(submission_id, problem_id)
+            ON DELETE CASCADE;
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conrelid = 'problem_submission_test_results'::regclass
+          AND conname = 'fk_problem_submission_test_results_problem_test'
+    ) THEN
+        ALTER TABLE problem_submission_test_results
+            ADD CONSTRAINT fk_problem_submission_test_results_problem_test
+            FOREIGN KEY (problem_id, problem_test_id)
+            REFERENCES problem_tests(problem_id, problem_test_id)
+            ON DELETE CASCADE;
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conrelid = 'problem_submission_judge_jobs'::regclass
+          AND conname = 'fk_problem_submission_judge_jobs_submission_context'
+    ) THEN
+        ALTER TABLE problem_submission_judge_jobs
+            ADD CONSTRAINT fk_problem_submission_judge_jobs_submission_context
+            FOREIGN KEY (submission_id, problem_id, user_id)
+            REFERENCES problem_submissions(submission_id, problem_id, user_id);
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conrelid = 'problem_winners'::regclass
+          AND conname = 'uq_problem_winners_problem_id'
+    ) THEN
+        ALTER TABLE problem_winners
+            ADD CONSTRAINT uq_problem_winners_problem_id
+            UNIQUE (problem_id);
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conrelid = 'problem_submission_judge_jobs'::regclass
+          AND conname = 'chk_problem_submission_judge_jobs_source_code_length'
+    ) THEN
+        ALTER TABLE problem_submission_judge_jobs
+            ADD CONSTRAINT chk_problem_submission_judge_jobs_source_code_length
+            CHECK (char_length(source_code) <= 120000);
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conrelid = 'problem_submissions'::regclass
+          AND conname = 'chk_problem_submissions_source_code_length'
+    ) THEN
+        ALTER TABLE problem_submissions
+            ADD CONSTRAINT chk_problem_submissions_source_code_length
+            CHECK (char_length(source_code) <= 120000);
+    END IF;
+END $$;
+
 ALTER TABLE dashboard_daily_metrics
     DROP COLUMN IF EXISTS created_at;
 
@@ -833,23 +999,44 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_problem_tests_problem_id_test_order
 CREATE INDEX IF NOT EXISTS idx_problem_submission_test_results_problem_test_id
     ON problem_submission_test_results(problem_test_id);
 
+CREATE INDEX IF NOT EXISTS idx_problem_submission_test_results_submission_problem
+    ON problem_submission_test_results(submission_id, problem_id);
+
+CREATE INDEX IF NOT EXISTS idx_problem_submission_test_results_problem_test
+    ON problem_submission_test_results(problem_id, problem_test_id);
+
 CREATE INDEX IF NOT EXISTS idx_problem_submissions_user_id
     ON problem_submissions(user_id);
 
 CREATE INDEX IF NOT EXISTS idx_problem_submissions_problem_user
     ON problem_submissions(problem_id, user_id);
 
-CREATE INDEX IF NOT EXISTS idx_problem_submissions_onchain_record_tx
-    ON problem_submissions(onchain_record_tx_hash);
+DROP INDEX IF EXISTS idx_problem_submissions_onchain_record_tx;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_problem_submissions_onchain_record_tx_uq
+    ON problem_submissions(onchain_record_tx_hash)
+    WHERE onchain_record_tx_hash IS NOT NULL;
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_problem_submissions_onchain_submission_id
     ON problem_submissions(onchain_submission_id);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_problem_participants_join_tx_hash_uq
+    ON problem_participants(join_tx_hash)
+    WHERE join_tx_hash IS NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_problems_onchain_settlement_tx_hash_uq
+    ON problems(onchain_settlement_tx_hash)
+    WHERE onchain_settlement_tx_hash IS NOT NULL;
 
 CREATE INDEX IF NOT EXISTS idx_problem_submission_judge_jobs_status_requested_at
     ON problem_submission_judge_jobs(status, requested_at);
 
 CREATE INDEX IF NOT EXISTS idx_problem_submission_judge_jobs_user_id
     ON problem_submission_judge_jobs(user_id, requested_at);
+
+CREATE INDEX IF NOT EXISTS idx_problem_submission_judge_jobs_submission_context
+    ON problem_submission_judge_jobs(submission_id, problem_id, user_id)
+    WHERE submission_id IS NOT NULL;
 
 CREATE INDEX IF NOT EXISTS idx_problem_submission_attestations_submission_id
     ON problem_submission_attestations(submission_id);

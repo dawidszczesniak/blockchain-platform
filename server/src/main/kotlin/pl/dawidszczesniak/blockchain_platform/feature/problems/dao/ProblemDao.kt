@@ -8,6 +8,7 @@ import org.jetbrains.exposed.sql.innerJoin
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.select
 import org.jetbrains.exposed.sql.selectAll
+import org.jetbrains.exposed.sql.vendors.ForUpdateOption
 import pl.dawidszczesniak.blockchain_platform.db.ProblemLifecycleStatus
 import pl.dawidszczesniak.blockchain_platform.db.tables.ProblemParticipantsTable
 import pl.dawidszczesniak.blockchain_platform.db.tables.ProblemSubmissionsTable
@@ -26,6 +27,7 @@ internal interface ProblemDao {
     fun fetchOpenProblemRows(): List<ResultRow>
     fun fetchProblemRow(problemId: Long): ResultRow?
     fun fetchOpenProblemRow(problemId: Long): ResultRow?
+    fun fetchOpenProblemRowForUpdate(problemId: Long): ResultRow?
     fun fetchCreatedProblemRowsForUser(userId: Long): List<ResultRow>
     fun fetchParticipationProblemRowsForUser(userId: Long): List<ResultRow>
     fun isUserRegisteredForProblem(problemId: Long, userId: Long): Boolean
@@ -106,6 +108,17 @@ internal class ProblemDaoImpl : ProblemDao {
 
     override fun fetchOpenProblemRow(problemId: Long): ResultRow? {
         return fetchProblemRow(problemId)
+            ?.takeIf { row ->
+                row[ProblemsTable.problemStatus] == ProblemLifecycleStatus.Open.dbValue
+            }
+    }
+
+    override fun fetchOpenProblemRowForUpdate(problemId: Long): ResultRow? {
+        return ProblemsTable
+            .selectAll()
+            .where { ProblemsTable.problemId eq problemId }
+            .forUpdate(ForUpdateOption.PostgreSQL.ForUpdate(null, ProblemsTable))
+            .singleOrNull()
             ?.takeIf { row ->
                 row[ProblemsTable.problemStatus] == ProblemLifecycleStatus.Open.dbValue
             }

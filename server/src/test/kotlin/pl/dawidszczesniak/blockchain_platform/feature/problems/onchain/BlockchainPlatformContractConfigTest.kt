@@ -43,7 +43,7 @@ class BlockchainPlatformContractConfigTest {
             )
         }
         assertEquals(
-            "ETH_PLATFORM_OPERATOR_PRIVATE_KEY must be configured because settlement and accepted result recording are always on-chain.",
+            "ETH_PLATFORM_OPERATOR_PRIVATE_KEY must be configured because submission result payloads are signed by platform operator.",
             missingOperatorKey.message,
         )
     }
