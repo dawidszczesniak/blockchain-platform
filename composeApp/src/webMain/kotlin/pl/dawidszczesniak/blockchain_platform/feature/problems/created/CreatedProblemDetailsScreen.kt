@@ -44,8 +44,6 @@ import blockchain_platform.composeapp.generated.resources.my_problems_started
 import blockchain_platform.composeapp.generated.resources.my_problems_waiting
 import blockchain_platform.composeapp.generated.resources.nav_my_problems
 import blockchain_platform.composeapp.generated.resources.problem_details_back
-import blockchain_platform.composeapp.generated.resources.problem_details_action_cancel_loading
-import blockchain_platform.composeapp.generated.resources.problem_details_action_settle_loading
 import blockchain_platform.composeapp.generated.resources.problem_details_constraints_title
 import blockchain_platform.composeapp.generated.resources.problem_details_example_input
 import blockchain_platform.composeapp.generated.resources.problem_details_example_label
@@ -67,7 +65,6 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.ProblemExa
 import pl.dawidszczesniak.blockchain_platform.feature.problems.domain.ProblemSummary
 import pl.dawidszczesniak.blockchain_platform.feature.problems.details.CompetitionLifecycleActionSection
 import pl.dawidszczesniak.blockchain_platform.feature.problems.details.CompetitionLifecycleActionState
-import pl.dawidszczesniak.blockchain_platform.feature.problems.details.ProblemDetailsProgressOverlay
 import pl.dawidszczesniak.blockchain_platform.feature.problems.details.ProblemDetailsViewModel
 import pl.dawidszczesniak.blockchain_platform.feature.problems.details.PublicReferenceSolutionSection
 import pl.dawidszczesniak.blockchain_platform.feature.problems.statement.ProblemStatementContent
@@ -179,17 +176,6 @@ fun CreatedProblemDetailsScreen(
                     )
                 }
             }
-        }
-
-        if (competitionActionState.isSettling || competitionActionState.isCancelling) {
-            ProblemDetailsProgressOverlay(
-                message = competitionActionState.statusMessage?.takeIf { it.isNotBlank() }
-                    ?: if (competitionActionState.isSettling) {
-                        stringResource(Res.string.problem_details_action_settle_loading)
-                    } else {
-                        stringResource(Res.string.problem_details_action_cancel_loading)
-                    },
-            )
         }
     }
 }

@@ -4,11 +4,11 @@ import kotlinx.serialization.json.Json
 import pl.dawidszczesniak.blockchain_platform.feature.auth.BlockchainConfig
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.PreparedWalletTransactionDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.SubmitProblemResponseDto
-import pl.dawidszczesniak.blockchain_platform.feature.problems.onchain.BlockchainPlatformContractClient
 import pl.dawidszczesniak.blockchain_platform.feature.problems.onchain.BlockchainPlatformContractConfig
 import pl.dawidszczesniak.blockchain_platform.feature.problems.onchain.PreparedCompetitionTransaction
+import pl.dawidszczesniak.blockchain_platform.feature.problems.onchain.SubmissionResultContractClient
 import pl.dawidszczesniak.blockchain_platform.feature.problems.onchain.SubmissionResultRecord
-import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.ProblemWriteRepository
+import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.SubmissionResultRepository
 
 internal interface SubmissionOnchainPayloadRefresher {
     fun refresh(
@@ -19,8 +19,8 @@ internal interface SubmissionOnchainPayloadRefresher {
 }
 
 internal class SubmissionOnchainPayloadRefresherImpl(
-    private val repository: ProblemWriteRepository,
-    private val contractClient: BlockchainPlatformContractClient,
+    private val repository: SubmissionResultRepository,
+    private val contractClient: SubmissionResultContractClient,
     private val contractConfig: BlockchainPlatformContractConfig,
     private val blockchainConfig: BlockchainConfig,
 ) : SubmissionOnchainPayloadRefresher {

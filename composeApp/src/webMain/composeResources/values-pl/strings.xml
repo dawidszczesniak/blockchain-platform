@@ -64,6 +64,7 @@
     <string name="create_problem_submit_until_label">Koniec zgłoszeń (YYYY-MM-DD)</string>
     <string name="create_problem_date_picker_confirm">OK</string>
     <string name="create_problem_date_picker_dismiss">Anuluj</string>
+    <string name="operation_cancel">Przerwij operację</string>
     <string name="create_problem_action_create">Utwórz problem</string>
     <string name="create_problem_action_creating">Tworzenie...</string>
     <string name="create_problem_validation_required">To pole jest wymagane.</string>

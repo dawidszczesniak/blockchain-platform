@@ -204,6 +204,7 @@ sealed interface CreateProblemIntent {
     data class RunSingleTest(val id: Int) : CreateProblemIntent
     data object RunAllTests : CreateProblemIntent
     data object CancelRun : CreateProblemIntent
+    data object CancelSubmit : CreateProblemIntent
     data object Submit : CreateProblemIntent
 }
 
@@ -218,6 +219,7 @@ class CreateProblemViewModel(
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var activeRunJob: Job? = null
+    private var activeSubmitJob: Job? = null
     private var activeValidationRunId: String? = null
     private val _state = MutableStateFlow(CreateProblemState())
     val state: StateFlow<CreateProblemState> = _state.asStateFlow()
@@ -360,12 +362,14 @@ class CreateProblemViewModel(
             is CreateProblemIntent.RunSingleTest -> runSingleTest(intent.id)
             CreateProblemIntent.RunAllTests -> runAllTests()
             CreateProblemIntent.CancelRun -> cancelActiveRun()
+            CreateProblemIntent.CancelSubmit -> cancelActiveSubmit()
             CreateProblemIntent.Submit -> submit()
         }
     }
 
     fun close() {
         activeRunJob?.cancel()
+        activeSubmitJob?.cancel()
         scope.cancel()
     }
 
@@ -414,7 +418,7 @@ class CreateProblemViewModel(
             )
         }
 
-        scope.launch {
+        activeSubmitJob = scope.launch {
             runCatching {
                 val walletId = walletSessionStore.currentWalletId()
                     ?: error("Reconnect wallet before creating an on-chain competition.")
@@ -517,6 +521,9 @@ class CreateProblemViewModel(
                     submitSuccessProblemId = createdProblemId,
                 )
             }.onFailure { error ->
+                if (error is CancellationException) {
+                    return@onFailure
+                }
                 _state.update { current ->
                     current.copy(
                         isSubmitting = false,
@@ -527,6 +534,12 @@ class CreateProblemViewModel(
                         submitErrorMessage = extractReadableErrorMessage(error),
                         submitSuccessProblemId = null,
                     )
+                }
+            }
+        }.also { job ->
+            job.invokeOnCompletion {
+                if (activeSubmitJob === job) {
+                    activeSubmitJob = null
                 }
             }
         }
@@ -817,6 +830,22 @@ class CreateProblemViewModel(
                 runCancelled = true,
                 runErrorMessage = null,
                 submitQueuedAfterValidation = false,
+            )
+        }
+    }
+
+    private fun cancelActiveSubmit() {
+        activeSubmitJob?.cancel()
+        activeSubmitJob = null
+        _state.update { current ->
+            current.copy(
+                isSubmitting = false,
+                submitQueuedAfterValidation = false,
+                submitFailed = false,
+                requiresFreshValidationForSubmit = false,
+                submitStatusMessage = null,
+                submitErrorMessage = null,
+                submitSuccessProblemId = null,
             )
         }
     }

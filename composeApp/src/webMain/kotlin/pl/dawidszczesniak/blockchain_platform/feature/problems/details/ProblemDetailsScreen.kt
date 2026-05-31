@@ -46,6 +46,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -55,6 +56,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import blockchain_platform.composeapp.generated.resources.Res
 import blockchain_platform.composeapp.generated.resources.days_count
+import blockchain_platform.composeapp.generated.resources.operation_cancel
 import blockchain_platform.composeapp.generated.resources.problem_details_back
 import blockchain_platform.composeapp.generated.resources.problem_details_action_cancel_loading
 import blockchain_platform.composeapp.generated.resources.problem_details_action_settle_loading
@@ -299,56 +301,72 @@ fun ProblemDetailsScreen(
                 }
             }
         }
+    }
+}
 
-        when {
-            competitionActionState.isSettling || competitionActionState.isCancelling -> {
-                ProblemDetailsProgressOverlay(
-                    message = competitionActionState.statusMessage?.takeIf { it.isNotBlank() }
-                        ?: if (competitionActionState.isSettling) {
-                            stringResource(Res.string.problem_details_action_settle_loading)
-                        } else {
-                            stringResource(Res.string.problem_details_action_cancel_loading)
-                        },
-                )
-            }
+@Composable
+internal fun ProblemDetailsOverlay(
+    gateState: ProblemDetailsGateState?,
+    competitionActionState: CompetitionLifecycleActionState,
+    onCancelCompetitionAction: () -> Unit,
+    onCancelJoin: () -> Unit,
+    onCancelRun: () -> Unit,
+    onCancelSubmit: () -> Unit,
+    onDismissSubmitPopup: () -> Unit,
+    onRetrySubmit: () -> Unit,
+) {
+    when {
+        competitionActionState.isSettling || competitionActionState.isCancelling -> {
+            ProblemDetailsProgressOverlay(
+                message = competitionActionState.statusMessage?.takeIf { it.isNotBlank() }
+                    ?: if (competitionActionState.isSettling) {
+                        stringResource(Res.string.problem_details_action_settle_loading)
+                    } else {
+                        stringResource(Res.string.problem_details_action_cancel_loading)
+                    },
+                onCancel = onCancelCompetitionAction,
+            )
+        }
 
-            gateState.isJoining -> {
-                ProblemDetailsProgressOverlay(
-                    message = gateState.joinStatusMessage?.takeIf { it.isNotBlank() }
-                        ?: stringResource(Res.string.problem_details_editor_locked_join_action_loading),
-                )
-            }
+        gateState?.isJoining == true -> {
+            ProblemDetailsProgressOverlay(
+                message = gateState.joinStatusMessage?.takeIf { it.isNotBlank() }
+                    ?: stringResource(Res.string.problem_details_editor_locked_join_action_loading),
+                onCancel = onCancelJoin,
+            )
+        }
 
-            gateState.isRunning -> {
-                ProblemDetailsProgressOverlay(
-                    message = stringResource(Res.string.problem_details_run_running),
-                )
-            }
+        gateState?.isRunning == true -> {
+            ProblemDetailsProgressOverlay(
+                message = stringResource(Res.string.problem_details_run_running),
+                onCancel = onCancelRun,
+            )
+        }
 
-            gateState.isSubmitting || gateState.isSubmitRequestInFlight -> {
-                ProblemDetailsSubmitOverlay(
-                    isLoading = true,
-                    message = resolveProblemDetailsUiText(gateState.submitStatusMessage)?.takeIf { it.isNotBlank() }
-                        ?: stringResource(Res.string.problem_details_submit_submitting),
-                    errorMessage = null,
-                    retryAllowed = false,
-                    retryInFlight = false,
-                    onDismiss = { },
-                    onRetry = { },
-                )
-            }
+        gateState?.isSubmitting == true || gateState?.isSubmitRequestInFlight == true -> {
+            ProblemDetailsSubmitOverlay(
+                isLoading = true,
+                message = resolveProblemDetailsUiText(gateState.submitStatusMessage)?.takeIf { it.isNotBlank() }
+                    ?: stringResource(Res.string.problem_details_submit_submitting),
+                errorMessage = null,
+                retryAllowed = false,
+                retryInFlight = false,
+                onCancel = onCancelSubmit,
+                onDismiss = { },
+                onRetry = { },
+            )
+        }
 
-            !gateState.submitErrorMessage.isNullOrBlank() -> {
-                ProblemDetailsSubmitOverlay(
-                    isLoading = false,
-                    message = null,
-                    errorMessage = gateState.submitErrorMessage,
-                    retryAllowed = gateState.submitRetryAllowed,
-                    retryInFlight = false,
-                    onDismiss = viewModel::dismissSubmitPopup,
-                    onRetry = viewModel::retrySubmit,
-                )
-            }
+        !gateState?.submitErrorMessage.isNullOrBlank() -> {
+            ProblemDetailsSubmitOverlay(
+                isLoading = false,
+                message = null,
+                errorMessage = gateState.submitErrorMessage,
+                retryAllowed = gateState.submitRetryAllowed,
+                retryInFlight = false,
+                onDismiss = onDismissSubmitPopup,
+                onRetry = onRetrySubmit,
+            )
         }
     }
 }
@@ -508,6 +526,7 @@ private fun CodeEditorPane(
 ) {
     val editorBlocked = overlayState.show
     val paneScroll = rememberScrollState()
+    val editorShape = RoundedCornerShape(8.dp)
 
     Box(modifier = modifier) {
         AppSurface(modifier = Modifier.fillMaxSize()) {
@@ -539,17 +558,28 @@ private fun CodeEditorPane(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Spacer(Modifier.height(10.dp))
-                    OutlinedTextField(
-                        value = code,
-                        onValueChange = onCodeChange,
-                        modifier = editorModifier,
-                        enabled = !editorBlocked,
-                        textStyle = MaterialTheme.typography.bodyMedium.copy(
-                            fontFamily = FontFamily.Monospace,
-                        ),
-                        minLines = 16,
-                        maxLines = 50,
-                    )
+                    Box {
+                        OutlinedTextField(
+                            value = code,
+                            onValueChange = onCodeChange,
+                            modifier = editorModifier.clip(editorShape),
+                            enabled = !editorBlocked,
+                            shape = editorShape,
+                            textStyle = MaterialTheme.typography.bodyMedium.copy(
+                                fontFamily = FontFamily.Monospace,
+                            ),
+                            minLines = 16,
+                            maxLines = 50,
+                        )
+                        if (overlayState.show) {
+                            LockedEditorOverlay(
+                                modifier = Modifier.matchParentSize(),
+                                shape = editorShape,
+                                overlayState = overlayState,
+                                onJoinRequest = onJoinRequest,
+                            )
+                        }
+                    }
                     Spacer(Modifier.height(8.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -593,100 +623,124 @@ private fun CodeEditorPane(
                 }
             }
         }
+    }
+}
 
-        if (overlayState.show) {
-            Box(
+@Composable
+private fun LockedEditorOverlay(
+    modifier: Modifier,
+    shape: RoundedCornerShape,
+    overlayState: EditorOverlayState,
+    onJoinRequest: () -> Unit,
+) {
+    Box(
+        modifier = modifier
+            .clip(shape)
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.72f)),
+    ) {
+        OutlinedCard(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth(),
+            shape = RoundedCornerShape(
+                topStart = 20.dp,
+                topEnd = 20.dp,
+                bottomStart = 8.dp,
+                bottomEnd = 8.dp,
+            ),
+            colors = CardDefaults.outlinedCardColors(
+                containerColor = MaterialTheme.colorScheme.surface,
+            ),
+        ) {
+            Column(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.72f)),
-            )
-            OutlinedCard(
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .padding(20.dp)
                     .fillMaxWidth()
-                    .widthIn(max = 420.dp),
-                colors = CardDefaults.outlinedCardColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                ),
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    when {
-                        overlayState.isLoadingMembership -> {
-                            CircularProgressIndicator()
-                            Text(
-                                text = stringResource(Res.string.problem_details_editor_locked_loading),
-                                modifier = Modifier.fillMaxWidth(),
-                                style = MaterialTheme.typography.bodyMedium,
-                                textAlign = TextAlign.Center,
-                            )
-                        }
-
-                        overlayState.requiresJoin -> {
-                            Text(
-                                text = stringResource(Res.string.problem_details_editor_locked_join_title),
-                                modifier = Modifier.fillMaxWidth(),
-                                style = MaterialTheme.typography.titleMedium,
-                                textAlign = TextAlign.Center,
-                            )
-                            Text(
-                                text = stringResource(Res.string.problem_details_editor_locked_join_body),
-                                modifier = Modifier.fillMaxWidth(),
-                                style = MaterialTheme.typography.bodyMedium,
-                                textAlign = TextAlign.Center,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            Button(
-                                onClick = onJoinRequest,
-                                enabled = !overlayState.isJoining,
-                            ) {
-                                Text(
-                                    if (overlayState.isJoining) {
-                                        stringResource(Res.string.problem_details_editor_locked_join_action_loading)
-                                    } else {
-                                        stringResource(Res.string.problem_details_editor_locked_join_action)
-                                    },
-                                )
-                            }
-                        }
-
-                        overlayState.waitingForStart -> {
-                            Text(
-                                text = stringResource(Res.string.problem_details_editor_locked_waiting_title),
-                                modifier = Modifier.fillMaxWidth(),
-                                style = MaterialTheme.typography.titleMedium,
-                                textAlign = TextAlign.Center,
-                            )
-                            Text(
-                                text = stringResource(
-                                    Res.string.problem_details_editor_locked_waiting_body,
-                                    overlayState.registeredParticipants,
-                                    overlayState.requiredParticipants,
-                                ),
-                                modifier = Modifier.fillMaxWidth(),
-                                style = MaterialTheme.typography.bodyMedium,
-                                textAlign = TextAlign.Center,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-
-                    if (!overlayState.joinErrorMessage.isNullOrBlank()) {
-                        Text(
-                            text = overlayState.joinErrorMessage,
-                            modifier = Modifier.fillMaxWidth(),
-                            style = MaterialTheme.typography.bodySmall,
-                            textAlign = TextAlign.Center,
-                            color = MaterialTheme.colorScheme.error,
-                        )
-                    }
-                }
+                LockedEditorOverlayContent(
+                    overlayState = overlayState,
+                    onJoinRequest = onJoinRequest,
+                )
             }
         }
+    }
+}
+
+@Composable
+private fun LockedEditorOverlayContent(
+    overlayState: EditorOverlayState,
+    onJoinRequest: () -> Unit,
+) {
+    when {
+        overlayState.isLoadingMembership -> {
+            CircularProgressIndicator()
+            Text(
+                text = stringResource(Res.string.problem_details_editor_locked_loading),
+                modifier = Modifier.fillMaxWidth(),
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.Center,
+            )
+        }
+
+        overlayState.requiresJoin -> {
+            Text(
+                text = stringResource(Res.string.problem_details_editor_locked_join_title),
+                modifier = Modifier.fillMaxWidth(),
+                style = MaterialTheme.typography.titleMedium,
+                textAlign = TextAlign.Center,
+            )
+            Text(
+                text = stringResource(Res.string.problem_details_editor_locked_join_body),
+                modifier = Modifier.fillMaxWidth(),
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.Center,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Button(
+                onClick = onJoinRequest,
+                enabled = !overlayState.isJoining,
+            ) {
+                Text(
+                    if (overlayState.isJoining) {
+                        stringResource(Res.string.problem_details_editor_locked_join_action_loading)
+                    } else {
+                        stringResource(Res.string.problem_details_editor_locked_join_action)
+                    },
+                )
+            }
+        }
+
+        overlayState.waitingForStart -> {
+            Text(
+                text = stringResource(Res.string.problem_details_editor_locked_waiting_title),
+                modifier = Modifier.fillMaxWidth(),
+                style = MaterialTheme.typography.titleMedium,
+                textAlign = TextAlign.Center,
+            )
+            Text(
+                text = stringResource(
+                    Res.string.problem_details_editor_locked_waiting_body,
+                    overlayState.registeredParticipants,
+                    overlayState.requiredParticipants,
+                ),
+                modifier = Modifier.fillMaxWidth(),
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.Center,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+
+    if (!overlayState.joinErrorMessage.isNullOrBlank()) {
+        Text(
+            text = overlayState.joinErrorMessage,
+            modifier = Modifier.fillMaxWidth(),
+            style = MaterialTheme.typography.bodySmall,
+            textAlign = TextAlign.Center,
+            color = MaterialTheme.colorScheme.error,
+        )
     }
 }
 
@@ -739,7 +793,10 @@ private fun PaneScrollbar(
 }
 
 @Composable
-internal fun ProblemDetailsProgressOverlay(message: String) {
+internal fun ProblemDetailsProgressOverlay(
+    message: String,
+    onCancel: () -> Unit,
+) {
     val loadingDotsCount = rememberJoinOverlayLoadingDotsCount()
     Box(
         modifier = Modifier
@@ -777,6 +834,9 @@ internal fun ProblemDetailsProgressOverlay(message: String) {
                     color = MaterialTheme.colorScheme.onSurface,
                     textAlign = TextAlign.Center,
                 )
+                OutlinedButton(onClick = onCancel) {
+                    Text(stringResource(Res.string.operation_cancel))
+                }
             }
         }
     }
@@ -789,6 +849,7 @@ private fun ProblemDetailsSubmitOverlay(
     errorMessage: String?,
     retryAllowed: Boolean,
     retryInFlight: Boolean,
+    onCancel: (() -> Unit)? = null,
     onDismiss: () -> Unit,
     onRetry: () -> Unit,
 ) {
@@ -830,6 +891,11 @@ private fun ProblemDetailsSubmitOverlay(
                         color = MaterialTheme.colorScheme.onSurface,
                         textAlign = TextAlign.Center,
                     )
+                    if (onCancel != null) {
+                        OutlinedButton(onClick = onCancel) {
+                            Text(stringResource(Res.string.operation_cancel))
+                        }
+                    }
                 } else {
                     ErrorConsoleMessage(
                         message = errorMessage.orEmpty(),

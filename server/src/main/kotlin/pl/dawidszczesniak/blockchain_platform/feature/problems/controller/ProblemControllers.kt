@@ -44,28 +44,11 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.PrepareCa
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.PrepareSettleCompetitionOnChainUseCase
 import pl.dawidszczesniak.blockchain_platform.feature.problems.usecase.ValidateCreateProblemUseCase
 
-internal class ProblemController(
+internal class ProblemQueryController(
     private val getProblemSummariesUseCase: GetProblemSummariesUseCase,
     private val getProblemSummaryByIdUseCase: GetProblemSummaryByIdUseCase,
     private val getCreatedProblemsUseCase: GetCreatedProblemsUseCase,
     private val getParticipationProblemsUseCase: GetParticipationProblemsUseCase,
-    private val createProblemUseCase: CreateProblemUseCase,
-    private val prepareCreateProblemOnChainUseCase: PrepareCreateProblemOnChainUseCase,
-    private val confirmCreateProblemOnChainUseCase: ConfirmCreateProblemOnChainUseCase,
-    private val validateCreateProblemUseCase: ValidateCreateProblemUseCase,
-    private val cancelCreateProblemValidationUseCase: CancelCreateProblemValidationUseCase,
-    private val joinProblemUseCase: JoinProblemUseCase,
-    private val prepareJoinProblemOnChainUseCase: PrepareJoinProblemOnChainUseCase,
-    private val confirmJoinProblemOnChainUseCase: ConfirmJoinProblemOnChainUseCase,
-    private val prepareSettleCompetitionOnChainUseCase: PrepareSettleCompetitionOnChainUseCase,
-    private val confirmSettleCompetitionOnChainUseCase: ConfirmSettleCompetitionOnChainUseCase,
-    private val prepareCancelCompetitionOnChainUseCase: PrepareCancelCompetitionOnChainUseCase,
-    private val confirmCancelCompetitionOnChainUseCase: ConfirmCancelCompetitionOnChainUseCase,
-    private val confirmSubmissionResultOnChainUseCase: ConfirmSubmissionResultOnChainUseCase,
-    private val runProblemCodeUseCase: RunProblemCodeUseCase,
-    private val enqueueProblemSubmissionUseCase: EnqueueProblemSubmissionUseCase,
-    private val getSubmissionJudgeJobUseCase: GetSubmissionJudgeJobUseCase,
-    private val retrySubmissionJudgeJobUseCase: RetrySubmissionJudgeJobUseCase,
 ) {
     fun getProblemSummaries(): List<ProblemSummaryDto> {
         return getProblemSummariesUseCase().map { it.toDto() }
@@ -82,7 +65,15 @@ internal class ProblemController(
     fun getParticipationProblems(userId: Long): List<ParticipationProblemDto> {
         return getParticipationProblemsUseCase(userId).map { it.toDto() }
     }
+}
 
+internal class ProblemCreationController(
+    private val createProblemUseCase: CreateProblemUseCase,
+    private val prepareCreateProblemOnChainUseCase: PrepareCreateProblemOnChainUseCase,
+    private val confirmCreateProblemOnChainUseCase: ConfirmCreateProblemOnChainUseCase,
+    private val validateCreateProblemUseCase: ValidateCreateProblemUseCase,
+    private val cancelCreateProblemValidationUseCase: CancelCreateProblemValidationUseCase,
+) {
     fun createProblem(userId: Long, request: CreateProblemRequestDto): CreateProblemResponseDto {
         val createdId = createProblemUseCase(userId, request)
         return CreateProblemResponseDto(id = createdId)
@@ -117,7 +108,13 @@ internal class ProblemController(
     ) {
         cancelCreateProblemValidationUseCase(userId, request.validationRunId)
     }
+}
 
+internal class ProblemParticipationController(
+    private val joinProblemUseCase: JoinProblemUseCase,
+    private val prepareJoinProblemOnChainUseCase: PrepareJoinProblemOnChainUseCase,
+    private val confirmJoinProblemOnChainUseCase: ConfirmJoinProblemOnChainUseCase,
+) {
     fun joinProblem(userId: Long, problemId: Int): JoinProblemResponseDto {
         val result = joinProblemUseCase(userId, problemId)
         return JoinProblemResponseDto(
@@ -143,7 +140,14 @@ internal class ProblemController(
     ): JoinProblemResponseDto {
         return confirmJoinProblemOnChainUseCase(userId, walletAddress, problemId, request)
     }
+}
 
+internal class CompetitionLifecycleController(
+    private val prepareSettleCompetitionOnChainUseCase: PrepareSettleCompetitionOnChainUseCase,
+    private val confirmSettleCompetitionOnChainUseCase: ConfirmSettleCompetitionOnChainUseCase,
+    private val prepareCancelCompetitionOnChainUseCase: PrepareCancelCompetitionOnChainUseCase,
+    private val confirmCancelCompetitionOnChainUseCase: ConfirmCancelCompetitionOnChainUseCase,
+) {
     fun prepareSettleCompetitionOnChain(
         userId: Long,
         walletAddress: String,
@@ -177,6 +181,15 @@ internal class ProblemController(
     ): CompetitionLifecycleActionResponseDto {
         return confirmCancelCompetitionOnChainUseCase(userId, walletAddress, problemId, request)
     }
+}
+
+internal class ProblemSubmissionController(
+    private val confirmSubmissionResultOnChainUseCase: ConfirmSubmissionResultOnChainUseCase,
+    private val runProblemCodeUseCase: RunProblemCodeUseCase,
+    private val enqueueProblemSubmissionUseCase: EnqueueProblemSubmissionUseCase,
+    private val getSubmissionJudgeJobUseCase: GetSubmissionJudgeJobUseCase,
+    private val retrySubmissionJudgeJobUseCase: RetrySubmissionJudgeJobUseCase,
+) {
 
     fun confirmSubmissionResultOnChain(
         userId: Long,

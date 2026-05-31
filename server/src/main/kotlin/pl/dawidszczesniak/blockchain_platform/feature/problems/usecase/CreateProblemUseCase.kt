@@ -10,7 +10,7 @@ internal interface CreateProblemUseCase {
     operator fun invoke(userId: Long, request: CreateProblemRequestDto): Int
 }
 
-internal class CreateProblemUseCaseImpl : CreateProblemUseCase {
+internal class DisabledDirectCreateProblemUseCase : CreateProblemUseCase {
     override fun invoke(userId: Long, request: CreateProblemRequestDto): Int {
         throw CreateProblemValidationException(
             "Direct backend-only creation is disabled. Prepare and confirm the on-chain transaction instead."

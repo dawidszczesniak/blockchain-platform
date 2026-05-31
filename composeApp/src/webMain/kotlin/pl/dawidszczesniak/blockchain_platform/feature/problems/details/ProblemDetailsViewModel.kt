@@ -15,6 +15,7 @@ import kotlin.math.max
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
@@ -114,6 +115,10 @@ class ProblemDetailsViewModel(
     private val getPlatformConfigUseCase: GetPlatformConfigUseCase,
 ) {
     private var scope = newScope()
+    private var joinJob: Job? = null
+    private var runJob: Job? = null
+    private var submitJob: Job? = null
+    private var competitionActionJob: Job? = null
     private val joinedProblemIds = mutableSetOf<Int>()
     private var loadedProblemId: Int? = null
     private var loadedCompetitionProblemId: Int? = null
@@ -244,7 +249,7 @@ class ProblemDetailsViewModel(
                 joinErrorMessage = null,
             )
         }
-        activeScope().launch {
+        joinJob = activeScope().launch {
             runCatching {
                 val walletId = walletSessionStore.currentWalletId()
                     ?: error("Reconnect wallet before joining this competition.")
@@ -321,6 +326,9 @@ class ProblemDetailsViewModel(
                     }
                 }
                 .onFailure { error ->
+                    if (error is CancellationException) {
+                        return@onFailure
+                    }
                     _state.update { current ->
                         current.copy(
                             isJoining = false,
@@ -329,6 +337,12 @@ class ProblemDetailsViewModel(
                         )
                     }
                 }
+        }.also { job ->
+            job.invokeOnCompletion {
+                if (joinJob === job) {
+                    joinJob = null
+                }
+            }
         }
     }
 
@@ -347,7 +361,7 @@ class ProblemDetailsViewModel(
                 explorerUrl = null,
             )
         }
-        activeScope().launch {
+        competitionActionJob = activeScope().launch {
             runCatching {
                 val walletId = walletSessionStore.currentWalletId()
                     ?: error("Reconnect wallet before settling this competition.")
@@ -410,6 +424,12 @@ class ProblemDetailsViewModel(
                         )
                     }
                 }
+        }.also { job ->
+            job.invokeOnCompletion {
+                if (competitionActionJob === job) {
+                    competitionActionJob = null
+                }
+            }
         }
     }
 
@@ -428,7 +448,7 @@ class ProblemDetailsViewModel(
                 explorerUrl = null,
             )
         }
-        activeScope().launch {
+        competitionActionJob = activeScope().launch {
             runCatching {
                 val walletId = walletSessionStore.currentWalletId()
                     ?: error("Reconnect wallet before cancelling this competition.")
@@ -491,6 +511,12 @@ class ProblemDetailsViewModel(
                         )
                     }
                 }
+        }.also { job ->
+            job.invokeOnCompletion {
+                if (competitionActionJob === job) {
+                    competitionActionJob = null
+                }
+            }
         }
     }
 
@@ -519,7 +545,7 @@ class ProblemDetailsViewModel(
                 submitInlineErrorMessage = null,
             )
         }
-        activeScope().launch {
+        runJob = activeScope().launch {
             runCatching { runProblemCodeUseCase(problemId, sourceCode, language) }
                 .onSuccess { runResult ->
                     _state.update { current ->
@@ -542,6 +568,12 @@ class ProblemDetailsViewModel(
                         )
                     }
                 }
+        }.also { job ->
+            job.invokeOnCompletion {
+                if (runJob === job) {
+                    runJob = null
+                }
+            }
         }
     }
 
@@ -574,7 +606,7 @@ class ProblemDetailsViewModel(
                 submitRetryAllowed = false,
             )
         }
-        activeScope().launch {
+        submitJob = activeScope().launch {
             runCatching { submitProblemCodeUseCase(problemId, sourceCode, language) }
                 .onSuccess { job ->
                     applySubmissionJobState(job)
@@ -592,6 +624,12 @@ class ProblemDetailsViewModel(
                     }
                     applySubmitError(extractReadableErrorMessage(error))
                 }
+        }.also { job ->
+            job.invokeOnCompletion {
+                if (submitJob === job) {
+                    submitJob = null
+                }
+            }
         }
     }
 
@@ -615,7 +653,7 @@ class ProblemDetailsViewModel(
                 submitRetryAllowed = false,
             )
         }
-        activeScope().launch {
+        submitJob = activeScope().launch {
             val retryAction = when {
                 pendingResult != null && !pendingResult.onchainRecorded -> runCatching {
                     val latestJob = getSubmissionJudgeJobUseCase(jobId)
@@ -641,6 +679,61 @@ class ProblemDetailsViewModel(
                         pendingResult = _state.value.submitResult ?: pendingResult,
                     )
                 }
+        }.also { job ->
+            job.invokeOnCompletion {
+                if (submitJob === job) {
+                    submitJob = null
+                }
+            }
+        }
+    }
+
+    fun cancelJoin() {
+        joinJob?.cancel()
+        joinJob = null
+        _state.update { current ->
+            current.copy(
+                isJoining = false,
+                joinStatusMessage = null,
+                joinErrorMessage = null,
+            )
+        }
+    }
+
+    fun cancelRun() {
+        runJob?.cancel()
+        runJob = null
+        _state.update { current ->
+            current.copy(
+                isRunning = false,
+                runErrorMessage = null,
+            )
+        }
+    }
+
+    fun cancelSubmit() {
+        submitJob?.cancel()
+        submitJob = null
+        _state.update { current ->
+            current.copy(
+                isSubmitting = false,
+                isSubmitRequestInFlight = false,
+                submitStatusMessage = null,
+                submitErrorMessage = null,
+                submitRetryAllowed = false,
+            )
+        }
+    }
+
+    fun cancelCompetitionAction() {
+        competitionActionJob?.cancel()
+        competitionActionJob = null
+        _competitionActionState.update { current ->
+            current.copy(
+                isSettling = false,
+                isCancelling = false,
+                statusMessage = null,
+            )
         }
     }
 
@@ -659,6 +752,10 @@ class ProblemDetailsViewModel(
     }
 
     fun close() {
+        joinJob?.cancel()
+        runJob?.cancel()
+        submitJob?.cancel()
+        competitionActionJob?.cancel()
         scope.cancel()
     }
 

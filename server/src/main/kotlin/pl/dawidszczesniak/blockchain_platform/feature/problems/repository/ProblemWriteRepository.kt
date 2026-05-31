@@ -198,9 +198,12 @@ internal data class SubmissionReceiptRetryContext(
     val currentError: String?,
 )
 
-internal interface ProblemWriteRepository {
+internal interface ProblemCreationRepository {
     fun findProblemIdByOnchainCreationTxHash(txHash: String): Int?
     fun createProblemForUser(userId: Long, draft: NewProblemDraft): Int
+}
+
+internal interface ProblemParticipationRepository {
     fun registerUserForProblem(userId: Long, problemId: Int): JoinProblemResult
     fun registerUserForProblemOnChain(
         userId: Long,
@@ -210,7 +213,13 @@ internal interface ProblemWriteRepository {
         fromWallet: String,
     ): JoinProblemResult
     fun fetchOnchainJoinContext(problemId: Int): OnchainJoinContext
+}
+
+internal interface ProblemExecutionRepository {
     fun fetchExecutionContextForUser(userId: Long, problemId: Int): ProblemExecutionContext
+}
+
+internal interface SubmissionResultRepository {
     fun createSubmissionRecord(draft: SubmissionRecordDraft): PersistedSubmissionRecord
     fun markSubmissionResultPendingConfirmation(
         submissionId: Long,
@@ -230,6 +239,9 @@ internal interface ProblemWriteRepository {
     fun fetchSubmissionReceiptRetryContext(submissionId: Long): SubmissionReceiptRetryContext?
     fun fetchSubmissionOnchainConfirmationContext(userId: Long, submissionId: Long): SubmissionOnchainConfirmationContext?
     fun updateSubmissionAcceptedResultPayload(submissionId: Long, payloadJson: String)
+}
+
+internal interface CompetitionSettlementRepository {
     fun fetchCompetitionSettlementSnapshot(problemId: Int): CompetitionSettlementSnapshot?
     fun fetchCompetitionLifecycleContext(problemId: Int): CompetitionLifecycleContext?
     fun fetchBestSettlementCandidate(problemId: Int): ProblemSettlementCandidate?
@@ -246,3 +258,13 @@ internal interface ProblemWriteRepository {
     fun markCompetitionSettlementPendingError(problemId: Int, error: String)
     fun markCompetitionSettlementFailed(problemId: Int, error: String)
 }
+
+internal interface ProblemSubmissionRepository :
+    ProblemExecutionRepository,
+    SubmissionResultRepository
+
+internal interface ProblemWriteRepository :
+    ProblemCreationRepository,
+    ProblemParticipationRepository,
+    ProblemSubmissionRepository,
+    CompetitionSettlementRepository

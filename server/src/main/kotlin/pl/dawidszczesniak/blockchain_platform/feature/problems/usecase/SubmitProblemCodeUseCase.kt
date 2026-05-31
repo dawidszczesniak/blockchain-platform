@@ -13,15 +13,18 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.RunProblemRes
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.RunProblemTestResultDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.PreparedWalletTransactionDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.SubmitProblemResponseDto
+import pl.dawidszczesniak.blockchain_platform.feature.problems.judge.JudgeLanguageProfile
 import pl.dawidszczesniak.blockchain_platform.feature.problems.judge.JudgeLanguages
-import pl.dawidszczesniak.blockchain_platform.feature.problems.onchain.BlockchainPlatformContractClient
 import pl.dawidszczesniak.blockchain_platform.feature.problems.onchain.BlockchainPlatformContractConfig
+import pl.dawidszczesniak.blockchain_platform.feature.problems.onchain.PreparedSignedSubmissionResult
+import pl.dawidszczesniak.blockchain_platform.feature.problems.onchain.SubmissionResultContractClient
 import pl.dawidszczesniak.blockchain_platform.feature.problems.onchain.SubmissionResultRecord
 import pl.dawidszczesniak.blockchain_platform.feature.problems.onchain.bytes32HashHex
 import pl.dawidszczesniak.blockchain_platform.feature.problems.onchain.generateOnchainSubmissionId
+import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.PersistedSubmissionRecord
 import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.ProblemExecutionContext
 import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.ProblemExecutionTest
-import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.ProblemWriteRepository
+import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.ProblemSubmissionRepository
 import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.SubmissionNodeAttestationDraft
 import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.SubmissionPersistedTestResult
 import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.SubmissionRecordDraft
@@ -59,11 +62,11 @@ internal interface SubmissionJudgeService {
 }
 
 internal class SubmitProblemCodeUseCaseImpl(
-    private val repository: ProblemWriteRepository,
+    private val repository: ProblemSubmissionRepository,
     private val sandboxClient: SandboxClient,
     private val sandboxConfig: SandboxConfig,
     private val contractConfig: BlockchainPlatformContractConfig,
-    private val contractClient: BlockchainPlatformContractClient,
+    private val contractClient: SubmissionResultContractClient,
     private val blockchainConfig: BlockchainConfig,
     private val sandboxConsensusEvaluator: SandboxConsensusEvaluator = SandboxConsensusEvaluator(sandboxConfig),
 ) : SubmitProblemCodeUseCase, SubmissionJudgeService {
@@ -80,6 +83,27 @@ internal class SubmitProblemCodeUseCaseImpl(
         request: RunProblemRequestDto,
         reportStatus: (String) -> Unit,
     ): SubmissionJudgeOutcome {
+        val validatedRequest = validateSubmissionRequest(request)
+        val context = loadExecutionContext(userId, problemId)
+        val evaluation = evaluateSubmission(
+            problemId = problemId,
+            userId = userId,
+            context = context,
+            request = validatedRequest,
+            reportStatus = reportStatus,
+        )
+        return rejectedSubmissionOutcome(problemId, userId, evaluation)
+            ?: acceptedSubmissionOutcome(
+                userId = userId,
+                problemId = problemId,
+                context = context,
+                request = validatedRequest,
+                evaluation = evaluation,
+                reportStatus = reportStatus,
+            )
+    }
+
+    private fun validateSubmissionRequest(request: RunProblemRequestDto): ValidSubmissionRequest {
         val languageProfile = runCatching { JudgeLanguages.requireSupported(request.language) }
             .getOrElse { error ->
                 throw SubmitProblemValidationException(error.message ?: "Unsupported language.")
@@ -93,8 +117,14 @@ internal class SubmitProblemCodeUseCaseImpl(
                 "Source code is too long. Max length is $MAX_SOURCE_CODE_CHARS characters."
             )
         }
+        return ValidSubmissionRequest(
+            sourceCode = sourceCode,
+            languageProfile = languageProfile,
+        )
+    }
 
-        val context = runCatching {
+    private fun loadExecutionContext(userId: Long, problemId: Int): ProblemExecutionContext {
+        return runCatching {
             repository.fetchExecutionContextForUser(
                 userId = userId,
                 problemId = problemId,
@@ -104,152 +134,246 @@ internal class SubmitProblemCodeUseCaseImpl(
                 error.message?.ifBlank { "Cannot submit this solution." } ?: "Cannot submit this solution."
             )
         }
+    }
 
-        val sandboxInputs = context.tests.map(languageProfile::applyTo)
+    private fun evaluateSubmission(
+        problemId: Int,
+        userId: Long,
+        context: ProblemExecutionContext,
+        request: ValidSubmissionRequest,
+        reportStatus: (String) -> Unit,
+    ): SubmissionClusterEvaluation {
+        val sandboxInputs = context.tests.map(request.languageProfile::applyTo)
         logger.info(
             "Starting submission evaluation for problemId={}, userId={}, tests={}, language={}.",
             problemId,
             userId,
             sandboxInputs.size,
-            languageProfile.id,
+            request.languageProfile.id,
         )
-        val evaluation = evaluateSubmissionOnCluster(
+        return evaluateSubmissionOnCluster(
             context = context,
-            sourceCode = sourceCode,
-            language = languageProfile.id,
+            sourceCode = request.sourceCode,
+            language = request.languageProfile.id,
             tests = sandboxInputs,
             reportStatus = reportStatus,
             sandboxClient = sandboxClient,
             sandboxConsensusEvaluator = sandboxConsensusEvaluator,
             sandboxConfig = sandboxConfig,
         )
+    }
+
+    private fun rejectedSubmissionOutcome(
+        problemId: Int,
+        userId: Long,
+        evaluation: SubmissionClusterEvaluation,
+    ): SubmissionJudgeOutcome.Rejected? {
         val consensus = evaluation.consensus
-        val evaluatedNodes = consensus.evaluatedNodes
-        val consensusReached = consensus.consensusReached
-        val consensusResultHash = consensus.resultHash
-        val consensusImageHash = consensus.imageHash
-        val consensusNodeIds = consensus.consensusNodeIds
         val consensusNode = consensus.representativeNode
         val evaluatedTests = evaluation.evaluatedTests
         val passedCount = evaluatedTests.count { it.apiResult.passed }
-        val allPassed = passedCount == evaluatedTests.size
-        val runtimeMs = consensus.runtimeMs
-        val reportedMemoryUsedKb = consensus.memoryUsedKb
         logger.info(
             "Submission evaluation aggregated for problemId={}, userId={}: consensusReached={}/{}, runtimeMs={}, memoryUsedKb={}.",
             problemId,
             userId,
-            consensusReached,
+            consensus.consensusReached,
             sandboxConfig.requiredConsensus,
-            runtimeMs,
-            reportedMemoryUsedKb,
+            consensus.runtimeMs,
+            consensus.memoryUsedKb,
         )
-        if (!allPassed) {
-            val failedCount = evaluatedTests.size - passedCount
-            logger.warn(
-                "Submission blocked for problemId={}, userId={}: failedTests={}/{}.",
-                problemId,
-                userId,
-                failedCount,
-                evaluatedTests.size,
-            )
-            return SubmissionJudgeOutcome.Rejected(
-                preview = RunProblemResponseDto(
-                    total = evaluatedTests.size,
-                    passed = passedCount,
-                    allPassed = false,
-                    runtimeMs = runtimeMs,
-                    memoryUsedKb = reportedMemoryUsedKb,
-                    results = evaluatedTests.map { it.apiResult },
-                    sandboxNodeId = consensusNode.nodeId,
-                    sandboxImageHash = consensusNode.imageHash,
-                    sandboxRunHash = consensusNode.runHash,
-                ),
-                message = "Submission blocked: $failedCount/${evaluatedTests.size} tests did not pass. Solution was not submitted.",
-            )
+        if (passedCount == evaluatedTests.size) {
+            return null
         }
-        val memoryUsedKb = reportedMemoryUsedKb
+
+        val failedCount = evaluatedTests.size - passedCount
+        logger.warn(
+            "Submission blocked for problemId={}, userId={}: failedTests={}/{}.",
+            problemId,
+            userId,
+            failedCount,
+            evaluatedTests.size,
+        )
+        return SubmissionJudgeOutcome.Rejected(
+            preview = RunProblemResponseDto(
+                total = evaluatedTests.size,
+                passed = passedCount,
+                allPassed = false,
+                runtimeMs = consensus.runtimeMs,
+                memoryUsedKb = consensus.memoryUsedKb,
+                results = evaluatedTests.map { it.apiResult },
+                sandboxNodeId = consensusNode.nodeId,
+                sandboxImageHash = consensusNode.imageHash,
+                sandboxRunHash = consensusNode.runHash,
+            ),
+            message = "Submission blocked: $failedCount/${evaluatedTests.size} tests did not pass. Solution was not submitted.",
+        )
+    }
+
+    private fun acceptedSubmissionOutcome(
+        userId: Long,
+        problemId: Int,
+        context: ProblemExecutionContext,
+        request: ValidSubmissionRequest,
+        evaluation: SubmissionClusterEvaluation,
+        reportStatus: (String) -> Unit,
+    ): SubmissionJudgeOutcome.Accepted {
+        val consensus = evaluation.consensus
+        val evaluatedTests = evaluation.evaluatedTests
+        val memoryUsedKb = consensus.memoryUsedKb
             ?: throw SubmitProblemValidationException("Submission blocked: sandbox memory usage was not reported.")
-        val submissionStatus = SubmissionAttemptStatus.Accepted
+        val hashes = buildSubmissionHashes(
+            context = context,
+            sourceCode = request.sourceCode,
+            consensus = consensus,
+            memoryUsedKb = memoryUsedKb,
+        )
+        val submissionRecord = persistAcceptedSubmission(
+            userId = userId,
+            problemId = problemId,
+            context = context,
+            request = request,
+            evaluation = evaluation,
+            memoryUsedKb = memoryUsedKb,
+            hashes = hashes,
+        )
+        reportStatus("Przygotowuję podpisany wynik do zapisu on-chain.")
+        val signedSubmission = prepareSignedSubmission(
+            problemId = problemId,
+            userId = userId,
+            context = context,
+            submissionRecord = submissionRecord,
+            hashes = hashes,
+            consensus = consensus,
+            memoryUsedKb = memoryUsedKb,
+        )
+        val acceptedResponse = buildAcceptedResponse(
+            submissionId = submissionRecord.submissionId,
+            evaluatedTests = evaluatedTests,
+            consensus = consensus,
+            memoryUsedKb = memoryUsedKb,
+            hashes = hashes,
+            signedSubmission = signedSubmission,
+        )
+        return SubmissionJudgeOutcome.Accepted(response = acceptedResponse)
+    }
+
+    private fun buildSubmissionHashes(
+        context: ProblemExecutionContext,
+        sourceCode: String,
+        consensus: SandboxConsensusDecision,
+        memoryUsedKb: Int,
+    ): SubmissionHashes {
         val codeHash = sha256Hex(sourceCode)
         val challengeHash = hashExecutionChallenge(context)
-        val sandboxImageHash = bytes32HashHex(consensusImageHash)
-        val commitmentHash = buildCommitmentHash(
-            competitionId = context.onchainCompetitionId,
-            participantWalletAddress = context.participantWalletAddress,
+        val sandboxImageHash = bytes32HashHex(consensus.imageHash)
+        return SubmissionHashes(
             codeHash = codeHash,
             challengeHash = challengeHash,
-            resultHash = consensusResultHash,
-            imageHash = sandboxImageHash,
-            runtimeMs = runtimeMs,
-            memoryUsedKb = memoryUsedKb,
-            consensusNodes = consensusReached,
+            sandboxImageHash = sandboxImageHash,
+            commitmentHash = buildCommitmentHash(
+                competitionId = context.onchainCompetitionId,
+                participantWalletAddress = context.participantWalletAddress,
+                codeHash = codeHash,
+                challengeHash = challengeHash,
+                resultHash = consensus.resultHash,
+                imageHash = sandboxImageHash,
+                runtimeMs = consensus.runtimeMs,
+                memoryUsedKb = memoryUsedKb,
+                consensusNodes = consensus.consensusReached,
+            ),
         )
-        val submissionRecord = repository.createSubmissionRecord(
+    }
+
+    private fun persistAcceptedSubmission(
+        userId: Long,
+        problemId: Int,
+        context: ProblemExecutionContext,
+        request: ValidSubmissionRequest,
+        evaluation: SubmissionClusterEvaluation,
+        memoryUsedKb: Int,
+        hashes: SubmissionHashes,
+    ) = repository.createSubmissionRecord(
             SubmissionRecordDraft(
                 onchainSubmissionId = generateOnchainSubmissionId(),
                 problemId = problemId,
                 userId = userId,
-                status = submissionStatus,
-                sourceCode = sourceCode,
-                language = languageProfile.id,
-                codeHash = codeHash,
-                challengeHash = challengeHash,
-                resultHash = consensusResultHash,
-                consensusImageHash = sandboxImageHash,
-                consensusNodes = consensusReached,
-                commitmentHash = commitmentHash,
-                runtimeMs = runtimeMs,
+                status = SubmissionAttemptStatus.Accepted,
+                sourceCode = request.sourceCode,
+                language = request.languageProfile.id,
+                codeHash = hashes.codeHash,
+                challengeHash = hashes.challengeHash,
+                resultHash = evaluation.consensus.resultHash,
+                consensusImageHash = hashes.sandboxImageHash,
+                consensusNodes = evaluation.consensus.consensusReached,
+                commitmentHash = hashes.commitmentHash,
+                runtimeMs = evaluation.consensus.runtimeMs,
                 memoryUsedKb = memoryUsedKb,
-                testResults = evaluatedTests.map { test ->
-                    SubmissionPersistedTestResult(
-                        problemTestId = test.problemTestId,
-                        status = test.dbStatus,
-                        executionTimeMs = test.apiResult.executionTimeMs,
-                        memoryUsedKb = test.apiResult.memoryUsedKb,
-                        message = test.apiResult.message,
-                    )
-                },
-                nodeAttestations = evaluatedNodes.map { node ->
-                    SubmissionNodeAttestationDraft(
-                        nodeId = node.nodeId,
-                        nodeUrl = node.nodeUrl,
-                        imageHash = node.imageHash,
-                        runHash = node.runHash,
-                        resultHash = node.resultHash,
-                        attestationPayloadHash = node.attestationPayloadHash,
-                        attestationSignature = node.attestationSignature,
-                        attestationScheme = node.attestationScheme ?: DEFAULT_ATTESTATION_SCHEME,
-                        isValid = node.isValid,
-                        isConsensus = node.nodeId in consensusNodeIds,
-                        status = node.status,
-                        message = node.message,
-                    )
-                },
+                testResults = persistedTestResults(evaluation.evaluatedTests),
+                nodeAttestations = nodeAttestations(evaluation.consensus),
             )
-        )
-        logger.info(
-            "Persisted accepted submission draft for problemId={}, userId={}, submissionId={}.",
-            problemId,
-            userId,
-            submissionRecord.submissionId,
-        )
-        reportStatus("Przygotowuję podpisany wynik do zapisu on-chain.")
-        val signedSubmission = contractClient.prepareSignedSubmissionResult(
-            SubmissionResultRecord(
-                competitionId = context.onchainCompetitionId,
-                onchainSubmissionId = submissionRecord.onchainSubmissionId,
-                participantWalletAddress = context.participantWalletAddress,
-                submissionHash = commitmentHash,
-                codeHash = codeHash,
-                challengeHash = challengeHash,
-                resultHash = consensusResultHash,
-                sandboxImageHash = sandboxImageHash,
-                runtimeMs = runtimeMs,
-                memoryUsedKb = memoryUsedKb,
-                consensusNodes = consensusReached,
+        ).also { submissionRecord ->
+            logger.info(
+                "Persisted accepted submission draft for problemId={}, userId={}, submissionId={}.",
+                problemId,
+                userId,
+                submissionRecord.submissionId,
             )
+        }
+
+    private fun persistedTestResults(evaluatedTests: List<EvaluatedSubmissionTest>): List<SubmissionPersistedTestResult> {
+        return evaluatedTests.map { test ->
+            SubmissionPersistedTestResult(
+                problemTestId = test.problemTestId,
+                status = test.dbStatus,
+                executionTimeMs = test.apiResult.executionTimeMs,
+                memoryUsedKb = test.apiResult.memoryUsedKb,
+                message = test.apiResult.message,
+            )
+        }
+    }
+
+    private fun nodeAttestations(consensus: SandboxConsensusDecision): List<SubmissionNodeAttestationDraft> {
+        return consensus.evaluatedNodes.map { node ->
+            SubmissionNodeAttestationDraft(
+                nodeId = node.nodeId,
+                nodeUrl = node.nodeUrl,
+                imageHash = node.imageHash,
+                runHash = node.runHash,
+                resultHash = node.resultHash,
+                attestationPayloadHash = node.attestationPayloadHash,
+                attestationSignature = node.attestationSignature,
+                attestationScheme = node.attestationScheme ?: DEFAULT_ATTESTATION_SCHEME,
+                isValid = node.isValid,
+                isConsensus = node.nodeId in consensus.consensusNodeIds,
+                status = node.status,
+                message = node.message,
+            )
+        }
+    }
+
+    private fun prepareSignedSubmission(
+        problemId: Int,
+        userId: Long,
+        context: ProblemExecutionContext,
+        submissionRecord: PersistedSubmissionRecord,
+        hashes: SubmissionHashes,
+        consensus: SandboxConsensusDecision,
+        memoryUsedKb: Int,
+    ) = contractClient.prepareSignedSubmissionResult(
+        SubmissionResultRecord(
+            competitionId = context.onchainCompetitionId,
+            onchainSubmissionId = submissionRecord.onchainSubmissionId,
+            participantWalletAddress = context.participantWalletAddress,
+            submissionHash = hashes.commitmentHash,
+            codeHash = hashes.codeHash,
+            challengeHash = hashes.challengeHash,
+            resultHash = consensus.resultHash,
+            sandboxImageHash = hashes.sandboxImageHash,
+            runtimeMs = consensus.runtimeMs,
+            memoryUsedKb = memoryUsedKb,
+            consensusNodes = consensus.consensusReached,
         )
+    ).also { signedSubmission ->
         if (!signedSubmission.simulationErrorMessage.isNullOrBlank()) {
             logger.warn(
                 "Submission on-chain preflight reverted for problemId={}, userId={}, submissionId={}, onchainSubmissionId={}, competitionId={}: {}",
@@ -274,19 +398,30 @@ internal class SubmitProblemCodeUseCaseImpl(
                 context.onchainCompetitionId,
             )
         }
-        val acceptedResponse = SubmitProblemResponseDto(
-            submissionId = submissionRecord.submissionId,
+    }
+
+    private fun buildAcceptedResponse(
+        submissionId: Long,
+        evaluatedTests: List<EvaluatedSubmissionTest>,
+        consensus: SandboxConsensusDecision,
+        memoryUsedKb: Int,
+        hashes: SubmissionHashes,
+        signedSubmission: PreparedSignedSubmissionResult,
+    ): SubmitProblemResponseDto {
+        val passedCount = evaluatedTests.count { it.apiResult.passed }
+        return SubmitProblemResponseDto(
+            submissionId = submissionId,
             total = evaluatedTests.size,
             passed = passedCount,
-            allPassed = allPassed,
-            runtimeMs = runtimeMs,
+            allPassed = passedCount == evaluatedTests.size,
+            runtimeMs = consensus.runtimeMs,
             memoryUsedKb = memoryUsedKb,
             results = evaluatedTests.map { it.apiResult },
             consensusRequired = sandboxConfig.requiredConsensus,
-            consensusReached = consensusReached,
-            sandboxImageHash = sandboxImageHash,
-            sandboxResultHash = consensusResultHash,
-            commitmentHash = commitmentHash,
+            consensusReached = consensus.consensusReached,
+            sandboxImageHash = hashes.sandboxImageHash,
+            sandboxResultHash = consensus.resultHash,
+            commitmentHash = hashes.commitmentHash,
             chainId = blockchainConfig.chainId,
             proxyAddress = contractConfig.proxyAddress,
             walletTransaction = signedSubmission.simulationErrorMessage?.let { null } ?: PreparedWalletTransactionDto(
@@ -301,15 +436,24 @@ internal class SubmitProblemCodeUseCaseImpl(
             txHash = "",
             explorerUrl = null,
         )
-        return SubmissionJudgeOutcome.Accepted(
-            response = acceptedResponse,
-        )
     }
 }
 
 private data class SubmissionClusterEvaluation(
     val consensus: SandboxConsensusDecision,
     val evaluatedTests: List<EvaluatedSubmissionTest>,
+)
+
+private data class ValidSubmissionRequest(
+    val sourceCode: String,
+    val languageProfile: JudgeLanguageProfile,
+)
+
+private data class SubmissionHashes(
+    val codeHash: String,
+    val challengeHash: String,
+    val sandboxImageHash: String,
+    val commitmentHash: String,
 )
 
 private fun evaluateSubmissionOnCluster(
@@ -377,22 +521,6 @@ private enum class SubmitRunStatus {
     Error,
     Timeout,
 }
-
-private fun buildReceiptTimeoutMessage(
-    submissionId: Long,
-    txHash: String,
-    timeoutMs: Long,
-): String {
-    return buildString {
-        appendLine(RECEIPT_TIMEOUT_ERROR)
-        appendLine("Submission ID: $submissionId")
-        appendLine("Transaction hash: $txHash")
-        appendLine("Receipt timeout: ${timeoutMs} ms")
-        append("Retry is available and will re-check the same transaction receipt without sending a new transaction.")
-    }
-}
-
-private const val RECEIPT_TIMEOUT_ERROR = "Transaction sent but receipt was not confirmed in time."
 
 private fun ProblemExecutionTest.toMissingSubmissionResult(): EvaluatedSubmissionTest {
     return toSubmissionResult(

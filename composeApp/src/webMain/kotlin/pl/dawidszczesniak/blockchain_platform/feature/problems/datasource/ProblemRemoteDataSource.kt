@@ -70,9 +70,10 @@ class ProblemRemoteDataSourceImpl(
     private val apiBaseUrl: String,
     private val httpTextClient: HttpTextClient,
 ) : ProblemRemoteDataSource {
+    private val json = Json { ignoreUnknownKeys = true }
+
     override suspend fun fetchProblems(): List<ProblemSummaryDto> {
         val payload = httpTextClient.get(endpoint(apiBaseUrl, "/problems"))
-        val json = Json { ignoreUnknownKeys = true }
         val array = json.parseToJsonElement(payload).jsonArray
         return array.map { item ->
             val obj = item.jsonObject
@@ -112,13 +113,11 @@ class ProblemRemoteDataSourceImpl(
 
     override suspend fun fetchProblemById(problemId: Int): ProblemSummaryDto {
         val payload = httpTextClient.get(endpoint(apiBaseUrl, "/problems/$problemId"))
-        val json = Json { ignoreUnknownKeys = true }
         return json.decodeFromString(ProblemSummaryDto.serializer(), payload)
     }
 
     override suspend fun fetchCreatedProblems(): List<CreatedProblemDto> {
         val payload = httpTextClient.get(endpoint(apiBaseUrl, "/problems/created"))
-        val json = Json { ignoreUnknownKeys = true }
         val array = json.parseToJsonElement(payload).jsonArray
         return array.map { item ->
             val obj = item.jsonObject
@@ -140,7 +139,6 @@ class ProblemRemoteDataSourceImpl(
 
     override suspend fun fetchParticipationProblems(): List<ParticipationProblemDto> {
         val payload = httpTextClient.get(endpoint(apiBaseUrl, "/problems/participation"))
-        val json = Json { ignoreUnknownKeys = true }
         val array = json.parseToJsonElement(payload).jsonArray
         return array.map { item ->
             val obj = item.jsonObject
@@ -156,21 +154,18 @@ class ProblemRemoteDataSourceImpl(
     }
 
     override suspend fun prepareCreateProblemOnChain(request: CreateProblemRequestDto): PrepareCreateProblemResponseDto {
-        val json = Json { ignoreUnknownKeys = true }
         val body = json.encodeToString(CreateProblemRequestDto.serializer(), request)
         val payload = httpTextClient.postJson(endpoint(apiBaseUrl, "/problems/create/prepare"), body)
         return json.decodeFromString(PrepareCreateProblemResponseDto.serializer(), payload)
     }
 
     override suspend fun confirmCreateProblemOnChain(request: ConfirmCreateProblemRequestDto): CreateProblemResponseDto {
-        val json = Json { ignoreUnknownKeys = true }
         val body = json.encodeToString(ConfirmCreateProblemRequestDto.serializer(), request)
         val payload = httpTextClient.postJson(endpoint(apiBaseUrl, "/problems/create/confirm"), body)
         return json.decodeFromString(CreateProblemResponseDto.serializer(), payload)
     }
 
     override suspend fun validateCreateProblem(request: ValidateCreateProblemRequestDto): ValidateCreateProblemResponseDto {
-        val json = Json { ignoreUnknownKeys = true }
         val body = json.encodeToString(ValidateCreateProblemRequestDto.serializer(), request)
         val payload = httpTextClient.postJson(endpoint(apiBaseUrl, "/problems/create/validate"), body)
         val obj = json.parseToJsonElement(payload).jsonObject
@@ -199,7 +194,6 @@ class ProblemRemoteDataSourceImpl(
     }
 
     override suspend fun cancelCreateProblemValidation(runId: String) {
-        val json = Json { ignoreUnknownKeys = true }
         val body = json.encodeToString(
             CancelCreateProblemValidationRequestDto.serializer(),
             CancelCreateProblemValidationRequestDto(validationRunId = runId),
@@ -208,7 +202,6 @@ class ProblemRemoteDataSourceImpl(
     }
 
     override suspend fun prepareJoinProblemOnChain(problemId: Int): PrepareJoinProblemResponseDto {
-        val json = Json { ignoreUnknownKeys = true }
         val payload = httpTextClient.postJson(
             endpoint(apiBaseUrl, "/problems/$problemId/join/prepare"),
             "{}",
@@ -220,7 +213,6 @@ class ProblemRemoteDataSourceImpl(
         problemId: Int,
         request: ConfirmJoinProblemRequestDto,
     ): JoinProblemResponseDto {
-        val json = Json { ignoreUnknownKeys = true }
         val body = json.encodeToString(ConfirmJoinProblemRequestDto.serializer(), request)
         val payload = httpTextClient.postJson(
             endpoint(apiBaseUrl, "/problems/$problemId/join/confirm"),
@@ -230,7 +222,6 @@ class ProblemRemoteDataSourceImpl(
     }
 
     override suspend fun prepareSettleCompetitionOnChain(problemId: Int): PrepareCompetitionLifecycleActionResponseDto {
-        val json = Json { ignoreUnknownKeys = true }
         val payload = httpTextClient.postJson(
             endpoint(apiBaseUrl, "/problems/$problemId/settle/prepare"),
             "{}",
@@ -242,7 +233,6 @@ class ProblemRemoteDataSourceImpl(
         problemId: Int,
         request: ConfirmCompetitionLifecycleActionRequestDto,
     ): CompetitionLifecycleActionResponseDto {
-        val json = Json { ignoreUnknownKeys = true }
         val body = json.encodeToString(ConfirmCompetitionLifecycleActionRequestDto.serializer(), request)
         val payload = httpTextClient.postJson(
             endpoint(apiBaseUrl, "/problems/$problemId/settle/confirm"),
@@ -252,7 +242,6 @@ class ProblemRemoteDataSourceImpl(
     }
 
     override suspend fun prepareCancelCompetitionOnChain(problemId: Int): PrepareCompetitionLifecycleActionResponseDto {
-        val json = Json { ignoreUnknownKeys = true }
         val payload = httpTextClient.postJson(
             endpoint(apiBaseUrl, "/problems/$problemId/cancel/prepare"),
             "{}",
@@ -264,7 +253,6 @@ class ProblemRemoteDataSourceImpl(
         problemId: Int,
         request: ConfirmCompetitionLifecycleActionRequestDto,
     ): CompetitionLifecycleActionResponseDto {
-        val json = Json { ignoreUnknownKeys = true }
         val body = json.encodeToString(ConfirmCompetitionLifecycleActionRequestDto.serializer(), request)
         val payload = httpTextClient.postJson(
             endpoint(apiBaseUrl, "/problems/$problemId/cancel/confirm"),
@@ -277,7 +265,6 @@ class ProblemRemoteDataSourceImpl(
         problemId: Int,
         request: RunProblemRequestDto,
     ): RunProblemResponseDto {
-        val json = Json { ignoreUnknownKeys = true }
         val body = json.encodeToString(RunProblemRequestDto.serializer(), request)
         val payload = httpTextClient.postJson(
             endpoint(apiBaseUrl, "/problems/$problemId/run"),
@@ -316,7 +303,6 @@ class ProblemRemoteDataSourceImpl(
         problemId: Int,
         request: RunProblemRequestDto,
     ): SubmissionJudgeJobDto {
-        val json = Json { ignoreUnknownKeys = true }
         val body = json.encodeToString(RunProblemRequestDto.serializer(), request)
         val payload = httpTextClient.postJson(
             endpoint(apiBaseUrl, "/problems/$problemId/submit"),
@@ -329,7 +315,6 @@ class ProblemRemoteDataSourceImpl(
         submissionId: Long,
         request: ConfirmSubmissionResultRequestDto,
     ): SubmitProblemResponseDto {
-        val json = Json { ignoreUnknownKeys = true }
         val body = json.encodeToString(ConfirmSubmissionResultRequestDto.serializer(), request)
         val payload = httpTextClient.postJson(
             endpoint(apiBaseUrl, "/problems/submissions/$submissionId/confirm"),
@@ -339,7 +324,6 @@ class ProblemRemoteDataSourceImpl(
     }
 
     override suspend fun fetchSubmissionJudgeJob(jobId: Long): SubmissionJudgeJobDto {
-        val json = Json { ignoreUnknownKeys = true }
         val payload = httpTextClient.get(
             endpoint(apiBaseUrl, "/problems/submission-jobs/$jobId"),
         )
@@ -347,7 +331,6 @@ class ProblemRemoteDataSourceImpl(
     }
 
     override suspend fun retrySubmissionJudgeJob(jobId: Long): SubmissionJudgeJobDto {
-        val json = Json { ignoreUnknownKeys = true }
         val payload = httpTextClient.postJson(
             endpoint(apiBaseUrl, "/problems/submission-jobs/$jobId/retry"),
             "{}",

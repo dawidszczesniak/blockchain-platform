@@ -4,8 +4,8 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.RunProblemReq
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.RunProblemResponseDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.RunProblemTestResultDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.judge.JudgeLanguages
+import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.ProblemExecutionRepository
 import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.ProblemExecutionTest
-import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.ProblemWriteRepository
 import pl.dawidszczesniak.blockchain_platform.feature.problems.sandbox.SandboxClient
 
 internal class RunProblemValidationException(
@@ -17,7 +17,7 @@ internal interface RunProblemCodeUseCase {
 }
 
 internal class RunProblemCodeUseCaseImpl(
-    private val repository: ProblemWriteRepository,
+    private val repository: ProblemExecutionRepository,
     private val sandboxClient: SandboxClient,
 ) : RunProblemCodeUseCase {
     override fun invoke(userId: Long, problemId: Int, request: RunProblemRequestDto): RunProblemResponseDto {

@@ -64,6 +64,7 @@
     <string name="create_problem_submit_until_label">Submission ends (YYYY-MM-DD)</string>
     <string name="create_problem_date_picker_confirm">OK</string>
     <string name="create_problem_date_picker_dismiss">Cancel</string>
+    <string name="operation_cancel">Cancel operation</string>
     <string name="create_problem_action_create">Create problem</string>
     <string name="create_problem_action_creating">Creating...</string>
     <string name="create_problem_validation_required">This field is required.</string>

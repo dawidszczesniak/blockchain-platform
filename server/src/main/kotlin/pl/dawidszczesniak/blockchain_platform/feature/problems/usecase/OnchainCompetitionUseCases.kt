@@ -25,10 +25,16 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.PrepareCompet
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.PreparedWalletTransactionDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.PrepareJoinProblemResponseDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.SubmitProblemResponseDto
-import pl.dawidszczesniak.blockchain_platform.feature.problems.onchain.BlockchainPlatformContractClient
 import pl.dawidszczesniak.blockchain_platform.feature.problems.onchain.BlockchainPlatformContractConfig
+import pl.dawidszczesniak.blockchain_platform.feature.problems.onchain.CompetitionCreationContractClient
+import pl.dawidszczesniak.blockchain_platform.feature.problems.onchain.CompetitionJoinContractClient
+import pl.dawidszczesniak.blockchain_platform.feature.problems.onchain.CompetitionLifecycleContractClient
+import pl.dawidszczesniak.blockchain_platform.feature.problems.onchain.SubmissionResultContractClient
 import pl.dawidszczesniak.blockchain_platform.feature.problems.onchain.SubmissionResultRecord
-import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.ProblemWriteRepository
+import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.CompetitionSettlementRepository
+import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.ProblemCreationRepository
+import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.ProblemParticipationRepository
+import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.SubmissionResultRepository
 
 internal interface PrepareCreateProblemOnChainUseCase {
     operator fun invoke(userId: Long, walletAddress: String, request: CreateProblemRequestDto): PrepareCreateProblemResponseDto
@@ -84,7 +90,7 @@ internal interface ConfirmSubmissionResultOnChainUseCase {
 internal class PrepareCreateProblemOnChainUseCaseImpl(
     private val draftFactory: CreateProblemDraftFactory,
     private val intentStore: CompetitionIntentStore,
-    private val contractClient: BlockchainPlatformContractClient,
+    private val contractClient: CompetitionCreationContractClient,
     private val blockchainConfig: BlockchainConfig,
     private val paymentAssetCatalog: PaymentAssetCatalog,
 ) : PrepareCreateProblemOnChainUseCase {
@@ -129,9 +135,9 @@ internal class PrepareCreateProblemOnChainUseCaseImpl(
 }
 
 internal class ConfirmCreateProblemOnChainUseCaseImpl(
-    private val repository: ProblemWriteRepository,
+    private val repository: ProblemCreationRepository,
     private val intentStore: CompetitionIntentStore,
-    private val contractClient: BlockchainPlatformContractClient,
+    private val contractClient: CompetitionCreationContractClient,
     private val dashboardMetricsRefresher: DashboardMetricsRefresher,
     private val transactionRunner: DbTransactionRunner,
     private val contractConfig: BlockchainPlatformContractConfig,
@@ -183,9 +189,9 @@ internal class ConfirmCreateProblemOnChainUseCaseImpl(
 }
 
 internal class PrepareJoinProblemOnChainUseCaseImpl(
-    private val repository: ProblemWriteRepository,
+    private val repository: ProblemParticipationRepository,
     private val intentStore: CompetitionIntentStore,
-    private val contractClient: BlockchainPlatformContractClient,
+    private val contractClient: CompetitionJoinContractClient,
     private val blockchainConfig: BlockchainConfig,
     private val paymentAssetCatalog: PaymentAssetCatalog,
 ) : PrepareJoinProblemOnChainUseCase {
@@ -234,9 +240,9 @@ internal class PrepareJoinProblemOnChainUseCaseImpl(
 }
 
 internal class ConfirmJoinProblemOnChainUseCaseImpl(
-    private val repository: ProblemWriteRepository,
+    private val repository: ProblemParticipationRepository,
     private val intentStore: CompetitionIntentStore,
-    private val contractClient: BlockchainPlatformContractClient,
+    private val contractClient: CompetitionJoinContractClient,
     private val paymentAssetCatalog: PaymentAssetCatalog,
 ) : ConfirmJoinProblemOnChainUseCase {
     override fun invoke(
@@ -283,8 +289,8 @@ internal class ConfirmJoinProblemOnChainUseCaseImpl(
 internal class CompetitionLifecycleValidationException(message: String) : RuntimeException(message)
 
 internal class PrepareSettleCompetitionOnChainUseCaseImpl(
-    private val repository: ProblemWriteRepository,
-    private val contractClient: BlockchainPlatformContractClient,
+    private val repository: CompetitionSettlementRepository,
+    private val contractClient: CompetitionLifecycleContractClient,
     private val blockchainConfig: BlockchainConfig,
 ) : PrepareSettleCompetitionOnChainUseCase {
     override fun invoke(
@@ -309,8 +315,8 @@ internal class PrepareSettleCompetitionOnChainUseCaseImpl(
 }
 
 internal class ConfirmSettleCompetitionOnChainUseCaseImpl(
-    private val repository: ProblemWriteRepository,
-    private val contractClient: BlockchainPlatformContractClient,
+    private val repository: CompetitionSettlementRepository,
+    private val contractClient: CompetitionLifecycleContractClient,
     private val contractConfig: BlockchainPlatformContractConfig,
 ) : ConfirmSettleCompetitionOnChainUseCase {
     override fun invoke(
@@ -352,8 +358,8 @@ internal class ConfirmSettleCompetitionOnChainUseCaseImpl(
 }
 
 internal class PrepareCancelCompetitionOnChainUseCaseImpl(
-    private val repository: ProblemWriteRepository,
-    private val contractClient: BlockchainPlatformContractClient,
+    private val repository: CompetitionSettlementRepository,
+    private val contractClient: CompetitionLifecycleContractClient,
     private val blockchainConfig: BlockchainConfig,
     private val contractConfig: BlockchainPlatformContractConfig,
 ) : PrepareCancelCompetitionOnChainUseCase {
@@ -384,8 +390,8 @@ internal class PrepareCancelCompetitionOnChainUseCaseImpl(
 }
 
 internal class ConfirmCancelCompetitionOnChainUseCaseImpl(
-    private val repository: ProblemWriteRepository,
-    private val contractClient: BlockchainPlatformContractClient,
+    private val repository: CompetitionSettlementRepository,
+    private val contractClient: CompetitionLifecycleContractClient,
     private val contractConfig: BlockchainPlatformContractConfig,
 ) : ConfirmCancelCompetitionOnChainUseCase {
     override fun invoke(
@@ -428,8 +434,8 @@ internal class ConfirmCancelCompetitionOnChainUseCaseImpl(
 }
 
 internal class ConfirmSubmissionResultOnChainUseCaseImpl(
-    private val repository: ProblemWriteRepository,
-    private val contractClient: BlockchainPlatformContractClient,
+    private val repository: SubmissionResultRepository,
+    private val contractClient: SubmissionResultContractClient,
     private val contractConfig: BlockchainPlatformContractConfig,
 ) : ConfirmSubmissionResultOnChainUseCase {
     private val json = Json { ignoreUnknownKeys = true }

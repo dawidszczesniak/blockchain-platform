@@ -52,7 +52,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -135,6 +134,7 @@ import blockchain_platform.composeapp.generated.resources.create_problem_validat
 import blockchain_platform.composeapp.generated.resources.create_problem_validation_required
 import blockchain_platform.composeapp.generated.resources.create_problem_validation_run_required
 import blockchain_platform.composeapp.generated.resources.create_problem_validation_ready
+import blockchain_platform.composeapp.generated.resources.operation_cancel
 import blockchain_platform.composeapp.generated.resources.problem_details_reference_memory
 import blockchain_platform.composeapp.generated.resources.problem_details_reference_runtime
 import kotlinx.datetime.LocalDate
@@ -144,7 +144,6 @@ import kotlinx.datetime.toLocalDateTime
 import kotlinx.coroutines.delay
 import kotlin.time.Instant
 import org.jetbrains.compose.resources.stringResource
-import pl.dawidszczesniak.blockchain_platform.di.LocalKoin
 import pl.dawidszczesniak.blockchain_platform.ui.AppScrollbarTrack
 import pl.dawidszczesniak.blockchain_platform.ui.AppVerticalScrollbar
 
@@ -178,7 +177,7 @@ private fun EditorFieldLabelText(text: String) {
     )
 }
 
-private sealed interface CreateProblemRunOverlayState {
+internal sealed interface CreateProblemRunOverlayState {
     data class RunningAll(
         val currentTestNumber: Int,
         val testCount: Int,
@@ -191,14 +190,8 @@ private sealed interface CreateProblemRunOverlayState {
 }
 
 @Composable
-fun CreateProblemScreen() {
-    val koin = LocalKoin.current
-    val viewModel = remember { koin.get<CreateProblemViewModel>() }
-    DisposableEffect(viewModel) {
-        onDispose { viewModel.close() }
-    }
+fun CreateProblemScreen(viewModel: CreateProblemViewModel) {
     val state by viewModel.state.collectAsState()
-    val runOverlayState = rememberRunOverlayState(state)
     val scrollState = rememberScrollState()
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -284,14 +277,6 @@ fun CreateProblemScreen() {
                     .fillMaxHeight(),
             )
         }
-        CreateProblemRunOverlay(
-            state = runOverlayState.value,
-            onDismiss = { runOverlayState.value = null },
-            onCancel = {
-                viewModel.onIntent(CreateProblemIntent.CancelRun)
-                runOverlayState.value = null
-            },
-        )
     }
 }
 
@@ -1467,7 +1452,7 @@ private fun TestCaseCard(
 }
 
 @Composable
-private fun rememberRunOverlayState(state: CreateProblemState): androidx.compose.runtime.MutableState<CreateProblemRunOverlayState?> {
+internal fun rememberRunOverlayState(state: CreateProblemState): androidx.compose.runtime.MutableState<CreateProblemRunOverlayState?> {
     val overlayStateState = remember { mutableStateOf<CreateProblemRunOverlayState?>(null) }
     var previousIsRunningAll by remember { mutableStateOf(false) }
     var previousRunningTestId by remember { mutableStateOf<Int?>(null) }
@@ -1559,7 +1544,7 @@ private fun rememberRunOverlayState(state: CreateProblemState): androidx.compose
 }
 
 @Composable
-private fun CreateProblemRunOverlay(
+internal fun CreateProblemRunOverlay(
     state: CreateProblemRunOverlayState?,
     onDismiss: () -> Unit,
     onCancel: () -> Unit,
@@ -1609,16 +1594,14 @@ private fun CreateProblemRunOverlay(
                             color = IntelliJCodePalette.Identifier,
                             textAlign = TextAlign.Center,
                         )
-                        if (state is CreateProblemRunOverlayState.RunningAll || state is CreateProblemRunOverlayState.RunningSingle) {
-                            OutlinedButton(
-                                onClick = onCancel,
-                                border = androidx.compose.foundation.BorderStroke(
-                                    1.dp,
-                                    IntelliJCodePalette.Keyword,
-                                ),
-                            ) {
-                                Text(text = stringResource(Res.string.create_problem_date_picker_dismiss))
-                            }
+                        OutlinedButton(
+                            onClick = onCancel,
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                IntelliJCodePalette.Keyword,
+                            ),
+                        ) {
+                            Text(text = stringResource(Res.string.operation_cancel))
                         }
                     }
                     is CreateProblemRunOverlayState.SuccessAll,

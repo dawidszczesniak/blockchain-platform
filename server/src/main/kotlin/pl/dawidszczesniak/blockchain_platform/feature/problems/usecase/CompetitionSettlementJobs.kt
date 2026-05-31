@@ -31,7 +31,7 @@ import pl.dawidszczesniak.blockchain_platform.db.tables.CompetitionSettlementJob
 import pl.dawidszczesniak.blockchain_platform.db.tables.ProblemsTable
 import pl.dawidszczesniak.blockchain_platform.feature.problems.competition.toContractDeadlineEpochSeconds
 import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.CompetitionSettlementSnapshot
-import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.ProblemWriteRepository
+import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.CompetitionSettlementRepository
 
 internal data class CompetitionSettlementJobRecord(
     val jobId: Long,
@@ -272,7 +272,7 @@ internal class CompetitionSettlementWakeupSignal {
 }
 
 internal class CompetitionSettlementWorker(
-    private val repository: ProblemWriteRepository,
+    private val repository: CompetitionSettlementRepository,
     private val jobRepository: CompetitionSettlementJobRepository,
     private val wakeupSignal: CompetitionSettlementWakeupSignal,
     private val nowProvider: () -> Instant = { Instant.now() },

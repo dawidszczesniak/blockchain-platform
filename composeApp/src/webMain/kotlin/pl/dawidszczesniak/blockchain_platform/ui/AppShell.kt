@@ -6,11 +6,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -48,7 +46,12 @@ import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 import pl.dawidszczesniak.blockchain_platform.navigation.Route
 import pl.dawidszczesniak.blockchain_platform.di.LocalKoin
+import pl.dawidszczesniak.blockchain_platform.feature.problems.create.CreateProblemIntent
+import pl.dawidszczesniak.blockchain_platform.feature.problems.create.CreateProblemRunOverlay
+import pl.dawidszczesniak.blockchain_platform.feature.problems.create.CreateProblemRunOverlayState
 import pl.dawidszczesniak.blockchain_platform.feature.problems.create.CreateProblemScreen
+import pl.dawidszczesniak.blockchain_platform.feature.problems.create.CreateProblemViewModel
+import pl.dawidszczesniak.blockchain_platform.feature.problems.create.rememberRunOverlayState
 import pl.dawidszczesniak.blockchain_platform.feature.home.HomeScreen
 import pl.dawidszczesniak.blockchain_platform.feature.login.LoginScreen
 import pl.dawidszczesniak.blockchain_platform.feature.maintenance.BackendHealthIntent
@@ -59,6 +62,7 @@ import pl.dawidszczesniak.blockchain_platform.feature.maintenance.NetworkOffline
 import pl.dawidszczesniak.blockchain_platform.feature.problems.participation.MyParticipationScreen
 import pl.dawidszczesniak.blockchain_platform.feature.problems.created.CreatedProblemDetailsScreen
 import pl.dawidszczesniak.blockchain_platform.feature.problems.created.MyProblemsScreen
+import pl.dawidszczesniak.blockchain_platform.feature.problems.details.ProblemDetailsOverlay
 import pl.dawidszczesniak.blockchain_platform.feature.problems.details.ProblemDetailsScreen
 import pl.dawidszczesniak.blockchain_platform.feature.problems.details.ProblemDetailsViewModel
 import pl.dawidszczesniak.blockchain_platform.feature.problems.list.ProblemsListScreen
@@ -94,6 +98,8 @@ fun AppShell(
     }
     val clientConnectivityState by clientConnectivityMonitor.state.collectAsState()
     val backendHealthState by backendHealthViewModel.state.collectAsState()
+    val problemDetailsGateState by problemDetailsViewModel.state.collectAsState()
+    val problemDetailsCompetitionActionState by problemDetailsViewModel.competitionActionState.collectAsState()
     var hasRenderedPageContent by remember { mutableStateOf(false) }
     val refreshBackendHealth = {
         backendHealthViewModel.onIntent(BackendHealthIntent.RefreshNow)
@@ -116,6 +122,18 @@ fun AppShell(
     }
     val isBackendHealthPending = clientConnectivityState.isOnline && backendHealthState.isAvailable == null
     val shouldShowInitialLoader = !hasRenderedPageContent && (isRestoringSession || isBackendHealthPending)
+    val createProblemViewModel = if (currentRoute == Route.CreateProblem) {
+        remember { koin.get<CreateProblemViewModel>() }
+    } else {
+        null
+    }
+    createProblemViewModel?.let { viewModel ->
+        DisposableEffect(viewModel) {
+            onDispose { viewModel.close() }
+        }
+    }
+    val createProblemState = createProblemViewModel?.state?.collectAsState()?.value
+    val createProblemRunOverlayState = createProblemState?.let { rememberRunOverlayState(it) }
 
     Box(modifier = Modifier.fillMaxSize()) {
         AppBackdrop(modifier = Modifier.fillMaxSize())
@@ -197,7 +215,9 @@ fun AppShell(
                                 onBackToMyProblems = { navigate(Route.MyProblems) },
                             )
                         }
-                        Route.CreateProblem -> CreateProblemScreen()
+                        Route.CreateProblem -> CreateProblemScreen(
+                            viewModel = checkNotNull(createProblemViewModel),
+                        )
                         Route.MyProblems -> MyProblemsScreen(
                             onCreateProblem = { navigate(Route.CreateProblem) },
                             onOpenProblem = { createdProblem, onComplete ->
@@ -242,6 +262,52 @@ fun AppShell(
                         })
                     }
                 }
+            }
+        }
+        if (!shouldShowInitialLoader) {
+            when (currentRoute) {
+                is Route.ProblemDetails -> ProblemDetailsOverlay(
+                    gateState = problemDetailsGateState,
+                    competitionActionState = problemDetailsCompetitionActionState,
+                    onCancelCompetitionAction = problemDetailsViewModel::cancelCompetitionAction,
+                    onCancelJoin = problemDetailsViewModel::cancelJoin,
+                    onCancelRun = problemDetailsViewModel::cancelRun,
+                    onCancelSubmit = problemDetailsViewModel::cancelSubmit,
+                    onDismissSubmitPopup = problemDetailsViewModel::dismissSubmitPopup,
+                    onRetrySubmit = problemDetailsViewModel::retrySubmit,
+                )
+
+                is Route.CreatedProblemDetails -> ProblemDetailsOverlay(
+                    gateState = null,
+                    competitionActionState = problemDetailsCompetitionActionState,
+                    onCancelCompetitionAction = problemDetailsViewModel::cancelCompetitionAction,
+                    onCancelJoin = problemDetailsViewModel::cancelJoin,
+                    onCancelRun = problemDetailsViewModel::cancelRun,
+                    onCancelSubmit = problemDetailsViewModel::cancelSubmit,
+                    onDismissSubmitPopup = problemDetailsViewModel::dismissSubmitPopup,
+                    onRetrySubmit = problemDetailsViewModel::retrySubmit,
+                )
+
+                Route.CreateProblem -> {
+                    val overlayState = createProblemRunOverlayState
+                    if (overlayState != null) {
+                        val viewModel = checkNotNull(createProblemViewModel)
+                        CreateProblemRunOverlay(
+                            state = overlayState.value,
+                            onDismiss = { overlayState.value = null },
+                            onCancel = {
+                                val cancelIntent = when (overlayState.value) {
+                                    is CreateProblemRunOverlayState.Submitting -> CreateProblemIntent.CancelSubmit
+                                    else -> CreateProblemIntent.CancelRun
+                                }
+                                viewModel.onIntent(cancelIntent)
+                                overlayState.value = null
+                            },
+                        )
+                    }
+                }
+
+                else -> Unit
             }
         }
         if (!clientConnectivityState.isOnline) {
@@ -309,12 +375,12 @@ private fun SessionExpiredNotice(
                 )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     OutlinedButton(onClick = onDismiss) {
                         Text(stringResource(Res.string.session_expired_dismiss))
                     }
-                    Spacer(Modifier.width(8.dp))
                     Button(onClick = onLoginClick) {
                         Text(stringResource(Res.string.session_expired_action))
                     }

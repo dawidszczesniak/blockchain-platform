@@ -142,7 +142,7 @@ internal data class VerifiedCompetitionCancellation(
     val txHash: String,
 )
 
-internal interface BlockchainPlatformContractClient {
+internal interface CompetitionCreationContractClient {
     fun prepareCreateCompetition(
         paymentAsset: PaymentAssetConfig,
         competitionKey: String,
@@ -151,12 +151,6 @@ internal interface BlockchainPlatformContractClient {
         entryFeeAmountAtomic: String,
         requiredParticipants: Int,
         prizeAmountAtomic: String,
-    ): PreparedCompetitionTransactions
-
-    fun prepareJoinCompetition(
-        paymentAsset: PaymentAssetConfig,
-        competitionId: Long,
-        entryFeeAmountAtomic: String,
     ): PreparedCompetitionTransactions
 
     fun verifyCreateCompetitionTransaction(
@@ -170,6 +164,14 @@ internal interface BlockchainPlatformContractClient {
         expectedRequiredParticipants: Int,
         expectedPrizeAmountAtomic: String,
     ): VerifiedCompetitionCreation
+}
+
+internal interface CompetitionJoinContractClient {
+    fun prepareJoinCompetition(
+        paymentAsset: PaymentAssetConfig,
+        competitionId: Long,
+        entryFeeAmountAtomic: String,
+    ): PreparedCompetitionTransactions
 
     fun verifyJoinCompetitionTransaction(
         txHash: String,
@@ -178,7 +180,9 @@ internal interface BlockchainPlatformContractClient {
         expectedCompetitionId: Long,
         expectedEntryFeeAmountAtomic: String,
     ): VerifiedCompetitionJoin
+}
 
+internal interface SubmissionResultContractClient {
     fun prepareSignedSubmissionResult(
         record: SubmissionResultRecord,
     ): PreparedSignedSubmissionResult
@@ -189,7 +193,9 @@ internal interface BlockchainPlatformContractClient {
         record: SubmissionResultRecord,
         signatureHex: String,
     ): VerifiedSubmissionRecording
+}
 
+internal interface CompetitionLifecycleContractClient {
     fun prepareSettleCompetition(competitionId: Long): PreparedCompetitionTransaction
 
     fun verifySettleCompetitionTransaction(
@@ -205,7 +211,13 @@ internal interface BlockchainPlatformContractClient {
         expectedSenderWallet: String,
         expectedCompetitionId: Long,
     ): VerifiedCompetitionCancellation
+}
 
+internal interface BlockchainPlatformContractClient :
+    CompetitionCreationContractClient,
+    CompetitionJoinContractClient,
+    SubmissionResultContractClient,
+    CompetitionLifecycleContractClient {
     fun close()
 }
 
