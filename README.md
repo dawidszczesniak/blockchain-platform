@@ -1,180 +1,109 @@
 # Blockchain Platform
 
-Kotlin full-stack coding competition platform with one on-chain application contract deployed behind an OpenZeppelin UUPS proxy.
+Kotlin full-stack platform for blockchain-backed algorithmic competitions. The app lets creators publish programming challenges, lets participants submit optimized solutions, validates code through isolated sandbox nodes, and records competition lifecycle data on-chain.
 
 This repository is the master's thesis project of Dawid Szczesniak at the Military University of Technology.
 
-The runtime contract surface is still one address: the `BlockchainTestContract` proxy. The implementation contract contains logic and can be replaced. The proxy keeps the persistent storage under ERC-1967, so competition state, winner history, and recorded submission results survive upgrades.
+## What It Does
 
-## Project Goal
+- Creators define a problem, reference solution, tests, prize, entry fee, participant limit, and deadlines.
+- Participants join on-chain, submit code, and compete on correctness plus runtime and memory usage.
+- The backend judges submissions with sandbox consensus before preparing any on-chain result.
+- The Solidity contract escrows ETH/ERC-20 funds, tracks accepted result hashes and metrics, and handles settlement or refunds.
 
-The platform is designed for algorithmic and optimization-heavy programming competitions.
+## Modules
 
-Its core model is:
+- `composeApp` - Compose Multiplatform web frontend, served locally on `http://localhost:8081`.
+- `server` - Ktor backend on `http://localhost:8080`; exposes auth, platform, dashboard, and problem APIs.
+- `shared` - DTOs and domain models shared by frontend and backend.
+- `sandbox-runner` - Kotlin/JVM HTTP sandbox node with `/run`, `/cancel`, `/health`, and `/attestation`.
+- `solidity` - Foundry project containing the UUPS-upgradeable contract, scripts, and tests.
 
-- a problem creator publishes an algorithmic challenge with a reference solution, evaluation tests, and competition parameters
-- participants join the competition and submit their own implementations of the same problem
-- correctness is enforced first through sandbox execution and consensus across isolated execution nodes
-- among correct solutions, the system records and compares runtime and memory metrics to identify the most efficient implementation
-- the blockchain layer provides a tamper-resistant settlement and result-recording surface for competition lifecycle events and accepted submissions
+## Smart Contract
 
-In product terms, this is not a generic coding playground. It is a modern blockchain-backed optimization contest system where the value comes from proving that a participant solved the same algorithmic task more efficiently than competing implementations under a controlled and auditable execution environment.
+The active contract is `solidity/contracts/BlockchainTestContractV4.sol`.
 
-OpenZeppelin references used for this setup:
+- Deployed behind an ERC-1967 UUPS proxy.
+- Proxy address is the stable runtime address used by frontend, backend, and users.
+- Implementation logic can be upgraded while proxy storage is preserved.
+- Inherits `Ownable2StepUpgradeable`, `UUPSUpgradeable`, and `ReentrancyGuardTransient`.
+- Supports native ETH and owner-whitelisted ERC-20 payment tokens.
+- Rejects unsupported or fee-on-transfer ERC-20 behavior to keep escrow accounting exact.
+- Exposes `version()` returning `4.0.0`.
 
-- UUPS overview: https://docs.openzeppelin.com/upgrades
-- Foundry upgrades workflow: https://docs.openzeppelin.com/upgrades-plugins/foundry-upgrades
-- Foundry upgrades API: https://docs.openzeppelin.com/upgrades-plugins/api-foundry-upgrades
-
-## Architecture
-
-- `solidity/contracts/BlockchainTestContractV1.sol`
-- `solidity/contracts/BlockchainTestContractV2.sol`
-- `solidity/contracts/BlockchainTestContractV3.sol`
-  - previous implementation kept as upgrade reference for V4
-- `solidity/contracts/BlockchainTestContractV4.sol`
-  - current OpenZeppelin upgradeable implementation contract
-  - inherits `Ownable2StepUpgradeable`, `UUPSUpgradeable`, `ReentrancyGuardTransient`
-  - initializer replaces constructor
-  - supports native ETH plus whitelisted ERC-20 payment tokens such as USDC
-  - rejects fee-on-transfer ERC-20s, so escrow math stays exact
-  - exposes `version()` returning `4.0.0`
-- UUPS proxy
-  - deployed as ERC-1967 proxy
-  - stores all persistent state
-  - keeps the user-facing contract address stable across upgrades
-- `server`
-  - Ktor backend exposing auth, platform, dashboard, and problem APIs
-  - prepares and confirms on-chain create/join flows
-  - enqueues async submission judge jobs
-  - judges submissions through sandbox consensus
-  - records accepted submission results on-chain
-  - retries pending receipt confirmations for already-sent submission transactions
-  - runs background settlement/cancellation workers
-- `composeApp`
-  - Compose Multiplatform web frontend
-  - WasmJS local dev entrypoint on port `8081`
-- `sandbox-runner`
-  - Kotlin/JVM HTTP sandbox node used for judging consensus
-  - compiles user code and validators inside the container
-  - runs a long-lived JVM worker harness per suite to avoid per-test JVM startup noise
-  - exposes `/run`, `/cancel`, `/health`, and `/attestation`
-
-## UUPS Upgrade Model
-
-This is the exact model you asked for:
-
-- implementation contract
-  - contains logic
-  - can be replaced with a new implementation
-- proxy contract
-  - keeps storage forever
-  - delegates calls to the current implementation
-  - keeps the same public address for frontend, backend, and users
-
-In practice:
-
-1. deploy implementation + UUPS proxy
-2. initialize through proxy
-3. users and backend always use the proxy address
-4. when you need a new version, deploy a new implementation and call `upgradeToAndCall(...)` through the proxy
-5. storage remains in proxy, so values are preserved if storage layout stays compatible
-
-Current scope of the on-chain contract:
-
-- native chain currency, currently ETH on Sepolia
-- ERC-20 tokens on the same chain, currently USDC
-
-Future scope:
-
-- more ERC-20 tokens can be enabled without upgrading the proxy, by whitelisting them
-- non-EVM or cross-chain rails like BTC, Arbitrum bridged settlement, or other L2-native payment routes need a new backend payment rail abstraction and separate settlement integration; they are not something a single Ethereum contract can natively execute on its own
-
-The frontend and backend were refactored around a generic `paymentAsset` model, so extending beyond `ETH + USDC` later does not require another domain-model rewrite.
-
-## Foundry Tooling
-
-The project now uses Foundry instead of Hardhat for contract work.
-
-Solidity dependencies are no longer vendored under `lib/`. Foundry resolves them from official external packages installed into `node_modules` and mapped through [remappings.txt](/Users/computer.account/Desktop/blockchain-platform/remappings.txt).
-
-Added:
-
-- [foundry.toml](/Users/computer.account/Desktop/blockchain-platform/foundry.toml)
-- [remappings.txt](/Users/computer.account/Desktop/blockchain-platform/remappings.txt)
-- [DeployBlockchainTestContract.sol](/Users/computer.account/Desktop/blockchain-platform/solidity/scripts/DeployBlockchainTestContract.sol)
-- [UpgradeBlockchainTestContract.sol](/Users/computer.account/Desktop/blockchain-platform/solidity/scripts/UpgradeBlockchainTestContract.sol)
-- [ValidateBlockchainTestContract.sol](/Users/computer.account/Desktop/blockchain-platform/solidity/scripts/ValidateBlockchainTestContract.sol)
-
-Removed:
-
-- project-root Hardhat config
-- project-root Hardhat JS deploy/upgrade/validate scripts
+Older implementation files `BlockchainTestContractV1.sol`, `V2.sol`, and `V3.sol` are kept as upgrade references. `V4` is the current implementation.
 
 ## Requirements
 
 - Java 21
-- Foundry
-- Node.js
 - Docker
-- Ethereum RPC endpoint
+- Node.js and npm
+- Foundry (`forge`, `cast`)
+- Ethereum RPC endpoint for the configured chain
 
-Node.js is still needed for OpenZeppelin Foundry upgrade safety validation. OpenZeppelin documents this explicitly for `openzeppelin-foundry-upgrades`.
+Node.js dependencies are required because OpenZeppelin Foundry upgrade validation resolves packages from `node_modules`.
 
-## Install Contract Dependencies
-
-Run:
+## Install Dependencies
 
 ```bash
 npm install
 ```
 
-This installs:
+This installs `forge-std`, `@openzeppelin/foundry-upgrades`, `@openzeppelin/contracts`, and `@openzeppelin/contracts-upgradeable`. Foundry remappings are configured in `remappings.txt`.
 
-- `forge-std` from the official `foundry-rs/forge-std` Git tag
-- `@openzeppelin/foundry-upgrades` from the official OpenZeppelin Git tag
-- `@openzeppelin/contracts` and `@openzeppelin/contracts-upgradeable` from official npm releases
+## Local Configuration
 
-The repo remappings are already configured for this layout.
+Local development uses one ignored file in the repository root: `.env.local`.
 
-## Local App Development
+Rules:
 
-1. Edit [`.env.local`](/Users/computer.account/Desktop/blockchain-platform/.env.local).
+- `.env.local` must exist.
+- `APP_ENV` must be `local`.
+- Backend, frontend build, and Docker Compose read this file directly.
+- Do not commit `.env.local`; it is ignored by git.
 
-2. Start local infrastructure:
+Minimum local keys used by the current app:
 
-```bash
-docker compose --env-file .env.local up -d postgres redis sandbox-node-1 sandbox-node-2 sandbox-node-3
+```env
+APP_ENV=local
+DATABASE_URL=jdbc:postgresql://localhost:5432/blockchain_platform
+DB_NAME=blockchain_platform
+DB_USER=...
+DB_PASSWORD=...
+REDIS_URL=redis://:password@localhost:6379/0
+REDIS_PASSWORD=...
+AUTH_DOMAIN=localhost:8081
+AUTH_URI=http://localhost:8081
+AUTH_SESSION_SIGN_KEY=...
+ETH_RPC_URL=...
+ETH_PUBLIC_EXPLORER_BASE_URL=https://sepolia.etherscan.io
+ETH_PLATFORM_PROXY_ADDRESS=...
+ETH_PLATFORM_OPERATOR_PRIVATE_KEY=...
+ETH_PLATFORM_SUPPORTED_ERC20_TOKENS=USDC|USD Coin|USDC|6|0x...
+SANDBOX_NODES=http://127.0.0.1:8091,http://127.0.0.1:8092,http://127.0.0.1:8093
+SANDBOX_IMAGE_HASH=...
+SANDBOX_NODE_1_SECRET=...
+SANDBOX_NODE_2_SECRET=...
+SANDBOX_NODE_3_SECRET=...
 ```
 
-3. Start backend:
+`ETH_PLATFORM_SUPPORTED_ERC20_TOKENS` accepts semicolon-separated entries in this format:
 
-```bash
-./gradlew :server:runLocalForce8080
+```env
+CODE|DISPLAY_NAME|SYMBOL|DECIMALS|ADDRESS
 ```
 
-4. Start frontend:
+Example:
 
-```bash
-./gradlew :composeApp:runLocalForce8081
+```env
+ETH_PLATFORM_SUPPORTED_ERC20_TOKENS=USDC|USD Coin|USDC|6|0x...
 ```
 
-Frontend runs on `http://localhost:8081`, backend on `http://localhost:8080`.
+If a backend value should come from Google Secret Manager, leave the target key blank and set `GCP_SECRET_<KEY>`. If the secret name is not a full `projects/...` path, also set `GCP_PROJECT_ID` or `GOOGLE_CLOUD_PROJECT`.
 
-## Single `.env.local`
+Foundry scripts do not resolve `GCP_SECRET_*` references. Before deploy or upgrade, make sure concrete `ETH_RPC_URL` and `ETH_PLATFORM_OPERATOR_PRIVATE_KEY` values are exported in the shell.
 
-Backend, frontend build, Docker Compose, and Foundry scripts use one configuration source: [`.env.local`](/Users/computer.account/Desktop/blockchain-platform/.env.local).
-
-`.env.local` is mandatory for local development, must keep `APP_ENV=local`, and must define the local DB, Redis, auth, Ethereum, and sandbox settings the backend loads at startup.
-
-Auth session defaults are intentionally conservative:
-
-- `AUTH_SESSION_TTL_SECONDS` defaults to `86400` (24 hours absolute lifetime).
-- `AUTH_SESSION_IDLE_TIMEOUT_SECONDS` defaults to `7200` (2 hours without authenticated activity).
-- `AUTH_MAX_ACTIVE_SESSIONS_PER_USER` defaults to `1`; a new login revokes the user's previous session.
-- `AUTH_SESSION_SAME_SITE` defaults to `Strict`. Use `None` only when the frontend and backend must run cross-site, and only together with `AUTH_SESSION_SECURE=true`.
-
-Before running `forge script`, export that file into your shell:
+Before running Foundry scripts, export `.env.local` into the shell:
 
 ```bash
 set -a
@@ -182,28 +111,29 @@ source .env.local
 set +a
 ```
 
-Do not use a second env file, Gradle properties, or process env overrides for project configuration. Keep all configurable values in `.env.local`.
+## Run Locally
 
-If a value should come from Google Secret Manager, keep the target key blank and provide `GCP_SECRET_<KEY>`. When the secret reference is not a fully qualified `projects/...` path, also set `GCP_PROJECT_ID` or `GOOGLE_CLOUD_PROJECT`.
+Start infrastructure:
 
-For `ETH + USDC` the important blockchain entries are:
-
-- `ETH_RPC_URL`
-- `ETH_PLATFORM_PROXY_ADDRESS`
-- `ETH_PLATFORM_OPERATOR_PRIVATE_KEY`
-- `ETH_PLATFORM_SUPPORTED_ERC20_TOKENS`
-- `ETH_PLATFORM_INITIAL_SUPPORTED_PAYMENT_TOKEN`
-
-Recommended Sepolia USDC format:
-
-```env
-ETH_PLATFORM_SUPPORTED_ERC20_TOKENS=USDC|USD Coin|USDC|6|0x...
-ETH_PLATFORM_INITIAL_SUPPORTED_PAYMENT_TOKEN=0x...
+```bash
+docker compose --env-file .env.local up -d postgres redis sandbox-node-1 sandbox-node-2 sandbox-node-3
 ```
 
-`ETH_PLATFORM_INITIAL_SUPPORTED_PAYMENT_TOKEN` is optional. If you leave it empty and `ETH_PLATFORM_SUPPORTED_ERC20_TOKENS` contains a `USDC|...|ADDRESS` entry, the deploy script will automatically whitelist that USDC token during initialization. The backend/frontend asset catalog reads `ETH_PLATFORM_SUPPORTED_ERC20_TOKENS`.
+Start backend:
 
-## Validate, Deploy, Upgrade
+```bash
+./gradlew :server:runLocalForce8080
+```
+
+Start frontend:
+
+```bash
+./gradlew :composeApp:runLocalForce8081
+```
+
+Open `http://localhost:8081`. Backend health is available at `http://localhost:8080/health`.
+
+## Contract Commands
 
 Validate current implementation:
 
@@ -216,11 +146,7 @@ forge clean
 env -u ETH_RPC_URL forge script solidity/scripts/ValidateBlockchainTestContract.sol:ValidateBlockchainTestContract
 ```
 
-Deploy fresh V4 UUPS proxy:
-
-The deploy script uses platform fee `500` basis points by default and initializes owner, operator, and treasury to the wallet behind `ETH_PLATFORM_OPERATOR_PRIVATE_KEY`. If `ETH_PLATFORM_INITIAL_SUPPORTED_PAYMENT_TOKEN` is set, that ERC-20 is whitelisted from the first block of the proxy.
-
-Command:
+Deploy a fresh V4 UUPS proxy:
 
 ```bash
 set -a
@@ -232,9 +158,9 @@ forge script solidity/scripts/DeployBlockchainTestContract.sol:DeployBlockchainT
   --broadcast
 ```
 
-Upgrade existing proxy to V4:
+The deploy script initializes owner, operator, and treasury to the wallet behind `ETH_PLATFORM_OPERATOR_PRIVATE_KEY`, uses `500` bps platform fee, approves `SANDBOX_IMAGE_HASH`, and can whitelist an initial ERC-20 token from `ETH_PLATFORM_INITIAL_SUPPORTED_PAYMENT_TOKEN` or the first `USDC` entry in `ETH_PLATFORM_SUPPORTED_ERC20_TOKENS`.
 
-Command:
+Upgrade an existing proxy to V4:
 
 ```bash
 set -a
@@ -247,71 +173,55 @@ forge script solidity/scripts/UpgradeBlockchainTestContract.sol:UpgradeBlockchai
   --broadcast
 ```
 
-The `--sender` flag matters for upgrades because the proxy owner must authorize the UUPS upgrade.
-
-Post-upgrade sanity check:
+Check deployed version:
 
 ```bash
 cast call "$ETH_PLATFORM_PROXY_ADDRESS" "version()(string)" --rpc-url "$ETH_RPC_URL"
 ```
 
-Expected result after the V4 rollout:
+Expected V4 result:
 
 ```text
 4.0.0
 ```
 
-The upgrade script prints the new implementation address. Keep that value for Etherscan proxy verification.
+For future upgrades, preserve storage layout order and append new storage fields only. New implementation files should reference the previous implementation with `@custom:oz-upgrades-from` when required by OpenZeppelin validation.
 
-## Recommended Upgrade Discipline
+## Main Runtime Flow
 
-For future implementation versions:
+Create competition:
 
-1. keep proxy address unchanged
-2. preserve storage layout order
-3. only append new storage variables
-4. do not remove or reorder storage fields
-5. if you introduce a new implementation file, annotate it with `@custom:oz-upgrades-from <reference>`
+1. Frontend calls `POST /problems/create/prepare`.
+2. Backend validates the problem, stores a short-lived intent, and returns wallet calldata for `createCompetition(...)` plus an optional ERC-20 approval transaction.
+3. User signs the wallet transaction.
+4. Frontend calls `POST /problems/create/confirm`.
+5. Backend verifies calldata, payment value, receipt, and `CompetitionCreated`, then persists the problem.
 
-That is the OpenZeppelin-safe path for preserving proxy storage across upgrades.
+Join competition:
 
-## Backend Flow
+1. Frontend calls `POST /problems/{problemId}/join/prepare`.
+2. Backend returns wallet calldata for `joinCompetition(...)` plus optional ERC-20 approval.
+3. User signs the wallet transaction.
+4. Frontend calls `POST /problems/{problemId}/join/confirm`.
+5. Backend verifies `CompetitionJoined` and records participation.
 
-Current on-chain create flow (`/problems/create/prepare` -> `/problems/create/confirm`):
+Submit solution:
 
-1. frontend calls backend prepare endpoint
-2. backend returns prepared wallet tx for `createCompetition(...)`
-3. if asset is ERC-20, backend may also return an approval tx that must be signed first
-4. user signs wallet transaction(s)
-5. backend confirm step verifies calldata, transferred value, and `CompetitionCreated`
-6. backend persists on-chain competition id
+1. Frontend calls `POST /problems/{problemId}/submit`.
+2. Backend creates a Redis-backed judge job.
+3. Sandbox nodes execute the code; backend requires configured consensus and valid attestations.
+4. If accepted, backend stores the submission and returns a signed `recordSubmissionResult(...)` transaction payload.
+5. Participant sends that transaction from their wallet.
+6. Frontend calls `POST /problems/submissions/{submissionId}/confirm`.
+7. Backend verifies the receipt and marks the result as recorded on-chain.
 
-Current on-chain join flow (`/problems/{problemId}/join/prepare` -> `/problems/{problemId}/join/confirm`):
+Settle or cancel competition:
 
-1. frontend calls backend prepare endpoint
-2. backend returns prepared wallet tx for `joinCompetition(...)`
-3. if asset is ERC-20, backend may also return an approval tx that must be signed first
-4. user signs wallet transaction(s)
-5. backend confirm step verifies `CompetitionJoined`
-6. backend records participation
-
-Accepted submission:
-
-1. frontend enqueues a submission judge job
-2. backend worker pulls the job from Redis
-3. sandbox nodes run code
-4. backend requires consensus
-5. backend persists accepted submission
-6. backend operator records it on-chain with `recordSubmissionResult(...)`
-7. if the transaction was sent but receipt confirmation times out, the same job can retry receipt confirmation for the same `txHash` without submitting a new transaction
-
-Settlement:
-
-1. backend worker finds competitions ready for settlement
-2. worker marks the contest as awaiting user-triggered `settle` or `cancel`
-3. frontend calls `/problems/{problemId}/settle|cancel/prepare`, user signs the wallet transaction, then backend confirms it through `/confirm`
-4. backend verifies `CompetitionSettled` or `CompetitionCancelled` from the receipt and persists final state
-5. refunds stay claimable from the same proxy address
+1. `CompetitionSettlementWorker` schedules deadline jobs and marks competitions ready for user-triggered finalization.
+2. Settlement uses `POST /problems/{problemId}/settle/prepare` and `POST /problems/{problemId}/settle/confirm`.
+3. Cancellation uses `POST /problems/{problemId}/cancel/prepare` and `POST /problems/{problemId}/cancel/confirm`.
+4. Backend verifies `CompetitionSettled` or `CompetitionCancelled` and persists the final state.
+5. Refunds remain claimable from the same proxy address.
 
 ## Verification
 
@@ -333,18 +243,11 @@ Sandbox runner build:
 ./gradlew :sandbox-runner:build
 ```
 
-Foundry compile:
+Foundry compile and tests:
 
 ```bash
 forge build
-```
-
-OpenZeppelin validation:
-
-```bash
-npm install
-forge clean
-env -u ETH_RPC_URL forge script solidity/scripts/ValidateBlockchainTestContract.sol:ValidateBlockchainTestContract
+forge test
 ```
 
 Full local verification pass:
@@ -352,4 +255,5 @@ Full local verification pass:
 ```bash
 ./gradlew :server:test :composeApp:compileKotlinWasmJs :sandbox-runner:build
 forge build
+forge test
 ```
