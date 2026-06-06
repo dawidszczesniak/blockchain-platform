@@ -21,7 +21,7 @@ This repository is the master's thesis project of Dawid Szczesniak at the Milita
 
 ## Smart Contract
 
-The active contract is `solidity/contracts/BlockchainTestContractV4.sol`.
+The active contract is `solidity/contracts/BlockchainTestContract.sol`.
 
 - Deployed behind an ERC-1967 UUPS proxy.
 - Proxy address is the stable runtime address used by frontend, backend, and users.
@@ -31,7 +31,7 @@ The active contract is `solidity/contracts/BlockchainTestContractV4.sol`.
 - Rejects unsupported or fee-on-transfer ERC-20 behavior to keep escrow accounting exact.
 - Exposes `version()` returning `4.0.0`.
 
-Older implementation files `BlockchainTestContractV1.sol`, `V2.sol`, and `V3.sol` are kept as upgrade references. `V4` is the current implementation.
+Historical snapshots `BlockchainTestContractV1.sol`, `BlockchainTestContractV2.sol`, and `BlockchainTestContractV3.sol` are kept for storage-layout and upgrade-reference work. The active thesis-facing implementation remains unversioned as `BlockchainTestContract.sol`. When a future implementation is released, archive the current file under the next historical name and keep the newest implementation unversioned.
 
 ## Requirements
 
@@ -146,7 +146,7 @@ forge clean
 env -u ETH_RPC_URL forge script solidity/scripts/ValidateBlockchainTestContract.sol:ValidateBlockchainTestContract
 ```
 
-Deploy a fresh V4 UUPS proxy:
+Deploy a fresh UUPS proxy:
 
 ```bash
 set -a
@@ -160,7 +160,7 @@ forge script solidity/scripts/DeployBlockchainTestContract.sol:DeployBlockchainT
 
 The deploy script initializes owner, operator, and treasury to the wallet behind `ETH_PLATFORM_OPERATOR_PRIVATE_KEY`, uses `500` bps platform fee, approves `SANDBOX_IMAGE_HASH`, and can whitelist an initial ERC-20 token from `ETH_PLATFORM_INITIAL_SUPPORTED_PAYMENT_TOKEN` or the first `USDC` entry in `ETH_PLATFORM_SUPPORTED_ERC20_TOKENS`.
 
-Upgrade an existing proxy to V4:
+Upgrade an existing proxy to the current implementation:
 
 ```bash
 set -a
@@ -179,7 +179,7 @@ Check deployed version:
 cast call "$ETH_PLATFORM_PROXY_ADDRESS" "version()(string)" --rpc-url "$ETH_RPC_URL"
 ```
 
-Expected V4 result:
+Expected result:
 
 ```text
 4.0.0

@@ -8,11 +8,11 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
 
-/// @title BlockchainTestContractV4
+/// @title BlockchainTestContract
 /// @notice Unified on-chain surface for competition escrow, settlement, and accepted result recording.
 /// @custom:oz-upgrades
 /// @dev Deployed behind an ERC-1967 UUPS proxy. Persistent state lives in proxy storage.
-contract BlockchainTestContractV4 is Initializable, Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTransient {
+contract BlockchainTestContract is Initializable, Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardTransient {
     using SafeERC20 for IERC20;
 
     enum CompetitionState {

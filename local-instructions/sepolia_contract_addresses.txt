@@ -1,0 +1,27 @@
+Sepolia addresses
+
+Proxy
+- 0x7761Fc63E2C0ad6574C63f417c226D43C739A113
+- https://sepolia.etherscan.io/address/0x7761Fc63E2C0ad6574C63f417c226D43C739A113
+
+Treasury (current `treasury()` from proxy)
+- 0xf914335A7fDB1FFbA5Df155A410CEd53A8609B6e
+- https://sepolia.etherscan.io/address/0xf914335A7fDB1FFbA5Df155A410CEd53A8609B6e
+
+Current implementation (`BlockchainTestContract`, latest recorded upgrade)
+- 0xda24444a0596d8d588d3edfd697990a7d4f0fdc3
+- https://sepolia.etherscan.io/address/0xda24444a0596d8d588d3edfd697990a7d4f0fdc3
+
+Historical implementation snapshots
+
+BlockchainTestContractV1 implementation
+- 0x5eACBB111ff0Dd13cDF8CC4dfa2F882087e73F09
+- https://sepolia.etherscan.io/address/0x5eACBB111ff0Dd13cDF8CC4dfa2F882087e73F09
+
+BlockchainTestContractV2 implementation
+- 0x08b629a26cc0c6A6fc8d8B35475CD7a5A4FA7C6d
+- https://sepolia.etherscan.io/address/0x08b629a26cc0c6A6fc8d8B35475CD7a5A4FA7C6d
+
+BlockchainTestContractV3 implementation
+- 0xAb063DA42544805e20DF8188f7412719a115E4f0
+- https://sepolia.etherscan.io/address/0xAb063DA42544805e20DF8188f7412719a115E4f0
