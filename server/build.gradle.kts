@@ -1,0 +1,77 @@
+import org.gradle.jvm.toolchain.JavaLanguageVersion
+import org.gradle.jvm.toolchain.JvmVendorSpec
+
+plugins {
+    alias(libs.plugins.kotlinJvm)
+    alias(libs.plugins.kotlinSerialization)
+    alias(libs.plugins.ktor)
+    application
+}
+
+group = "pl.dawidszczesniak.blockchain_platform"
+version = "1.0.0"
+application {
+    mainClass.set("pl.dawidszczesniak.blockchain_platform.ApplicationKt")
+
+    val isDevelopment: Boolean = project.ext.has("development")
+    applicationDefaultJvmArgs = listOf("-Dio.ktor.development=$isDevelopment")
+}
+
+kotlin {
+    jvmToolchain {
+        languageVersion.set(JavaLanguageVersion.of(21))
+        vendor.set(JvmVendorSpec.ADOPTIUM)
+    }
+}
+
+dependencies {
+    implementation(platform(libs.jackson.bom))
+    implementation(platform(libs.google.cloud.libraries.bom))
+    implementation(project(":shared"))
+    implementation(libs.logback)
+    implementation(libs.google.cloud.secretmanager)
+    implementation(libs.ktor.serverCore)
+    implementation(libs.ktor.serverCors)
+    implementation(libs.ktor.serverContentNegotiation)
+    implementation(libs.ktor.serverDefaultHeaders)
+    implementation(libs.ktor.serverSessions)
+    implementation(libs.ktor.serializationKotlinxJson)
+    implementation(libs.ktor.serverNetty)
+    implementation(libs.postgresql)
+    implementation(libs.exposed.core)
+    implementation(libs.exposed.jdbc)
+    implementation(libs.exposed.javaTime)
+    implementation(libs.web3j.crypto)
+    implementation(libs.web3j.core)
+    implementation(libs.jedis)
+    implementation(libs.koin.ktor)
+    implementation(libs.kotlinx.serialization.json)
+    testImplementation(libs.ktor.serverTestHost)
+    testImplementation(libs.kotlin.testJunit)
+}
+
+val freeLocalBackendPort by tasks.registering(Exec::class) {
+    description = "Kills the process listening on port 8080 before a local backend run."
+
+    commandLine(
+        "zsh",
+        "-ic",
+        """
+        pids=$(lsof -tiTCP:8080 -sTCP:LISTEN)
+        if [ -n "${'$'}pids" ]; then
+          kill ${'$'}pids
+        fi
+        """.trimIndent(),
+    )
+}
+
+tasks.register<JavaExec>("runLocalForce8080") {
+    group = "application"
+    description = "Frees port 8080 and starts the backend only for local environment."
+
+    dependsOn(freeLocalBackendPort, tasks.named("classes"))
+
+    mainClass.set(application.mainClass)
+    classpath = sourceSets.main.get().runtimeClasspath
+    jvmArgs(application.applicationDefaultJvmArgs)
+}

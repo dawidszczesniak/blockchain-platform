@@ -1,0 +1,15 @@
+Sepolia addresses for master-project branch
+
+Record only the deployment that matches this branch.
+
+Proxy
+- <DEPLOYED_PROXY_ADDRESS>
+- https://sepolia.etherscan.io/address/<DEPLOYED_PROXY_ADDRESS>
+
+Current implementation (`BlockchainTestContract`)
+- <IMPLEMENTATION_ADDRESS>
+- https://sepolia.etherscan.io/address/<IMPLEMENTATION_ADDRESS>
+
+Treasury (`treasury()` from proxy)
+- <TREASURY_ADDRESS>
+- https://sepolia.etherscan.io/address/<TREASURY_ADDRESS>

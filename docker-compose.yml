@@ -1,0 +1,121 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: blockchain-platform-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256 --auth-local=scram-sha-256
+    command:
+      - postgres
+      - -c
+      - hba_file=/etc/postgresql/pg_hba.conf
+      - -c
+      - password_encryption=scram-sha-256
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+
+  redis:
+    image: redis:7.4-alpine
+    container_name: blockchain-platform-redis
+    restart: unless-stopped
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    command: ["sh", "-c", "exec redis-server --appendonly yes --requirepass \"$${REDIS_PASSWORD}\""]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  sandbox-node-1:
+    build:
+      context: ./sandbox-runner
+      dockerfile: Dockerfile
+    container_name: blockchain-platform-sandbox-node-1
+    restart: unless-stopped
+    environment:
+      SANDBOX_NODE_ID: sandbox-node-1
+      SANDBOX_PORT: 8080
+      SANDBOX_IMAGE_HASH: ${SANDBOX_IMAGE_HASH:-unknown}
+      SANDBOX_VERSION: ${SANDBOX_VERSION:-1}
+      SANDBOX_ATTESTATION_SECRET: ${SANDBOX_NODE_1_SECRET}
+      JDK_JAVA_OPTIONS: -Djansi.tmpdir=/jansi
+      JAVA_TOOL_OPTIONS: -Djansi.tmpdir=/jansi
+    ports:
+      - "8091:8080"
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m,noexec,nosuid
+      - /jansi:size=32m,exec,nosuid
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 256
+    mem_limit: 512m
+    cpus: 1.0
+
+  sandbox-node-2:
+    build:
+      context: ./sandbox-runner
+      dockerfile: Dockerfile
+    container_name: blockchain-platform-sandbox-node-2
+    restart: unless-stopped
+    environment:
+      SANDBOX_NODE_ID: sandbox-node-2
+      SANDBOX_PORT: 8080
+      SANDBOX_IMAGE_HASH: ${SANDBOX_IMAGE_HASH:-unknown}
+      SANDBOX_VERSION: ${SANDBOX_VERSION:-1}
+      SANDBOX_ATTESTATION_SECRET: ${SANDBOX_NODE_2_SECRET}
+      JDK_JAVA_OPTIONS: -Djansi.tmpdir=/jansi
+      JAVA_TOOL_OPTIONS: -Djansi.tmpdir=/jansi
+    ports:
+      - "8092:8080"
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m,noexec,nosuid
+      - /jansi:size=32m,exec,nosuid
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 256
+    mem_limit: 512m
+    cpus: 1.0
+
+  sandbox-node-3:
+    build:
+      context: ./sandbox-runner
+      dockerfile: Dockerfile
+    container_name: blockchain-platform-sandbox-node-3
+    restart: unless-stopped
+    environment:
+      SANDBOX_NODE_ID: sandbox-node-3
+      SANDBOX_PORT: 8080
+      SANDBOX_IMAGE_HASH: ${SANDBOX_IMAGE_HASH:-unknown}
+      SANDBOX_VERSION: ${SANDBOX_VERSION:-1}
+      SANDBOX_ATTESTATION_SECRET: ${SANDBOX_NODE_3_SECRET}
+      JDK_JAVA_OPTIONS: -Djansi.tmpdir=/jansi
+      JAVA_TOOL_OPTIONS: -Djansi.tmpdir=/jansi
+    ports:
+      - "8093:8080"
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m,noexec,nosuid
+      - /jansi:size=32m,exec,nosuid
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 256
+    mem_limit: 512m
+    cpus: 1.0
+
+volumes:
+  postgres_data:
+  redis_data:

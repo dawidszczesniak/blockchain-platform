@@ -1,0 +1,36 @@
+# IntelliJ IDEA
+.idea/
+*.iml
+*.ipr
+*.iws
+out/
+.run/
+broadcast/
+cache/
+
+# Gradle / Kotlin caches & build outputs
+.gradle/
+.kotlin/
+**/build/
+
+# Node / Kotlin JS/Wasm
+**/node_modules/
+kotlin-js-store/**/node_modules/
+/kotlin-js-store/yarn.lock
+/kotlin-js-store/wasm/yarn.lock
+
+# Local env / secrets
+local.properties
+.env
+.env.*
+
+# OS junk
+.DS_Store
+Thumbs.db
+*.log
+__pycache__/
+*.pyc
+
+# Local helper notes
+upgrade_instructions.txt
+sepolia_contract_addresses.txt
