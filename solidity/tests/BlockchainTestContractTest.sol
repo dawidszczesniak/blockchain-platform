@@ -4,7 +4,7 @@ pragma solidity ^0.8.24;
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {Test} from "forge-std/Test.sol";
-import {BlockchainTestContract} from "../contracts/BlockchainTestContract.sol";
+import {BlockchainTestContractV4} from "../contracts/BlockchainTestContractV4.sol";
 
 contract BlockchainTestContractTest is Test {
     struct SubmissionCall {
@@ -17,7 +17,7 @@ contract BlockchainTestContractTest is Test {
         bytes signature;
     }
 
-    BlockchainTestContract private platform;
+    BlockchainTestContractV4 private platform;
     MockERC20 private usdc;
     FeeOnTransferMockERC20 private feeToken;
 
@@ -43,15 +43,15 @@ contract BlockchainTestContractTest is Test {
         usdc = new MockERC20("USD Coin", "USDC", 6);
         feeToken = new FeeOnTransferMockERC20();
 
-        BlockchainTestContract implementation = new BlockchainTestContract();
+        BlockchainTestContractV4 implementation = new BlockchainTestContractV4();
         ERC1967Proxy proxy = new ERC1967Proxy(
             address(implementation),
             abi.encodeCall(
-                BlockchainTestContract.initialize,
+                BlockchainTestContractV4.initialize,
                 (OWNER, OPERATOR, TREASURY, 500, APPROVED_SANDBOX_HASH, address(usdc))
             )
         );
-        platform = BlockchainTestContract(address(proxy));
+        platform = BlockchainTestContractV4(address(proxy));
 
         vm.deal(CREATOR, 10 ether);
         vm.deal(ALICE, 10 ether);
@@ -95,11 +95,11 @@ contract BlockchainTestContractTest is Test {
             ,
             ,
             ,
-            BlockchainTestContract.CompetitionState state
+            BlockchainTestContractV4.CompetitionState state
         ) = platform.getCompetition(competitionId);
 
         assertEq(winner, BOB);
-        assertEq(uint256(state), uint256(BlockchainTestContract.CompetitionState.Settled));
+        assertEq(uint256(state), uint256(BlockchainTestContractV4.CompetitionState.Settled));
         assertEq(winnerBalanceBefore + ETH_PRIZE, BOB.balance);
         assertEq(creatorBalanceBefore + 0.19 ether, CREATOR.balance);
         assertEq(treasuryBalanceBefore + 0.01 ether, TREASURY.balance);
@@ -133,12 +133,12 @@ contract BlockchainTestContractTest is Test {
             ,
             ,
             ,
-            BlockchainTestContract.CompetitionState state
+            BlockchainTestContractV4.CompetitionState state
         ) = platform.getCompetition(competitionId);
 
         assertEq(winner, BOB);
         assertEq(paymentToken, address(usdc));
-        assertEq(uint256(state), uint256(BlockchainTestContract.CompetitionState.Settled));
+        assertEq(uint256(state), uint256(BlockchainTestContractV4.CompetitionState.Settled));
         assertEq(winnerBalanceBefore + USDC_PRIZE, usdc.balanceOf(BOB));
         assertEq(creatorBalanceBefore + 19e6, usdc.balanceOf(CREATOR));
         assertEq(treasuryBalanceBefore + 1e6, usdc.balanceOf(TREASURY));
@@ -153,7 +153,7 @@ contract BlockchainTestContractTest is Test {
         feeToken.approve(address(platform), prizeAmount);
         vm.expectRevert(
             abi.encodeWithSelector(
-                BlockchainTestContract.UnsupportedTokenBehavior.selector,
+                BlockchainTestContractV4.UnsupportedTokenBehavior.selector,
                 address(feeToken)
             )
         );
@@ -175,7 +175,7 @@ contract BlockchainTestContractTest is Test {
         joinNativeCompetition(competitionId, ALICE);
 
         vm.prank(BOB);
-        vm.expectRevert(BlockchainTestContract.CompetitionNotReadyForCancellation.selector);
+        vm.expectRevert(BlockchainTestContractV4.CompetitionNotReadyForCancellation.selector);
         platform.cancelCompetition(competitionId);
 
         vm.warp(12);
@@ -193,10 +193,10 @@ contract BlockchainTestContractTest is Test {
             ,
             ,
             ,
-            BlockchainTestContract.CompetitionState state
+            BlockchainTestContractV4.CompetitionState state
         ) = platform.getCompetition(competitionId);
 
-        assertEq(uint256(state), uint256(BlockchainTestContract.CompetitionState.Cancelled));
+        assertEq(uint256(state), uint256(BlockchainTestContractV4.CompetitionState.Cancelled));
     }
 
     function createNativeCompetition(

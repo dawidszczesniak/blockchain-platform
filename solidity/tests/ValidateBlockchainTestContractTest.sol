@@ -7,7 +7,7 @@ import {Upgrades} from "openzeppelin-foundry-upgrades/Upgrades.sol";
 import {Options} from "openzeppelin-foundry-upgrades/Options.sol";
 
 contract ValidateBlockchainTestContractTest is Test {
-    string internal constant CONTRACT_NAME = "BlockchainTestContract.sol:BlockchainTestContract";
+    string internal constant CONTRACT_NAME = "BlockchainTestContractV4.sol:BlockchainTestContractV4";
 
     function test_validateBlockchainTestContractImplementation() external {
         _removeStaleBuildInfo();
