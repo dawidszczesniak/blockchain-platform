@@ -49,6 +49,7 @@
     <string name="create_problem_run_error_incomplete_results">Nie udało się pobrać wyników wszystkich testów. Spróbuj ponownie.</string>
     <string name="create_problem_run_status">Status: %1$s</string>
     <string name="create_problem_run_output">Wynik: %1$s</string>
+    <string name="create_problem_run_output_for_test">Wynik dla testu %1$d: %2$s</string>
     <string name="create_problem_submit_error_test_input_required">Uzupełnij dane wejściowe dla każdego testu przed utworzeniem problemu.</string>
     <string name="create_problem_profit_title">Szacowany zysk</string>
     <string name="create_problem_profit_note">Wyliczane z nagrody, wejściówki, liczby uczestników i opłaty platformy 2%. Gas dla wpłat/wypłat nie jest pokrywany przez platformę.</string>
@@ -226,9 +227,11 @@
     <string name="problem_details_editor_submit">Submit</string>
     <string name="problem_details_editor_locked_loading">Sprawdzanie statusu uczestnictwa...</string>
     <string name="problem_details_editor_locked_join_title">Edytor jest zablokowany</string>
-    <string name="problem_details_editor_locked_join_body">Zapisz się do tego konkursu, aby odblokować edytor kodu.</string>
+    <string name="problem_details_editor_locked_join_body">Zapisani uczestnicy: %1$d / %2$d. Zapisz się do konkursu, aby odblokować edytor kodu.</string>
     <string name="problem_details_editor_locked_join_action">Zapisz się do konkursu</string>
     <string name="problem_details_editor_locked_join_action_loading">Zapisywanie...</string>
+    <string name="problem_details_editor_locked_full_title">Konkurs jest pełny</string>
+    <string name="problem_details_editor_locked_full_body">Zapisano już %1$d / %2$d uczestników. Brak możliwości zapisu.</string>
     <string name="problem_details_editor_locked_waiting_title">Konkurs jeszcze nie wystartował</string>
     <string name="problem_details_editor_locked_waiting_body">Zapisani uczestnicy: %1$d / %2$d wymaganych do startu.</string>
     <string name="problem_details_run_running">Uruchamianie testów...</string>

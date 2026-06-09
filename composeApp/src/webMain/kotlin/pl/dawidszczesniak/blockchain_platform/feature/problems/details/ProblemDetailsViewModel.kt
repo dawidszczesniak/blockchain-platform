@@ -121,7 +121,9 @@ class ProblemDetailsViewModel(
     private var competitionActionJob: Job? = null
     private val joinedProblemIds = mutableSetOf<Int>()
     private var loadedProblemId: Int? = null
+    private var loadedWalletAddressKey: String? = null
     private var loadedCompetitionProblemId: Int? = null
+    private var loadedCompetitionWalletAddressKey: String? = null
     private val _state = MutableStateFlow(ProblemDetailsGateState())
     private val _competitionActionState = MutableStateFlow(CompetitionLifecycleActionState())
     val state: StateFlow<ProblemDetailsGateState> = _state.asStateFlow()
@@ -133,9 +135,20 @@ class ProblemDetailsViewModel(
         requiredParticipants: Int,
         isLoggedIn: Boolean,
     ) {
+        val currentWalletAddressKey = if (isLoggedIn) {
+            walletSessionStore.currentWalletAddress().walletAddressKey()
+        } else {
+            null
+        }
         val isNewProblem = loadedProblemId != problemId
+        val isNewWallet = loadedWalletAddressKey != currentWalletAddressKey
+        val shouldResetUserScopedState = isNewProblem || isNewWallet
+        if (shouldResetUserScopedState) {
+            cancelProblemActions()
+        }
         loadedProblemId = problemId
-        if (!isLoggedIn) {
+        loadedWalletAddressKey = currentWalletAddressKey
+        if (!isLoggedIn || isNewWallet) {
             joinedProblemIds.clear()
         }
         val cachedJoined = isLoggedIn && joinedProblemIds.contains(problemId)
@@ -154,14 +167,14 @@ class ProblemDetailsViewModel(
                 registeredParticipants = initialRegistered,
                 isRunning = false,
                 runErrorMessage = null,
-                runResult = if (isNewProblem) null else current.runResult,
+                runResult = if (shouldResetUserScopedState) null else current.runResult,
                 isSubmitting = false,
                 isSubmitRequestInFlight = false,
                 activeSubmissionJobId = null,
                 submitStatusMessage = null,
                 submitErrorMessage = null,
-                submitResult = if (isNewProblem) null else current.submitResult,
-                submitInlineErrorMessage = if (isNewProblem) null else current.submitInlineErrorMessage,
+                submitResult = if (shouldResetUserScopedState) null else current.submitResult,
+                submitInlineErrorMessage = if (shouldResetUserScopedState) null else current.submitInlineErrorMessage,
                 submitRetryAllowed = false,
             )
         }
@@ -206,10 +219,16 @@ class ProblemDetailsViewModel(
 
     fun loadCompetitionLifecycle(problemId: Int) {
         val isNewProblem = loadedCompetitionProblemId != problemId
-        loadedCompetitionProblemId = problemId
         val currentWalletAddress = walletSessionStore.currentWalletAddress()
+        val currentWalletAddressKey = currentWalletAddress.walletAddressKey()
+        val isNewWallet = loadedCompetitionWalletAddressKey != currentWalletAddressKey
+        if (isNewProblem || isNewWallet) {
+            cancelCompetitionLifecycleAction()
+        }
+        loadedCompetitionProblemId = problemId
+        loadedCompetitionWalletAddressKey = currentWalletAddressKey
         _competitionActionState.update { current ->
-            if (isNewProblem) {
+            if (isNewProblem || isNewWallet) {
                 CompetitionLifecycleActionState(
                     currentWalletAddress = currentWalletAddress,
                 )
@@ -752,11 +771,23 @@ class ProblemDetailsViewModel(
     }
 
     fun close() {
-        joinJob?.cancel()
-        runJob?.cancel()
-        submitJob?.cancel()
-        competitionActionJob?.cancel()
+        cancelProblemActions()
+        cancelCompetitionLifecycleAction()
         scope.cancel()
+    }
+
+    private fun cancelProblemActions() {
+        joinJob?.cancel()
+        joinJob = null
+        runJob?.cancel()
+        runJob = null
+        submitJob?.cancel()
+        submitJob = null
+    }
+
+    private fun cancelCompetitionLifecycleAction() {
+        competitionActionJob?.cancel()
+        competitionActionJob = null
     }
 
     private fun activeScope(): CoroutineScope {
@@ -1097,6 +1128,13 @@ private fun decodeAbiUint256(dataHex: String): Long? {
         return null
     }
     return runCatching { raw.takeLast(64).toULong(16).toLong() }.getOrNull()
+}
+
+private fun String?.walletAddressKey(): String? {
+    return this
+        ?.trim()
+        ?.takeIf { it.isNotBlank() }
+        ?.lowercase()
 }
 
 private val SUBMIT_BLOCKED_PATTERN =
