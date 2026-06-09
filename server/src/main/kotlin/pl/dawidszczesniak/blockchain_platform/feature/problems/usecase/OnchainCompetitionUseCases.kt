@@ -10,6 +10,7 @@ import pl.dawidszczesniak.blockchain_platform.db.DashboardMetricsRefresher
 import pl.dawidszczesniak.blockchain_platform.db.DbTransactionRunner
 import pl.dawidszczesniak.blockchain_platform.feature.auth.BlockchainConfig
 import pl.dawidszczesniak.blockchain_platform.feature.platform.PaymentAssetCatalog
+import pl.dawidszczesniak.blockchain_platform.feature.problems.competition.hasContractDeadlinePassed
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.ConfirmSubmissionResultRequestDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.dto.CompetitionLifecycleActionResponseDto
 import pl.dawidszczesniak.blockchain_platform.feature.problems.competition.toContractDeadlineEpochSeconds
@@ -32,6 +33,7 @@ import pl.dawidszczesniak.blockchain_platform.feature.problems.onchain.Competiti
 import pl.dawidszczesniak.blockchain_platform.feature.problems.onchain.SubmissionResultContractClient
 import pl.dawidszczesniak.blockchain_platform.feature.problems.onchain.SubmissionResultRecord
 import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.CompetitionSettlementRepository
+import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.OnchainJoinContext
 import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.ProblemCreationRepository
 import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.ProblemParticipationRepository
 import pl.dawidszczesniak.blockchain_platform.feature.problems.repository.SubmissionResultRepository
@@ -204,6 +206,7 @@ internal class PrepareJoinProblemOnChainUseCaseImpl(
         } catch (error: IllegalArgumentException) {
             throw JoinProblemValidationException(error.message ?: "Cannot join this competition.")
         }
+        requireJoinOpen(context)
         val paymentAsset = paymentAssetCatalog.requireByCode(context.paymentAsset.code)
         val preparedTx = contractClient.prepareJoinCompetition(
             paymentAsset = paymentAsset,
@@ -552,6 +555,15 @@ private fun pl.dawidszczesniak.blockchain_platform.feature.problems.onchain.Prep
         data = data,
         valueHex = valueHex,
     )
+}
+
+private fun requireJoinOpen(context: OnchainJoinContext) {
+    if (Instant.now().hasContractDeadlinePassed(context.joinUntilDate)) {
+        throw JoinProblemValidationException("Registration period has ended.")
+    }
+    if (context.registeredParticipants >= context.requiredParticipants) {
+        throw JoinProblemValidationException("Competition has already started. Registration is closed.")
+    }
 }
 
 private fun requireSettlementReady(context: pl.dawidszczesniak.blockchain_platform.feature.problems.repository.CompetitionLifecycleContext) {

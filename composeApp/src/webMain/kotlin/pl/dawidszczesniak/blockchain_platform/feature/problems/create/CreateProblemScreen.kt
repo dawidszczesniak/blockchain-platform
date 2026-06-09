@@ -103,7 +103,7 @@ import blockchain_platform.composeapp.generated.resources.create_problem_run_err
 import blockchain_platform.composeapp.generated.resources.create_problem_run_all
 import blockchain_platform.composeapp.generated.resources.create_problem_run_all_loading
 import blockchain_platform.composeapp.generated.resources.create_problem_run_all_success
-import blockchain_platform.composeapp.generated.resources.create_problem_run_output
+import blockchain_platform.composeapp.generated.resources.create_problem_run_output_for_test
 import blockchain_platform.composeapp.generated.resources.create_problem_run_running
 import blockchain_platform.composeapp.generated.resources.create_problem_run_status
 import blockchain_platform.composeapp.generated.resources.create_problem_run_test
@@ -738,11 +738,11 @@ private fun ReferenceValidationBenchmark(
                 color = IntelliJCodePalette.Comment,
             )
         }
-        outputs.forEach { (_, output) ->
+        outputs.forEach { (testNumber, output) ->
             Spacer(Modifier.height(4.dp))
             SelectionContainer {
                 Text(
-                    text = stringResource(Res.string.create_problem_run_output, output),
+                    text = stringResource(Res.string.create_problem_run_output_for_test, testNumber, output),
                     style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
                     color = IntelliJCodePalette.Identifier,
                 )
@@ -1136,7 +1136,7 @@ private fun CodeEditorField(
     errorText: String? = null,
 ) {
     val lineCount = value.count { it == '\n' } + 1
-    val visibleLines = maxOf(minLines, lineCount)
+    val visibleLines = lineCount.coerceIn(minLines, maxLines)
     val lineHeight = 21.dp
     val editorVerticalPadding = 10.dp
     val lineBoxVerticalPadding = 0.dp
@@ -1400,7 +1400,7 @@ private fun TestCaseCard(
                     onValueChange = onInputChange,
                     modifier = Modifier.fillMaxWidth(),
                     minLines = 2,
-                    maxLines = 8,
+                    maxLines = 2,
                     isError = inputErrorMessage != null,
                     errorText = inputErrorMessage,
                 )

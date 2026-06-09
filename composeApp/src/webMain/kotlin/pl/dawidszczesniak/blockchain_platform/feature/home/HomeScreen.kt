@@ -322,8 +322,6 @@ private fun UpdatesList(
                     Spacer(Modifier.width(12.dp))
                     Column {
                         Text(update.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                        Spacer(Modifier.height(4.dp))
-                        Text(update.body, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }

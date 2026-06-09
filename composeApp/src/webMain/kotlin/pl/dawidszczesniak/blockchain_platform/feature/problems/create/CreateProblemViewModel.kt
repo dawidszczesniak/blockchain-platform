@@ -1121,11 +1121,39 @@ private fun parseAmount(value: String): Double {
 }
 
 fun formatAmount(value: Double): String {
-    val rounded = round(value * 100) / 100
-    val asLong = rounded.toLong().toDouble()
-    return if (abs(rounded - asLong) < 0.0001) {
-        asLong.toLong().toString()
-    } else {
-        rounded.toString()
+    if (abs(value) < 0.000000001) {
+        return "0"
     }
+    val decimals = when {
+        abs(value) >= 1.0 -> 2
+        abs(value) >= 0.01 -> 4
+        else -> 8
+    }
+    return formatDecimal(value, decimals)
+}
+
+private fun formatDecimal(value: Double, decimals: Int): String {
+    val factor = decimalFactor(decimals)
+    val scaled = round(abs(value) * factor).toLong()
+    if (scaled == 0L) {
+        return "0"
+    }
+    val sign = if (value < 0) "-" else ""
+    val whole = scaled / factor
+    val fraction = scaled % factor
+    if (fraction == 0L) {
+        return "$sign$whole"
+    }
+    val fractionText = fraction.toString()
+        .padStart(decimals, '0')
+        .trimEnd('0')
+    return "$sign$whole.$fractionText"
+}
+
+private fun decimalFactor(decimals: Int): Long {
+    var factor = 1L
+    repeat(decimals) {
+        factor *= 10L
+    }
+    return factor
 }

@@ -49,6 +49,7 @@
     <string name="create_problem_run_error_incomplete_results">Could not fetch all test results. Try again.</string>
     <string name="create_problem_run_status">Status: %1$s</string>
     <string name="create_problem_run_output">Output: %1$s</string>
+    <string name="create_problem_run_output_for_test">Output for test %1$d: %2$s</string>
     <string name="create_problem_submit_error_test_input_required">Fill in the input for every test before creating the problem.</string>
     <string name="create_problem_profit_title">Profit estimate</string>
     <string name="create_problem_profit_note">Calculated from prize, entry fee, participants, and 2% platform fee. Gas for deposits/withdrawals is not covered by the platform.</string>
@@ -226,9 +227,11 @@
     <string name="problem_details_editor_submit">Submit</string>
     <string name="problem_details_editor_locked_loading">Checking your participation status...</string>
     <string name="problem_details_editor_locked_join_title">Editor is locked</string>
-    <string name="problem_details_editor_locked_join_body">Join this competition to unlock the code editor.</string>
+    <string name="problem_details_editor_locked_join_body">Registered participants: %1$d / %2$d. Join this competition to unlock the code editor.</string>
     <string name="problem_details_editor_locked_join_action">Join competition</string>
     <string name="problem_details_editor_locked_join_action_loading">Joining...</string>
+    <string name="problem_details_editor_locked_full_title">Competition is full</string>
+    <string name="problem_details_editor_locked_full_body">Registered participants: %1$d / %2$d. Registration is no longer available.</string>
     <string name="problem_details_editor_locked_waiting_title">Competition has not started yet</string>
     <string name="problem_details_editor_locked_waiting_body">Registered participants: %1$d / %2$d required to start.</string>
     <string name="problem_details_run_running">Running tests...</string>

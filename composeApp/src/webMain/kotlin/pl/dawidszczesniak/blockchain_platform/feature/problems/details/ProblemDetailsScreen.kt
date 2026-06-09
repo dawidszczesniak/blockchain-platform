@@ -62,6 +62,8 @@ import blockchain_platform.composeapp.generated.resources.problem_details_action
 import blockchain_platform.composeapp.generated.resources.problem_details_action_settle_loading
 import blockchain_platform.composeapp.generated.resources.problem_details_constraints_title
 import blockchain_platform.composeapp.generated.resources.problem_details_editor_language
+import blockchain_platform.composeapp.generated.resources.problem_details_editor_locked_full_body
+import blockchain_platform.composeapp.generated.resources.problem_details_editor_locked_full_title
 import blockchain_platform.composeapp.generated.resources.problem_details_editor_locked_join_action
 import blockchain_platform.composeapp.generated.resources.problem_details_editor_locked_join_action_loading
 import blockchain_platform.composeapp.generated.resources.problem_details_editor_locked_join_body
@@ -161,12 +163,13 @@ fun ProblemDetailsScreen(
         problem.registeredParticipants,
         gateState.registeredParticipants ?: 0,
     )
-    val hasCompetitionStarted = registeredParticipants >= problem.requiredParticipants
+    val hasReachedParticipantLimit = registeredParticipants >= problem.requiredParticipants
     val editorOverlayState = EditorOverlayState(
-        show = gateState.isMembershipLoading || !gateState.isJoined || !hasCompetitionStarted,
+        show = gateState.isMembershipLoading || !gateState.isJoined || !hasReachedParticipantLimit,
         isLoadingMembership = gateState.isMembershipLoading,
-        requiresJoin = !gateState.isMembershipLoading && !gateState.isJoined,
-        waitingForStart = !gateState.isMembershipLoading && gateState.isJoined && !hasCompetitionStarted,
+        requiresJoin = !gateState.isMembershipLoading && !gateState.isJoined && !hasReachedParticipantLimit,
+        competitionFull = !gateState.isMembershipLoading && !gateState.isJoined && hasReachedParticipantLimit,
+        waitingForStart = !gateState.isMembershipLoading && gateState.isJoined && !hasReachedParticipantLimit,
         isJoining = gateState.isJoining,
         joinStatusMessage = gateState.joinStatusMessage,
         joinErrorMessage = gateState.joinErrorMessage,
@@ -692,7 +695,11 @@ private fun LockedEditorOverlayContent(
                 textAlign = TextAlign.Center,
             )
             Text(
-                text = stringResource(Res.string.problem_details_editor_locked_join_body),
+                text = stringResource(
+                    Res.string.problem_details_editor_locked_join_body,
+                    overlayState.registeredParticipants,
+                    overlayState.requiredParticipants,
+                ),
                 modifier = Modifier.fillMaxWidth(),
                 style = MaterialTheme.typography.bodyMedium,
                 textAlign = TextAlign.Center,
@@ -710,6 +717,26 @@ private fun LockedEditorOverlayContent(
                     },
                 )
             }
+        }
+
+        overlayState.competitionFull -> {
+            Text(
+                text = stringResource(Res.string.problem_details_editor_locked_full_title),
+                modifier = Modifier.fillMaxWidth(),
+                style = MaterialTheme.typography.titleMedium,
+                textAlign = TextAlign.Center,
+            )
+            Text(
+                text = stringResource(
+                    Res.string.problem_details_editor_locked_full_body,
+                    overlayState.registeredParticipants,
+                    overlayState.requiredParticipants,
+                ),
+                modifier = Modifier.fillMaxWidth(),
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.Center,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
 
         overlayState.waitingForStart -> {
@@ -1284,6 +1311,7 @@ private data class EditorOverlayState(
     val show: Boolean,
     val isLoadingMembership: Boolean,
     val requiresJoin: Boolean,
+    val competitionFull: Boolean,
     val waitingForStart: Boolean,
     val isJoining: Boolean,
     val joinStatusMessage: String?,
