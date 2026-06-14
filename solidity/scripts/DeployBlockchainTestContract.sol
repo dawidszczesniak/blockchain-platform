@@ -55,7 +55,7 @@ contract DeployBlockchainTestContract is Script {
     }
 
     function initialPlatformFeeBps() internal pure returns (uint16) {
-        return 500;
+        return 200;
     }
 
     function initialApprovedSandboxImageHash() internal view returns (bytes32) {

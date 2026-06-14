@@ -34,6 +34,7 @@ contract BlockchainTestContractTest is Test {
     uint256 private constant ETH_ENTRY_FEE = 0.1 ether;
     uint256 private constant USDC_PRIZE = 100e6;
     uint256 private constant USDC_ENTRY_FEE = 10e6;
+    uint16 private constant PLATFORM_FEE_BPS = 200;
     bytes32 private constant APPROVED_SANDBOX_HASH = bytes32(uint256(0xA11CE));
 
     function setUp() external {
@@ -48,7 +49,7 @@ contract BlockchainTestContractTest is Test {
             address(implementation),
             abi.encodeCall(
                 BlockchainTestContract.initialize,
-                (OWNER, OPERATOR, TREASURY, 500, APPROVED_SANDBOX_HASH, address(usdc))
+                (OWNER, OPERATOR, TREASURY, PLATFORM_FEE_BPS, APPROVED_SANDBOX_HASH, address(usdc))
             )
         );
         platform = BlockchainTestContract(address(proxy));
@@ -101,8 +102,8 @@ contract BlockchainTestContractTest is Test {
         assertEq(winner, BOB);
         assertEq(uint256(state), uint256(BlockchainTestContract.CompetitionState.Settled));
         assertEq(winnerBalanceBefore + ETH_PRIZE, BOB.balance);
-        assertEq(creatorBalanceBefore + 0.19 ether, CREATOR.balance);
-        assertEq(treasuryBalanceBefore + 0.01 ether, TREASURY.balance);
+        assertEq(creatorBalanceBefore + 0.196 ether, CREATOR.balance);
+        assertEq(treasuryBalanceBefore + 0.004 ether, TREASURY.balance);
     }
 
     function test_settleCompetition_allowsAnyCallerAfterDeadlineForErc20() external {
@@ -140,8 +141,8 @@ contract BlockchainTestContractTest is Test {
         assertEq(paymentToken, address(usdc));
         assertEq(uint256(state), uint256(BlockchainTestContract.CompetitionState.Settled));
         assertEq(winnerBalanceBefore + USDC_PRIZE, usdc.balanceOf(BOB));
-        assertEq(creatorBalanceBefore + 19e6, usdc.balanceOf(CREATOR));
-        assertEq(treasuryBalanceBefore + 1e6, usdc.balanceOf(TREASURY));
+        assertEq(creatorBalanceBefore + 19_600_000, usdc.balanceOf(CREATOR));
+        assertEq(treasuryBalanceBefore + 400_000, usdc.balanceOf(TREASURY));
     }
 
     function test_createCompetition_rejectsFeeOnTransferToken() external {

@@ -160,7 +160,7 @@ forge script solidity/scripts/DeployBlockchainTestContract.sol:DeployBlockchainT
   --broadcast
 ```
 
-The deploy script initializes owner, operator, and treasury to the wallet behind `ETH_PLATFORM_OPERATOR_PRIVATE_KEY`, uses `500` bps platform fee, approves `SANDBOX_IMAGE_HASH`, and can whitelist an initial ERC-20 token from `ETH_PLATFORM_INITIAL_SUPPORTED_PAYMENT_TOKEN` or the first `USDC` entry in `ETH_PLATFORM_SUPPORTED_ERC20_TOKENS`.
+The deploy script initializes owner, operator, and treasury to the wallet behind `ETH_PLATFORM_OPERATOR_PRIVATE_KEY`, uses `200` bps platform fee, approves `SANDBOX_IMAGE_HASH`, and can whitelist an initial ERC-20 token from `ETH_PLATFORM_INITIAL_SUPPORTED_PAYMENT_TOKEN` or the first `USDC` entry in `ETH_PLATFORM_SUPPORTED_ERC20_TOKENS`.
 
 Upgrade an existing proxy to the current implementation:
 
@@ -174,6 +174,8 @@ forge script solidity/scripts/UpgradeBlockchainTestContract.sol:UpgradeBlockchai
   --sender "$(cast wallet address --private-key "$ETH_PLATFORM_OPERATOR_PRIVATE_KEY")" \
   --broadcast
 ```
+
+Upgrades keep proxy storage unchanged. If an existing proxy was initialized with another platform fee, update it separately by calling `setPlatformFeeBps(200)` from the owner wallet.
 
 Check deployed version:
 
