@@ -7,8 +7,8 @@ import {Options} from "openzeppelin-foundry-upgrades/Options.sol";
 import {Upgrades} from "openzeppelin-foundry-upgrades/Upgrades.sol";
 
 contract UpgradeBlockchainTestContract is Script {
-    string internal constant CONTRACT_NAME = "BlockchainTestContractV4.sol:BlockchainTestContractV4";
-    string internal constant REFERENCE_CONTRACT = "BlockchainTestContractV3.sol:BlockchainTestContractV3";
+    string internal constant CONTRACT_NAME = "BlockchainTestContractV5.sol:BlockchainTestContractV5";
+    string internal constant REFERENCE_CONTRACT = "BlockchainTestContractV4.sol:BlockchainTestContractV4";
 
     function run() external returns (address implementation) {
         address proxy = proxyAddress();

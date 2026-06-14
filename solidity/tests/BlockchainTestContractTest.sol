@@ -4,7 +4,7 @@ pragma solidity ^0.8.24;
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {Test} from "forge-std/Test.sol";
-import {BlockchainTestContractV4} from "../contracts/BlockchainTestContractV4.sol";
+import {BlockchainTestContractV5} from "../contracts/BlockchainTestContractV5.sol";
 
 contract BlockchainTestContractTest is Test {
     struct SubmissionCall {
@@ -17,7 +17,7 @@ contract BlockchainTestContractTest is Test {
         bytes signature;
     }
 
-    BlockchainTestContractV4 private platform;
+    BlockchainTestContractV5 private platform;
     MockERC20 private usdc;
     FeeOnTransferMockERC20 private feeToken;
 
@@ -34,6 +34,7 @@ contract BlockchainTestContractTest is Test {
     uint256 private constant ETH_ENTRY_FEE = 0.1 ether;
     uint256 private constant USDC_PRIZE = 100e6;
     uint256 private constant USDC_ENTRY_FEE = 10e6;
+    uint16 private constant PLATFORM_FEE_BPS = 200;
     bytes32 private constant APPROVED_SANDBOX_HASH = bytes32(uint256(0xA11CE));
 
     function setUp() external {
@@ -43,15 +44,15 @@ contract BlockchainTestContractTest is Test {
         usdc = new MockERC20("USD Coin", "USDC", 6);
         feeToken = new FeeOnTransferMockERC20();
 
-        BlockchainTestContractV4 implementation = new BlockchainTestContractV4();
+        BlockchainTestContractV5 implementation = new BlockchainTestContractV5();
         ERC1967Proxy proxy = new ERC1967Proxy(
             address(implementation),
             abi.encodeCall(
-                BlockchainTestContractV4.initialize,
-                (OWNER, OPERATOR, TREASURY, 500, APPROVED_SANDBOX_HASH, address(usdc))
+                BlockchainTestContractV5.initialize,
+                (OWNER, OPERATOR, TREASURY, PLATFORM_FEE_BPS, APPROVED_SANDBOX_HASH, address(usdc))
             )
         );
-        platform = BlockchainTestContractV4(address(proxy));
+        platform = BlockchainTestContractV5(address(proxy));
 
         vm.deal(CREATOR, 10 ether);
         vm.deal(ALICE, 10 ether);
@@ -95,14 +96,14 @@ contract BlockchainTestContractTest is Test {
             ,
             ,
             ,
-            BlockchainTestContractV4.CompetitionState state
+            BlockchainTestContractV5.CompetitionState state
         ) = platform.getCompetition(competitionId);
 
         assertEq(winner, BOB);
-        assertEq(uint256(state), uint256(BlockchainTestContractV4.CompetitionState.Settled));
+        assertEq(uint256(state), uint256(BlockchainTestContractV5.CompetitionState.Settled));
         assertEq(winnerBalanceBefore + ETH_PRIZE, BOB.balance);
-        assertEq(creatorBalanceBefore + 0.19 ether, CREATOR.balance);
-        assertEq(treasuryBalanceBefore + 0.01 ether, TREASURY.balance);
+        assertEq(creatorBalanceBefore + 0.196 ether, CREATOR.balance);
+        assertEq(treasuryBalanceBefore + 0.004 ether, TREASURY.balance);
     }
 
     function test_settleCompetition_allowsAnyCallerAfterDeadlineForErc20() external {
@@ -133,15 +134,15 @@ contract BlockchainTestContractTest is Test {
             ,
             ,
             ,
-            BlockchainTestContractV4.CompetitionState state
+            BlockchainTestContractV5.CompetitionState state
         ) = platform.getCompetition(competitionId);
 
         assertEq(winner, BOB);
         assertEq(paymentToken, address(usdc));
-        assertEq(uint256(state), uint256(BlockchainTestContractV4.CompetitionState.Settled));
+        assertEq(uint256(state), uint256(BlockchainTestContractV5.CompetitionState.Settled));
         assertEq(winnerBalanceBefore + USDC_PRIZE, usdc.balanceOf(BOB));
-        assertEq(creatorBalanceBefore + 19e6, usdc.balanceOf(CREATOR));
-        assertEq(treasuryBalanceBefore + 1e6, usdc.balanceOf(TREASURY));
+        assertEq(creatorBalanceBefore + 19_600_000, usdc.balanceOf(CREATOR));
+        assertEq(treasuryBalanceBefore + 400_000, usdc.balanceOf(TREASURY));
     }
 
     function test_createCompetition_rejectsFeeOnTransferToken() external {
@@ -153,7 +154,7 @@ contract BlockchainTestContractTest is Test {
         feeToken.approve(address(platform), prizeAmount);
         vm.expectRevert(
             abi.encodeWithSelector(
-                BlockchainTestContractV4.UnsupportedTokenBehavior.selector,
+                BlockchainTestContractV5.UnsupportedTokenBehavior.selector,
                 address(feeToken)
             )
         );
@@ -175,7 +176,7 @@ contract BlockchainTestContractTest is Test {
         joinNativeCompetition(competitionId, ALICE);
 
         vm.prank(BOB);
-        vm.expectRevert(BlockchainTestContractV4.CompetitionNotReadyForCancellation.selector);
+        vm.expectRevert(BlockchainTestContractV5.CompetitionNotReadyForCancellation.selector);
         platform.cancelCompetition(competitionId);
 
         vm.warp(12);
@@ -193,10 +194,10 @@ contract BlockchainTestContractTest is Test {
             ,
             ,
             ,
-            BlockchainTestContractV4.CompetitionState state
+            BlockchainTestContractV5.CompetitionState state
         ) = platform.getCompetition(competitionId);
 
-        assertEq(uint256(state), uint256(BlockchainTestContractV4.CompetitionState.Cancelled));
+        assertEq(uint256(state), uint256(BlockchainTestContractV5.CompetitionState.Cancelled));
     }
 
     function createNativeCompetition(

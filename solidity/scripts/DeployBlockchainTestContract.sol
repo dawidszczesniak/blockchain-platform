@@ -4,14 +4,14 @@ pragma solidity ^0.8.24;
 import {console2} from "forge-std/console2.sol";
 import {Script} from "forge-std/Script.sol";
 import {Upgrades} from "openzeppelin-foundry-upgrades/Upgrades.sol";
-import {BlockchainTestContractV4} from "../contracts/BlockchainTestContractV4.sol";
+import {BlockchainTestContractV5} from "../contracts/BlockchainTestContractV5.sol";
 
 contract DeployBlockchainTestContract is Script {
-    string internal constant CONTRACT_NAME = "BlockchainTestContractV4.sol:BlockchainTestContractV4";
+    string internal constant CONTRACT_NAME = "BlockchainTestContractV5.sol:BlockchainTestContractV5";
 
     function run() external returns (address proxy, address implementation) {
         bytes memory initializerData = abi.encodeCall(
-                BlockchainTestContractV4.initialize,
+                BlockchainTestContractV5.initialize,
             (
                 initialOwner(),
                 initialOperator(),
@@ -55,7 +55,7 @@ contract DeployBlockchainTestContract is Script {
     }
 
     function initialPlatformFeeBps() internal pure returns (uint16) {
-        return 500;
+        return 200;
     }
 
     function initialApprovedSandboxImageHash() internal view returns (bytes32) {

@@ -21,7 +21,7 @@ This repository is the master's thesis project of Dawid Szczesniak at the Milita
 
 ## Smart Contract
 
-The active contract is `solidity/contracts/BlockchainTestContractV4.sol`.
+The active contract is `solidity/contracts/BlockchainTestContractV5.sol`.
 
 - Deployed behind an ERC-1967 UUPS proxy.
 - Proxy address is the stable runtime address used by frontend, backend, and users.
@@ -29,9 +29,9 @@ The active contract is `solidity/contracts/BlockchainTestContractV4.sol`.
 - Inherits `Ownable2StepUpgradeable`, `UUPSUpgradeable`, and `ReentrancyGuardTransient`.
 - Supports native ETH and owner-whitelisted ERC-20 payment tokens.
 - Rejects unsupported or fee-on-transfer ERC-20 behavior to keep escrow accounting exact.
-- Exposes `version()` returning `4.0.0`.
+- Exposes `version()` returning `5.0.0`.
 
-Older implementation files `BlockchainTestContractV1.sol`, `V2.sol`, and `V3.sol` are kept as upgrade references. `V4` is the current implementation.
+Older implementation files `BlockchainTestContractV1.sol`, `V2.sol`, `V3.sol`, and `V4.sol` are kept as upgrade references. `V5` is the current implementation.
 
 ## Requirements
 
@@ -146,7 +146,7 @@ forge clean
 env -u ETH_RPC_URL forge script solidity/scripts/ValidateBlockchainTestContract.sol:ValidateBlockchainTestContract
 ```
 
-Deploy a fresh V4 UUPS proxy:
+Deploy a fresh V5 UUPS proxy:
 
 ```bash
 set -a
@@ -158,9 +158,9 @@ forge script solidity/scripts/DeployBlockchainTestContract.sol:DeployBlockchainT
   --broadcast
 ```
 
-The deploy script initializes owner, operator, and treasury to the wallet behind `ETH_PLATFORM_OPERATOR_PRIVATE_KEY`, uses `500` bps platform fee, approves `SANDBOX_IMAGE_HASH`, and can whitelist an initial ERC-20 token from `ETH_PLATFORM_INITIAL_SUPPORTED_PAYMENT_TOKEN` or the first `USDC` entry in `ETH_PLATFORM_SUPPORTED_ERC20_TOKENS`.
+The deploy script initializes owner, operator, and treasury to the wallet behind `ETH_PLATFORM_OPERATOR_PRIVATE_KEY`, uses `200` bps platform fee, approves `SANDBOX_IMAGE_HASH`, and can whitelist an initial ERC-20 token from `ETH_PLATFORM_INITIAL_SUPPORTED_PAYMENT_TOKEN` or the first `USDC` entry in `ETH_PLATFORM_SUPPORTED_ERC20_TOKENS`.
 
-Upgrade an existing proxy to V4:
+Upgrade an existing proxy to V5:
 
 ```bash
 set -a
@@ -173,16 +173,18 @@ forge script solidity/scripts/UpgradeBlockchainTestContract.sol:UpgradeBlockchai
   --broadcast
 ```
 
+Upgrades keep proxy storage unchanged. If an existing proxy was initialized with another platform fee, update it separately by calling `setPlatformFeeBps(200)` from the owner wallet.
+
 Check deployed version:
 
 ```bash
 cast call "$ETH_PLATFORM_PROXY_ADDRESS" "version()(string)" --rpc-url "$ETH_RPC_URL"
 ```
 
-Expected V4 result:
+Expected V5 result:
 
 ```text
-4.0.0
+5.0.0
 ```
 
 For future upgrades, preserve storage layout order and append new storage fields only. New implementation files should reference the previous implementation with `@custom:oz-upgrades-from` when required by OpenZeppelin validation.
