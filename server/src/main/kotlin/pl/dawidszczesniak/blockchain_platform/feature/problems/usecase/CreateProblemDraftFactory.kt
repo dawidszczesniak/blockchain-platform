@@ -179,7 +179,7 @@ internal class CreateProblemDraftFactory(
 
         if (request.tests.isNotEmpty()) {
             throw CreateProblemValidationException(
-                "Legacy 'tests' format is no longer supported. Send structured 'testCases'."
+                "The 'tests' field is not supported. Send structured 'testCases'."
             )
         }
 

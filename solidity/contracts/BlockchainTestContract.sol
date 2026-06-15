@@ -31,21 +31,6 @@ contract BlockchainTestContract is Initializable, Ownable2StepUpgradeable, UUPSU
         CompetitionState state;
     }
 
-    struct SubmissionResult {
-        uint256 competitionId;
-        uint256 submissionId;
-        address participant;
-        bytes32 submissionHash;
-        bytes32 codeHash;
-        bytes32 challengeHash;
-        bytes32 resultHash;
-        bytes32 sandboxImageHash;
-        uint32 runtimeMs;
-        uint32 memoryUsedKb;
-        uint16 consensusNodes;
-        uint64 recordedAt;
-    }
-
     struct StoredSubmission {
         address participant;
         uint32 runtimeMs;
@@ -121,8 +106,6 @@ contract BlockchainTestContract is Initializable, Ownable2StepUpgradeable, UUPSU
     mapping(uint256 => mapping(address => bool)) public participantRefundClaimed;
     mapping(uint256 => bool) public creatorPrizeRefundClaimed;
 
-    mapping(uint256 => SubmissionResult) private resultsBySubmissionId;
-    mapping(uint256 => uint256[]) private submissionIdsByCompetition;
     mapping(bytes32 => bool) public approvedSandboxImageHash;
     mapping(uint256 => uint256) public bestSubmissionIdByCompetition;
     mapping(address => bool) public supportedPaymentToken;
@@ -496,8 +479,6 @@ contract BlockchainTestContract is Initializable, Ownable2StepUpgradeable, UUPSU
     }
 
     /// Returns the stored participant and performance metrics for a submission.
-    /// The loader supports both the compact score mapping and the older full result
-    /// mapping, so historical records remain readable after upgrades.
     function getSubmissionResult(uint256 submissionId) external view returns (StoredSubmission memory) {
         return _loadStoredSubmission(submissionId);
     }
@@ -636,31 +617,16 @@ contract BlockchainTestContract is Initializable, Ownable2StepUpgradeable, UUPSU
     }
 
     /// Loads the participant and score for a submission.
-    /// New records are stored in the compact submissionScoresById mapping, but the
-    /// fallback keeps older records readable after the storage layout was simplified.
+    /// Reverts when the requested submission has not been recorded.
     function _loadStoredSubmission(uint256 submissionId) private view returns (StoredSubmission memory) {
         StoredSubmission memory score = submissionScoresById[submissionId];
-        if (score.participant != address(0)) {
-            return score;
-        }
-
-        SubmissionResult memory legacy = resultsBySubmissionId[submissionId];
-        if (legacy.submissionId == 0) revert InvalidSubmission();
-        return StoredSubmission({
-            participant: legacy.participant,
-            runtimeMs: legacy.runtimeMs,
-            memoryUsedKb: legacy.memoryUsedKb
-        });
+        if (score.participant == address(0)) revert InvalidSubmission();
+        return score;
     }
 
     /// Checks whether a submission id has already been recorded.
-    /// The check covers both the current compact storage and the legacy result storage
-    /// so old submissions cannot be overwritten after an upgrade.
     function _submissionRecordExists(uint256 submissionId) private view returns (bool) {
-        if (submissionScoresById[submissionId].participant != address(0)) {
-            return true;
-        }
-        return resultsBySubmissionId[submissionId].submissionId != 0;
+        return submissionScoresById[submissionId].participant != address(0);
     }
 
     /// Builds the digest that the operator signs for a submission result.
@@ -781,5 +747,5 @@ contract BlockchainTestContract is Initializable, Ownable2StepUpgradeable, UUPSU
         return candidateSubmissionId < currentBestSubmissionId;
     }
 
-    uint256[42] private __gap;
+    uint256[50] private __gap;
 }

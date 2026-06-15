@@ -136,14 +136,14 @@ fun ProblemDetailsScreen(
     onBackToProblems: () -> Unit,
 ) {
     val statementContent = remember(problem.id, problem.description, problem.constraints, problem.examples) {
-        val decodedLegacy = decodeProblemDescription(problem.description)
+        val decodedDescription = decodeProblemDescription(problem.description)
         ProblemStatementContent(
-            statement = decodedLegacy.statement,
-            constraints = problem.constraints.ifBlank { decodedLegacy.constraints },
+            statement = decodedDescription.statement,
+            constraints = problem.constraints.ifBlank { decodedDescription.constraints },
             examples = if (problem.examples.isNotEmpty()) {
                 problem.examples
             } else {
-                decodedLegacy.examples
+                decodedDescription.examples
             },
         )
     }
@@ -177,7 +177,7 @@ fun ProblemDetailsScreen(
         requiredParticipants = problem.requiredParticipants,
     )
 
-    var solutionCode by remember(problem.id) { mutableStateOf(defaultSolutionTemplate(problem)) }
+    var solutionCode by remember(problem.id) { mutableStateOf(defaultSolutionTemplate()) }
 
     Box(
         modifier = Modifier.fillMaxSize(),
@@ -1296,11 +1296,9 @@ private fun DetailLine(text: String) {
     )
 }
 
-private fun defaultSolutionTemplate(problem: ProblemSummary): String {
+private fun defaultSolutionTemplate(): String {
     return """
         fun solve(input: String): String {
-            // ${problem.title}
-            // Parse the input and return the expected output format.
             return input
         }
     """.trimIndent()

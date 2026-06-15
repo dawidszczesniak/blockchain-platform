@@ -10,7 +10,6 @@ import kotlin.js.Promise
 import kotlin.js.toBoolean
 import kotlin.js.toJsBoolean
 
-// JS/Wasm health check using backend `/health`.
 suspend fun checkBackendHealth(apiBaseUrl: String): Boolean {
     val base = apiBaseUrl.trimEnd('/')
     val url = if (base.isBlank()) "/health" else "$base/health"

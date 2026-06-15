@@ -7,13 +7,11 @@ import pl.dawidszczesniak.blockchain_platform.LOCAL_HOST
 import pl.dawidszczesniak.blockchain_platform.SERVER_PORT
 import pl.dawidszczesniak.blockchain_platform.parseAppEnvironment
 
-// Immutable config container for environment and API base URL.
 data class AppConfig(
     val environment: AppEnvironment,
     val apiBaseUrl: String,
 )
 
-// Lazily resolves build-time environment config.
 object AppConfigProvider {
     val config: AppConfig by lazy {
         val environment = parseAppEnvironment(AppEnvironment.fromId(APP_ENV))
@@ -22,7 +20,6 @@ object AppConfigProvider {
         AppConfig(environment = environment, apiBaseUrl = apiBaseUrl)
     }
 
-    // Default base URLs by environment.
     private fun defaultApiBaseUrl(environment: AppEnvironment): String {
         return when (environment) {
             AppEnvironment.Local -> "http://$LOCAL_HOST:$SERVER_PORT"

@@ -86,7 +86,7 @@
     <string name="login_title">Zaloguj się</string>
     <string name="login_subtitle">Aby mieć możliwość korzystania z platformy.</string>
     <string name="login_connect_wallet">Połącz portfel</string>
-    <string name="login_wallet_detecting">Wykrywanie dostępnych portfeli…</string>
+    <string name="login_wallet_detecting">Wykrywanie dostępnych portfeli...</string>
     <string name="login_wallet_not_found">Nie wykryto kompatybilnego portfela w tej przeglądarce.</string>
     <string name="login_wallet_install_hint">Zainstaluj kompatybilny portfel, np. MetaMask, a następnie odśwież stronę.</string>
 
@@ -99,7 +99,7 @@
     <string name="settings_chain_id">Chain ID</string>
     <string name="settings_proxy_address">Adres proxy BlockchainTestContract</string>
     <string name="settings_not_configured">Nie skonfigurowano</string>
-    <string name="settings_loading">Ładowanie…</string>
+    <string name="settings_loading">Ładowanie...</string>
     <string name="settings_unavailable">Niedostępne</string>
     <string name="settings_interface_language">Język interfejsu</string>
     <string name="settings_language_polish">Polski</string>
@@ -110,7 +110,7 @@
     <string name="problems_empty_title">Nie ma jeszcze zgłoszonych problemów.</string>
     <string name="problems_empty_body">Utwórz pierwszy challenge i zacznij zbierać zgłoszenia.</string>
     <string name="problems_empty_action">Utwórz problem</string>
-    <string name="loading_more">Dociąganie kolejnych problemów…</string>
+    <string name="loading_more">Dociąganie kolejnych problemów...</string>
     <string name="my_problems_title">Utworzone problemy</string>
     <string name="my_problems_filter_label">Typ:</string>
     <string name="my_problems_filter_all">Wszystkie</string>
@@ -141,7 +141,7 @@
 
     <string name="home_hero_title_lead">Blockchain</string>
     <string name="home_hero_title_emphasis">Challenge Platform</string>
-    <string name="home_hero_description">Twórz konkursy, ustawiaj nagrody i weryfikuj rozwiązania on‑chain. Prowadź uczciwe, audytowalne wyzwania dla twórców i badaczy.</string>
+    <string name="home_hero_description">Twórz konkursy, ustawiaj nagrody i weryfikuj rozwiązania on-chain. Prowadź uczciwe, audytowalne wyzwania dla twórców i badaczy.</string>
     <string name="home_hero_primary_cta">Przeglądaj wyzwania</string>
     <string name="home_hero_secondary_cta">Jak to działa</string>
 
@@ -276,7 +276,7 @@
     <string name="problem_details_submit_onchain_pending_with_tx">Judge przeszedł, ale backend nie potwierdził jeszcze zapisu on-chain dla tej transakcji.</string>
     <string name="problem_details_submit_onchain_error_title">Błąd zapisu on-chain</string>
 
-    <string name="problem_title_template">Problem #%1$d – Optymalizacja algorytmu (%2$s)</string>
+    <string name="problem_title_template">Problem #%1$d - Optymalizacja algorytmu (%2$s)</string>
 
     <string name="backend_unavailable_title">Backend niedostępny</string>
     <string name="backend_unavailable_body">Część danych może być nieaktualna. Spróbuj ponownie później.</string>

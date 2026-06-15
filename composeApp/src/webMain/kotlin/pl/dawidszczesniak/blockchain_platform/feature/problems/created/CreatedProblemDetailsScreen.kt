@@ -83,14 +83,14 @@ fun CreatedProblemDetailsScreen(
     onBackToMyProblems: () -> Unit,
 ) {
     val statementContent = remember(problem.id, problem.description, problem.constraints, problem.examples) {
-        val decodedLegacy = decodeProblemDescription(problem.description)
+        val decodedDescription = decodeProblemDescription(problem.description)
         ProblemStatementContent(
-            statement = decodedLegacy.statement,
-            constraints = problem.constraints.ifBlank { decodedLegacy.constraints },
+            statement = decodedDescription.statement,
+            constraints = problem.constraints.ifBlank { decodedDescription.constraints },
             examples = if (problem.examples.isNotEmpty()) {
                 problem.examples
             } else {
-                decodedLegacy.examples
+                decodedDescription.examples
             },
         )
     }

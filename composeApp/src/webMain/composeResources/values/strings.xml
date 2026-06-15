@@ -86,7 +86,7 @@
     <string name="login_title">Log in</string>
     <string name="login_subtitle">To be able to use the platform.</string>
     <string name="login_connect_wallet">Connect wallet</string>
-    <string name="login_wallet_detecting">Detecting available wallets…</string>
+    <string name="login_wallet_detecting">Detecting available wallets...</string>
     <string name="login_wallet_not_found">No compatible wallet detected in this browser.</string>
     <string name="login_wallet_install_hint">Install a compatible wallet such as MetaMask, then refresh the page.</string>
 
@@ -99,7 +99,7 @@
     <string name="settings_chain_id">Chain ID</string>
     <string name="settings_proxy_address">BlockchainTestContract proxy address</string>
     <string name="settings_not_configured">Not configured</string>
-    <string name="settings_loading">Loading…</string>
+    <string name="settings_loading">Loading...</string>
     <string name="settings_unavailable">Unavailable</string>
     <string name="settings_interface_language">Interface language</string>
     <string name="settings_language_polish">Polish</string>
@@ -110,7 +110,7 @@
     <string name="problems_empty_title">No problems submitted yet.</string>
     <string name="problems_empty_body">Create the first challenge to get things started.</string>
     <string name="problems_empty_action">Create problem</string>
-    <string name="loading_more">Loading more problems…</string>
+    <string name="loading_more">Loading more problems...</string>
     <string name="my_problems_title">Created problems</string>
     <string name="my_problems_filter_label">Type:</string>
     <string name="my_problems_filter_all">All</string>
@@ -118,7 +118,7 @@
     <string name="my_problems_waiting">Waiting for participants</string>
     <string name="my_problems_completed">Completed</string>
     <string name="my_problems_expired">Time elapsed (no participants)</string>
-    <string name="my_problems_empty_title">You haven’t created any problems yet.</string>
+    <string name="my_problems_empty_title">You haven't created any problems yet.</string>
     <string name="my_problems_empty_body">Create your first challenge and invite participants.</string>
     <string name="my_problems_empty_action">Create problem</string>
 
@@ -135,7 +135,7 @@
     <string name="participation_submission_pending">not sent</string>
     <string name="participation_load_failed">Failed to load participation list.</string>
     <string name="participation_retry">Retry</string>
-    <string name="participation_empty_title">You’re not participating in any problems yet.</string>
+    <string name="participation_empty_title">You're not participating in any problems yet.</string>
     <string name="participation_empty_body">Browse the problem list and join a challenge.</string>
     <string name="participation_empty_action">Go to problem list</string>
 
@@ -276,7 +276,7 @@
     <string name="problem_details_submit_onchain_pending_with_tx">Judge passed, but the backend has not confirmed the on-chain record for this transaction yet.</string>
     <string name="problem_details_submit_onchain_error_title">On-chain record error</string>
 
-    <string name="problem_title_template">Problem #%1$d – Algorithm optimization (%2$s)</string>
+    <string name="problem_title_template">Problem #%1$d - Algorithm optimization (%2$s)</string>
 
     <string name="backend_unavailable_title">Backend unavailable</string>
     <string name="backend_unavailable_body">Some data may be out of date. Please try again later.</string>
