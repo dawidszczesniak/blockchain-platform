@@ -1,6 +1,7 @@
-Sepolia addresses for master-project branch
+Optional Sepolia addresses for the main academic branch
 
-Record only the deployment that matches this branch.
+Leave these placeholders unchanged until a deployment is made from this branch.
+Record only addresses that match the current branch state.
 
 Proxy
 - <DEPLOYED_PROXY_ADDRESS>
