@@ -1,47 +1,47 @@
 # Blockchain Platform
 
-Projekt pracy magisterskiej: konfigurowalna platforma rywalizacji programistycznej z wykorzystaniem technologii blockchain.
+Master's thesis project: a configurable programming challenge platform using blockchain technology.
 
-Aplikacja pozwala tworzyć zadania algorytmiczne, zapisywać uczestników przez portfel kryptowalutowy, testować przesłany kod w odizolowanych węzłach sandbox oraz zapisywać zaakceptowane wyniki i rozliczenia w inteligentnym kontrakcie na sieci Ethereum Sepolia.
+The application lets users create algorithmic challenges, join competitions through a browser crypto wallet, evaluate submitted code in isolated sandbox nodes, and store accepted results and settlements in a smart contract on Ethereum Sepolia.
 
-## Najważniejsze elementy
+## Main Components
 
-- `composeApp` - frontend webowy Compose Multiplatform, lokalnie `http://localhost:8081`.
-- `server` - backend Ktor, lokalnie `http://localhost:8080`.
-- `sandbox-runner` - węzeł wykonujący i mierzący kod uczestników.
-- `solidity` - inteligentny kontrakt Solidity oraz skrypty Foundry.
-- `docker-compose.yml` - lokalne PostgreSQL, Redis i trzy węzły sandbox.
+- `composeApp` - Compose Multiplatform web frontend, available locally at `http://localhost:8081`.
+- `server` - Ktor backend, available locally at `http://localhost:8080`.
+- `sandbox-runner` - execution node responsible for running and measuring participant code.
+- `solidity` - Solidity smart contract and Foundry deployment scripts.
+- `docker-compose.yml` - local PostgreSQL, Redis, and three sandbox nodes.
 
-## Wymagania
+## Requirements
 
-Przed uruchomieniem trzeba mieć zainstalowane:
+Before running the project, install or prepare:
 
 - Java 21,
 - Docker,
-- Node.js z npm,
+- Node.js with npm,
 - Foundry (`forge`, `cast`),
-- MetaMask z włączoną siecią Sepolia,
-- adres RPC Sepolia, np. z Alchemy lub Infura,
-- prywatny klucz testowego portfela Sepolia z niewielką ilością SepoliaETH.
+- MetaMask browser extension with the Sepolia network enabled,
+- Sepolia RPC endpoint, for example from Alchemy or Infura,
+- private key of a test Sepolia wallet with a small amount of SepoliaETH.
 
-## Uruchomienie od zera
+## Run From Scratch
 
-### 0. Pobranie repozytorium
+### 0. Clone The Repository
 
 ```bash
 git clone git@github.com:dawidszczesniak/blockchain-platform.git
 cd blockchain-platform
 ```
 
-### 1. Pobranie zależności Solidity
+### 1. Install Solidity Dependencies
 
 ```bash
 npm install
 ```
 
-### 2. Konfiguracja `.env.local`
+### 2. Configure `.env.local`
 
-W katalogu głównym projektu utwórz plik `.env.local`:
+Create `.env.local` in the project root:
 
 ```env
 APP_ENV=local
@@ -71,23 +71,23 @@ SANDBOX_NODE_2_SECRET=local-dev-sandbox-secret-2
 SANDBOX_NODE_3_SECRET=local-dev-sandbox-secret-3
 ```
 
-`ETH_PLATFORM_OPERATOR_PRIVATE_KEY` to prywatny klucz portfela testowego. Ten portfel zostanie właścicielem kontraktu, operatorem podpisującym wyniki i skarbcem prowizji.
+`ETH_PLATFORM_OPERATOR_PRIVATE_KEY` is the private key of the test wallet. This wallet becomes the contract owner, the result-signing operator, and the platform fee treasury.
 
-Jeżeli ma być dostępny token ERC-20, pole `ETH_PLATFORM_SUPPORTED_ERC20_TOKENS` ma format:
+If an ERC-20 token should be available, use the following format for `ETH_PLATFORM_SUPPORTED_ERC20_TOKENS`:
 
 ```env
 CODE|DISPLAY_NAME|SYMBOL|DECIMALS|ADDRESS
 ```
 
-Dla prostego uruchomienia można zostawić je puste i korzystać tylko z SepoliaETH.
+For a simple local run, leave this value empty and use SepoliaETH only.
 
-### 3. Uruchomienie bazy, Redis i sandboxów
+### 3. Start PostgreSQL, Redis, And Sandbox Nodes
 
 ```bash
 docker compose --env-file .env.local up -d postgres redis sandbox-node-1 sandbox-node-2 sandbox-node-3
 ```
 
-### 4. Wdrożenie kontraktu na Sepolii
+### 4. Deploy The Contract To Sepolia
 
 ```bash
 set -a
@@ -99,87 +99,87 @@ forge script solidity/scripts/DeployBlockchainTestContract.sol:DeployBlockchainT
   --broadcast
 ```
 
-Po zakończeniu skrypt wypisze adres `Proxy`. Wstaw go w `.env.local`:
+After the script finishes, it prints the `Proxy` address. Put it into `.env.local`:
 
 ```env
 ETH_PLATFORM_PROXY_ADDRESS=<PROXY_FROM_DEPLOY_LOG>
 ```
 
-Opcjonalnie można sprawdzić wersję kontraktu:
+Optionally verify the deployed contract version:
 
 ```bash
 cast call "$ETH_PLATFORM_PROXY_ADDRESS" "version()(string)" --rpc-url "$ETH_RPC_URL"
 ```
 
-Oczekiwany wynik:
+Expected result:
 
 ```text
 1.0.0
 ```
 
-### 5. Uruchomienie backendu
+### 5. Start The Backend
 
 ```bash
 ./gradlew :server:runLocalForce8080
 ```
 
-Backend działa pod adresem:
+The backend is available at:
 
 ```text
 http://localhost:8080
 ```
 
-Szybki test zdrowia:
+Health check:
 
 ```text
 http://localhost:8080/health
 ```
 
-### 6. Uruchomienie frontendu
+### 6. Start The Frontend
 
-W drugim terminalu:
+In a second terminal:
 
 ```bash
 ./gradlew :composeApp:runLocalForce8081
 ```
 
-Frontend działa pod adresem:
+The frontend is available at:
 
 ```text
 http://localhost:8081
 ```
 
-Po wejściu na stronę należy połączyć MetaMask z siecią Sepolia.
+Open the page in a browser with MetaMask installed, connect the wallet, and make sure MetaMask is using the Sepolia network.
 
-## Co można sprawdzić w aplikacji
+## What To Check In The Application
 
-1. Zalogowanie portfelem MetaMask.
-2. Utworzenie zadania programistycznego z nagrodą i opłatą wpisową.
-3. Dołączenie uczestnika do konkursu przez transakcję on-chain.
-4. Wysłanie rozwiązania w Kotlinie i ocena przez węzły sandbox.
-5. Zapis zaakceptowanego wyniku w kontrakcie.
-6. Rozliczenie konkursu po terminie i podział środków.
+1. Log in with MetaMask.
+2. Create a programming challenge with a prize and an entry fee.
+3. Join the competition through an on-chain transaction.
+4. Submit a Kotlin solution and let the sandbox nodes evaluate it.
+5. Store the accepted result in the smart contract.
+6. Settle the competition after the deadline and distribute the funds.
 
-## Testy projektu
+## Project Tests
 
-Backend, frontend i sandbox:
+Backend, frontend, and sandbox:
 
 ```bash
 ./gradlew :server:test :composeApp:compileKotlinWasmJs :sandbox-runner:build
 ```
 
-Kontrakt Solidity:
+Solidity contract:
 
 ```bash
 forge test
 ```
 
-## Kontrakt
+## Contract
 
-Aktualny kontrakt znajduje się w:
+The current contract is located at:
 
 ```text
 solidity/contracts/BlockchainTestContract.sol
 ```
 
-Kontrakt działa jako ERC-1967 UUPS proxy, obsługuje depozyty w ETH i opcjonalnych tokenach ERC-20, zapisuje zaakceptowane metryki zgłoszeń oraz rozlicza nagrodę, wpisowe i prowizję platformy. Prowizja platformy wynosi `200` punktów bazowych, czyli `2%`.
+The contract uses an ERC-1967 UUPS proxy, supports deposits in ETH and optional ERC-20 tokens, stores accepted submission metrics, and settles the prize, entry fees, and platform fee. The platform fee is `200` basis points, which equals `2%`.
